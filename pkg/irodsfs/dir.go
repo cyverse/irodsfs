@@ -163,10 +163,33 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 	newdir := newDir.(*Dir)
 	irodsDestPath := path.Join(dir.FS.Config.IRODSPath, newdir.Path, req.NewName)
 
-	err := dir.FS.IRODSClient.RenameDirToDir(irodsSrcPath, irodsDestPath)
+	entry, err := dir.FS.IRODSClient.Stat(irodsSrcPath)
 	if err != nil {
-		//return err
+		if irodsfs_clienttype.IsFileNotFoundError(err) {
+			return syscall.ENOENT
+		} else {
+			//return nil, err
+			return syscall.EREMOTEIO
+		}
+	}
+
+	switch entry.Type {
+	case irodsfs_client.FSFileEntry:
+		err = dir.FS.IRODSClient.RenameDirToDir(irodsSrcPath, irodsDestPath)
+		if err != nil {
+			//return nil, err
+			return syscall.EREMOTEIO
+		}
+		return nil
+	case irodsfs_client.FSDirectoryEntry:
+		err = dir.FS.IRODSClient.RenameFileToFile(irodsSrcPath, irodsDestPath)
+		if err != nil {
+			//return nil, err
+			return syscall.EREMOTEIO
+		}
+		return nil
+	default:
+		//return nil, fmt.Errorf("Unknown entry type %s", entry.Type)
 		return syscall.EREMOTEIO
 	}
-	return nil
 }
