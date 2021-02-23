@@ -101,3 +101,72 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 		return nil, syscall.EREMOTEIO
 	}
 }
+
+func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
+	irodsPath := path.Join(dir.FS.Config.IRODSPath, dir.Path, req.Name)
+
+	entry, err := dir.FS.IRODSClient.Stat(irodsPath)
+	if err != nil {
+		if irodsfs_clienttype.IsFileNotFoundError(err) {
+			return syscall.ENOENT
+		} else {
+			//return nil, err
+			return syscall.EREMOTEIO
+		}
+	}
+
+	switch entry.Type {
+	case irodsfs_client.FSFileEntry:
+		err = dir.FS.IRODSClient.RemoveFile(irodsPath, true)
+		if err != nil {
+			//return nil, err
+			return syscall.EREMOTEIO
+		}
+		return nil
+	case irodsfs_client.FSDirectoryEntry:
+		err = dir.FS.IRODSClient.RemoveDir(irodsPath, false, true)
+		if err != nil {
+			//return nil, err
+			return syscall.EREMOTEIO
+		}
+		return nil
+	default:
+		//return nil, fmt.Errorf("Unknown entry type %s", entry.Type)
+		return syscall.EREMOTEIO
+	}
+}
+
+func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node, error) {
+	irodsPath := path.Join(dir.FS.Config.IRODSPath, dir.Path, req.Name)
+	err := dir.FS.IRODSClient.MakeDir(irodsPath, false)
+	if err != nil {
+		//return nil, err
+		return nil, syscall.EREMOTEIO
+	}
+
+	entry, err := dir.FS.IRODSClient.Stat(irodsPath)
+	if err != nil {
+		//return nil, err
+		return nil, syscall.EREMOTEIO
+	}
+
+	return &Dir{
+		FS:           dir.FS,
+		Path:         path.Join(dir.Path, req.Name),
+		IRODSFSEntry: entry,
+	}, nil
+}
+
+func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fusefs.Node) error {
+	irodsSrcPath := path.Join(dir.FS.Config.IRODSPath, dir.Path, req.OldName)
+
+	newdir := newDir.(*Dir)
+	irodsDestPath := path.Join(dir.FS.Config.IRODSPath, newdir.Path, req.NewName)
+
+	err := dir.FS.IRODSClient.RenameDirToDir(irodsSrcPath, irodsDestPath)
+	if err != nil {
+		//return err
+		return syscall.EREMOTEIO
+	}
+	return nil
+}
