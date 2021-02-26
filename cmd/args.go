@@ -15,10 +15,13 @@ import (
 	"github.com/cyverse/go-irodsclient/client"
 	"github.com/cyverse/irodsfs/pkg/irodsfs"
 	"golang.org/x/crypto/ssh/terminal"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const (
 	ChildProcessArgument = "child_process"
+	iRODSProtocol        = "irods://"
 )
 
 // IRODSAccessURL ...
@@ -32,8 +35,14 @@ type IRODSAccessURL struct {
 }
 
 func parseIRODSURL(inputURL string) (*IRODSAccessURL, error) {
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "parseIRODSURL",
+	})
+
 	u, err := url.Parse(inputURL)
 	if err != nil {
+		logger.WithError(err).Error("Error occurred while parsing source URL")
 		return nil, err
 	}
 
@@ -58,6 +67,7 @@ func parseIRODSURL(inputURL string) (*IRODSAccessURL, error) {
 	if len(u.Port()) > 0 {
 		port64, err := strconv.ParseInt(u.Port(), 10, 32)
 		if err != nil {
+			logger.WithError(err).Error("Error occurred while parsing source URL's port number")
 			return nil, err
 		}
 		port = int(port64)
@@ -67,20 +77,25 @@ func parseIRODSURL(inputURL string) (*IRODSAccessURL, error) {
 	zone := ""
 	irodsPath := "/"
 	if len(fullpath) == 0 || fullpath[0] != '/' {
-		return nil, fmt.Errorf("path (%s) must contain an absolute path", u.Path)
+		err = fmt.Errorf("path (%s) must contain an absolute path", u.Path)
+		logger.Error(err)
+		return nil, err
 	}
 
 	pos := strings.Index(fullpath[1:], "/")
 	if pos > 0 {
 		zone = strings.Trim(fullpath[1:pos+1], "/")
-		irodsPath = fullpath[pos+2:]
+		irodsPath = fullpath // starts with zone
 	} else if pos == -1 {
 		// no path
 		zone = strings.Trim(fullpath[1:], "/")
+		irodsPath = fullpath
 	}
 
 	if len(zone) == 0 || len(irodsPath) == 0 {
-		return nil, fmt.Errorf("path (%s) must contain an absolute path", inputURL)
+		err = fmt.Errorf("path (%s) must contain an absolute path", inputURL)
+		logger.Error(err)
+		return nil, err
 	}
 
 	return &IRODSAccessURL{
@@ -93,36 +108,11 @@ func parseIRODSURL(inputURL string) (*IRODSAccessURL, error) {
 	}, nil
 }
 
-func makeIRODSZonePath(zone string, path string) string {
-	// argument path may not start with zone
-	inputPath := path
-	zonePath := fmt.Sprintf("/%s/", zone)
-
-	if !strings.HasPrefix(path, zonePath) {
-		if strings.HasPrefix(path, "/") {
-			inputPath = fmt.Sprintf("/%s%s", zone, path)
-		} else {
-			inputPath = fmt.Sprintf("/%s/%s", zone, path)
-		}
-	}
-	return inputPath
-}
-
 func inputAdditionalParams(config *irodsfs.Config) error {
-	if len(config.Host) == 0 {
-		fmt.Print("iRODS Hostname: ")
-		fmt.Scanln(&config.Host)
-	}
-
-	if config.Port == 0 {
-		fmt.Print("iRODS Port: ")
-		fmt.Scanln(&config.Port)
-	}
-
-	if len(config.Zone) == 0 {
-		fmt.Print("Zone: ")
-		fmt.Scanln(&config.Zone)
-	}
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "inputAdditionalParams",
+	})
 
 	if len(config.ProxyUser) == 0 {
 		fmt.Print("Username: ")
@@ -136,6 +126,7 @@ func inputAdditionalParams(config *irodsfs.Config) error {
 		bytePassword, err := terminal.ReadPassword(int(syscall.Stdin))
 		fmt.Print("\n")
 		if err != nil {
+			logger.WithError(err).Error("Error occurred while reading password")
 			return err
 		}
 
@@ -146,8 +137,13 @@ func inputAdditionalParams(config *irodsfs.Config) error {
 }
 
 func processArguments() (*irodsfs.Config, error) {
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "processArguments",
+	})
+
 	var version bool
-	var irodsAddress string // contains HOST:PORT
+	var help bool
 	var operationTimeout string
 	var connectionIdleTimeout string
 	var cacheTimeout string
@@ -158,20 +154,17 @@ func processArguments() (*irodsfs.Config, error) {
 	// Parse parameters
 	flag.BoolVar(&version, "version", false, "Print client version information")
 	flag.BoolVar(&version, "v", false, "Print client version information (shorthand form)")
+	flag.BoolVar(&help, "h", false, "Print help")
 	flag.BoolVar(&config.Foreground, "f", false, "Run in foreground")
 	flag.BoolVar(&config.ChildProcess, ChildProcessArgument, false, "")
-	flag.StringVar(&config.Host, "host", "", "Set iRODS host address")
-	flag.IntVar(&config.Port, "port", 0, "Set iRODS port number")
-	flag.StringVar(&irodsAddress, "addr", "", "Set iRODS Address (HOST:PORT)")
 	flag.StringVar(&config.ProxyUser, "proxyuser", "", "Set iRODS proxy user")
 	flag.StringVar(&config.ClientUser, "clientuser", "", "Set iRODS client user")
 	flag.StringVar(&config.ProxyUser, "user", "", "Set iRODS user")
 	flag.StringVar(&config.ProxyUser, "u", "", "Set iRODS user (shorthand form)")
 	flag.StringVar(&config.Password, "password", "", "Set iRODS client password")
 	flag.StringVar(&config.Password, "p", "", "Set iRODS client password (shorthand form)")
-	flag.StringVar(&config.Zone, "zone", "", "Set iRODS zone")
-	flag.StringVar(&config.Zone, "z", "", "Set iRODS zone (shorthand form)")
 	flag.IntVar(&config.BlockSize, "blocksize", irodsfs.BlockSizeDefault, "Set data transfer block size")
+	flag.IntVar(&config.ReadAheadMax, "readahead", irodsfs.ReadAheadMaxDefault, "Set read-ahead size")
 	flag.IntVar(&config.ConnectionMax, "connectionmax", irodsfs.ConnectionMaxDefault, "Set max data transfer connections")
 	flag.StringVar(&operationTimeout, "operationtimeout", "", "Set filesystem operation timeout")
 	flag.StringVar(&connectionIdleTimeout, "connectionidletimeout", "", "Set idle data transfer timeout")
@@ -183,6 +176,7 @@ func processArguments() (*irodsfs.Config, error) {
 	if version {
 		info, err := client.GetVersionJSON()
 		if err != nil {
+			logger.WithError(err).Error("Could not get client version info")
 			return nil, err
 		}
 
@@ -190,15 +184,23 @@ func processArguments() (*irodsfs.Config, error) {
 		os.Exit(0)
 	}
 
+	if help {
+		flag.Usage()
+		os.Exit(0)
+	}
+
 	if flag.NArg() != 2 {
 		flag.Usage()
-		os.Exit(1)
+		err := fmt.Errorf("Illegal arguments given, required 2, but received %d", flag.NArg())
+		logger.Error(err)
+		return nil, err
 	}
 
 	// time
 	if len(operationTimeout) > 0 {
 		timeout, err := time.ParseDuration(operationTimeout)
 		if err != nil {
+			logger.WithError(err).Error("Could not parse Operation Timeout parameter into time.duration")
 			return nil, err
 		}
 
@@ -208,6 +210,7 @@ func processArguments() (*irodsfs.Config, error) {
 	if len(connectionIdleTimeout) > 0 {
 		timeout, err := time.ParseDuration(connectionIdleTimeout)
 		if err != nil {
+			logger.WithError(err).Error("Could not parse Connection Idle Timeout parameter into time.duration")
 			return nil, err
 		}
 
@@ -217,6 +220,7 @@ func processArguments() (*irodsfs.Config, error) {
 	if len(cacheTimeout) > 0 {
 		timeout, err := time.ParseDuration(cacheTimeout)
 		if err != nil {
+			logger.WithError(err).Error("Could not parse Cache Timeout parameter into time.duration")
 			return nil, err
 		}
 
@@ -226,6 +230,7 @@ func processArguments() (*irodsfs.Config, error) {
 	if len(cacheCleanupTime) > 0 {
 		timeout, err := time.ParseDuration(cacheCleanupTime)
 		if err != nil {
+			logger.WithError(err).Error("Could not parse Cache Cleanup Time parameter into time.duration")
 			return nil, err
 		}
 
@@ -234,8 +239,15 @@ func processArguments() (*irodsfs.Config, error) {
 
 	// the first argument contains irods://HOST:PORT/ZONE/inputPath...
 	irodsInputPath := flag.Arg(0)
+	if !strings.HasPrefix(irodsInputPath, iRODSProtocol) {
+		err := fmt.Errorf("Source path must start with 'irods://host:port/zone/path/to/the/collection'")
+		logger.Error(err)
+		return nil, err
+	}
+
 	access, err := parseIRODSURL(irodsInputPath)
 	if err != nil {
+		logger.WithError(err).Error("Could not parse iRODS source path")
 		return nil, err
 	}
 
@@ -269,15 +281,14 @@ func processArguments() (*irodsfs.Config, error) {
 
 	err = inputAdditionalParams(config)
 	if err != nil {
+		logger.WithError(err).Error("Could not get input parameters")
 		return nil, err
 	}
-
-	// IRODSPath starts with zone
-	config.IRODSPath = makeIRODSZonePath(config.Zone, config.IRODSPath)
 
 	// the second argument is local directory that irodsfs will be mounted
 	mountpoint, err := filepath.Abs(flag.Arg(1))
 	if err != nil {
+		logger.WithError(err).Errorf("Could not access the mount point %s", flag.Arg(1))
 		return nil, err
 	}
 

@@ -21,6 +21,8 @@ func GetFuseMountOptions(config *Config) []fuse.MountOption {
 	options := []fuse.MountOption{
 		fuse.FSName(FSName),
 		fuse.Subtype(Subtype),
+		fuse.AsyncRead(),
+		fuse.MaxReadahead(uint32(config.ReadAheadMax)),
 	}
 	return options
 }

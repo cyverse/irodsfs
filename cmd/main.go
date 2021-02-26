@@ -148,10 +148,12 @@ func run(config *irodsfs.Config) error {
 	fuseServer := fusefs.New(fuseConn, nil)
 	fs, err := irodsfs.NewFileSystem(config, fuseServer)
 	if err != nil {
+		logger.WithError(err).Error("Could not create filesystem")
 		return err
 	}
 
 	if err := fuseServer.Serve(fs); err != nil {
+		logger.WithError(err).Error("Could not start FUSE server")
 		return err
 	}
 	return nil

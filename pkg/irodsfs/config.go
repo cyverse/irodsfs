@@ -9,7 +9,10 @@ import (
 )
 
 const (
-	BlockSizeDefault             int           = 1024 * 64 // 64KB
+	BlockSizeDefault             int           = 1024 * 64     // 64KB
+	ReadAheadMaxDefault          int           = 1024 * 64 * 4 // 4*64KB
+	UseBlockIODefault            bool          = true
+	PerFileBlockCacheMaxDefault  int           = 3
 	ConnectionMaxDefault         int           = 10
 	OperationTimeoutDefault      time.Duration = 5 * time.Minute
 	ConnectionIdleTimeoutDefault time.Duration = 5 * time.Minute
@@ -29,6 +32,9 @@ type Config struct {
 	MountPath  string `yaml:"mount_path,omitempty"`
 
 	BlockSize             int           `yaml:"block_size"`
+	ReadAheadMax          int           `yaml:"read_ahead_max"`
+	UseBlockIO            bool          `yaml:"use_block_io"`
+	PerFileBlockCacheMax  int           `yaml:"per_file_block_cache_max"`
 	OperationTimeout      time.Duration `yaml:"operation_timeout"`
 	ConnectionIdleTimeout time.Duration `yaml:"connection_idle_timeout"`
 	ConnectionMax         int           `yaml:"connection_max"`
@@ -50,6 +56,9 @@ type configAlias struct {
 	MountPath  string `yaml:"mount_path,omitempty"`
 
 	BlockSize             int    `yaml:"block_size"`
+	ReadAheadMax          int    `yaml:"read_ahead_max"`
+	UseBlockIO            bool   `yaml:"use_block_io"`
+	PerFileBlockCacheMax  int    `yaml:"per_file_block_cache_max"`
 	OperationTimeout      string `yaml:"operation_timeout"`
 	ConnectionIdleTimeout string `yaml:"connection_idle_timeout"`
 	ConnectionMax         int    `yaml:"connection_max"`
@@ -66,6 +75,9 @@ func NewDefaultConfig() *Config {
 		Port: 0,
 
 		BlockSize:             BlockSizeDefault,
+		ReadAheadMax:          ReadAheadMaxDefault,
+		UseBlockIO:            UseBlockIODefault,
+		PerFileBlockCacheMax:  PerFileBlockCacheMaxDefault,
 		OperationTimeout:      OperationTimeoutDefault,
 		ConnectionIdleTimeout: ConnectionIdleTimeoutDefault,
 		ConnectionMax:         ConnectionMaxDefault,
@@ -79,8 +91,11 @@ func NewDefaultConfig() *Config {
 // NewConfigFromYAML creates Config from YAML
 func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 	alias := configAlias{
-		BlockSize:     BlockSizeDefault,
-		ConnectionMax: ConnectionMaxDefault,
+		BlockSize:            BlockSizeDefault,
+		ReadAheadMax:         ReadAheadMaxDefault,
+		PerFileBlockCacheMax: PerFileBlockCacheMaxDefault,
+		UseBlockIO:           UseBlockIODefault,
+		ConnectionMax:        ConnectionMaxDefault,
 	}
 
 	err := yaml.Unmarshal(yamlBytes, &alias)
@@ -139,6 +154,9 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		MountPath:  alias.MountPath,
 
 		BlockSize:             alias.BlockSize,
+		ReadAheadMax:          alias.ReadAheadMax,
+		UseBlockIO:            alias.UseBlockIO,
+		PerFileBlockCacheMax:  alias.PerFileBlockCacheMax,
 		OperationTimeout:      operationTimeout,
 		ConnectionIdleTimeout: connectionIdleTimeout,
 		ConnectionMax:         alias.ConnectionMax,
@@ -194,6 +212,14 @@ func (config *Config) Validate() error {
 
 	if config.BlockSize < 1024 {
 		return fmt.Errorf("BlockSize must be greater than 1024 Bytes")
+	}
+
+	if config.ReadAheadMax < 0 {
+		return fmt.Errorf("ReadAheadMax must be equal or greater than 0")
+	}
+
+	if config.PerFileBlockCacheMax < 0 {
+		return fmt.Errorf("PerFileBlockCacheMax must be greater than 0")
 	}
 
 	if config.ConnectionMax < 1 {
