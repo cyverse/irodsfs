@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	BlockSizeDefault             int           = 1024 * 64     // 64KB
-	ReadAheadMaxDefault          int           = 1024 * 64 * 4 // 4*64KB
+	BlockSizeDefault             int           = 1024 * 64 // 64KB
+	ReadAheadMaxDefault          int           = 1024 * 64 // 64KB
 	UseBlockIODefault            bool          = true
 	PerFileBlockCacheMaxDefault  int           = 3
 	ConnectionMaxDefault         int           = 10
