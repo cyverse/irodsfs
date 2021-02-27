@@ -28,8 +28,21 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 	})
 
 	irodsPath := path.Join(dir.FS.Config.IRODSPath, dir.Path)
-
 	logger.Infof("Calling Attr - %s", irodsPath)
+
+	// redo to get fresh info
+	entry, err := dir.FS.IRODSClient.Stat(irodsPath)
+	if err != nil {
+		if irodsfs_clienttype.IsFileNotFoundError(err) {
+			logger.WithError(err).Errorf("File not found - %s", irodsPath)
+			return syscall.ENOENT
+		}
+
+		logger.WithError(err).Errorf("Stat error - %s", irodsPath)
+		return syscall.EREMOTEIO
+	}
+
+	dir.IRODSFSEntry = entry
 
 	attr.Inode = uint64(dir.IRODSFSEntry.ID)
 	attr.Ctime = dir.IRODSFSEntry.CreateTime
@@ -226,14 +239,14 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 	}
 
 	switch entry.Type {
-	case irodsfs_client.FSFileEntry:
+	case irodsfs_client.FSDirectoryEntry:
 		err = dir.FS.IRODSClient.RenameDirToDir(irodsSrcPath, irodsDestPath)
 		if err != nil {
 			logger.WithError(err).Errorf("Could not rename dir - %s to %s", irodsSrcPath, irodsDestPath)
 			return syscall.EREMOTEIO
 		}
 		return nil
-	case irodsfs_client.FSDirectoryEntry:
+	case irodsfs_client.FSFileEntry:
 		err = dir.FS.IRODSClient.RenameFileToFile(irodsSrcPath, irodsDestPath)
 		if err != nil {
 			logger.WithError(err).Errorf("Could not rename file - %s to %s", irodsSrcPath, irodsDestPath)
@@ -244,4 +257,75 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 		logger.Errorf("Unknown entry type - %s", entry.Type)
 		return syscall.EREMOTEIO
 	}
+}
+
+// Create creates a file for the path and returns file handle
+func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (fusefs.Node, fusefs.Handle, error) {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"function": "Dir.Create",
+	})
+
+	irodsPath := path.Join(dir.FS.Config.IRODSPath, dir.Path, req.Name)
+	logger.Infof("Calling Create - %s", irodsPath)
+
+	openMode := string(irodsfs_clienttype.FileOpenModeReadOnly)
+
+	if req.Flags.IsWriteOnly() {
+		openMode = string(irodsfs_clienttype.FileOpenModeWriteOnly)
+	} else if req.Flags.IsReadWrite() {
+		openMode = string(irodsfs_clienttype.FileOpenModeReadWrite)
+	} else {
+		logger.Errorf("Unknown file open mode - %s", req.Flags.String())
+		return nil, nil, syscall.EACCES
+	}
+
+	handle, err := dir.FS.IRODSClient.CreateFile(irodsPath, "")
+	if err != nil {
+		logger.WithError(err).Errorf("CreateFile error - %s", irodsPath)
+		return nil, nil, syscall.EREMOTEIO
+	}
+
+	err = handle.Close()
+	if err != nil {
+		logger.WithError(err).Errorf("Close error - %s", irodsPath)
+		return nil, nil, syscall.EREMOTEIO
+	}
+
+	fileNode, err := dir.Lookup(ctx, req.Name)
+	if err != nil {
+		logger.WithError(err).Errorf("Lookup error - %s", irodsPath)
+		return nil, nil, syscall.EREMOTEIO
+	}
+
+	file := fileNode.(*File)
+
+	// reopen - to open file with openmode
+	handle, err = file.FS.IRODSClient.OpenFile(irodsPath, "", openMode)
+	if err != nil {
+		if irodsfs_clienttype.IsFileNotFoundError(err) {
+			logger.WithError(err).Errorf("File not found - %s", irodsPath)
+			return nil, nil, syscall.ENOENT
+		}
+
+		logger.WithError(err).Errorf("OpenFile error - %s", irodsPath)
+		return nil, nil, syscall.EREMOTEIO
+	}
+
+	file.FileHandle = handle
+
+	file.BlockIO = nil
+	if file.FS.Config.UseBlockIO {
+		if req.Flags.IsWriteOnly() {
+			blockio, err := NewBlockIO(file.FS, handle)
+			if err != nil {
+				logger.WithError(err).Errorf("BlockIO error - %s", irodsPath)
+				return nil, nil, syscall.EREMOTEIO
+			}
+
+			file.BlockIO = blockio
+		}
+	}
+
+	return file, file, nil
 }
