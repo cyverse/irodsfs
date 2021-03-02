@@ -15,6 +15,13 @@ import (
 
 // File is a file node
 type File struct {
+	FS           *IRODSFS
+	Path         string
+	IRODSFSEntry *irodsfs_client.FSEntry
+}
+
+// FileHandle is a file handle
+type FileHandle struct {
 	FS             *IRODSFS
 	Path           string
 	IRODSFSEntry   *irodsfs_client.FSEntry
@@ -71,7 +78,6 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 	})
 
 	irodsPath := path.Join(file.FS.Config.IRODSPath, file.Path)
-	logger.Infof("Calling Open - %s", irodsPath)
 
 	openMode := string(irodsfs_clienttype.FileOpenModeReadOnly)
 
@@ -87,6 +93,8 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		return nil, syscall.EACCES
 	}
 
+	logger.Infof("Calling Open - %s, %p, mode(%s)", irodsPath, file, openMode)
+
 	handle, err := file.FS.IRODSClient.OpenFile(irodsPath, "", openMode)
 	if err != nil {
 		if irodsfs_clienttype.IsFileNotFoundError(err) {
@@ -98,53 +106,61 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		return nil, syscall.EREMOTEIO
 	}
 
-	file.FileHandle = handle
+	logger.Infof("Conn %p, File Descriptor %d", handle.Connection, handle.IRODSHandle.FileDescriptor)
 
-	file.BlockIO = nil
-	if file.FS.Config.UseBlockIO {
+	fileHandle := &FileHandle{
+		FS:           file.FS,
+		Path:         file.Path,
+		IRODSFSEntry: file.IRODSFSEntry,
+		FileHandle:   handle,
+		BlockIO:      nil,
+	}
+
+	if fileHandle.FS.Config.UseBlockIO {
 		if req.Flags.IsReadOnly() && req.Flags.IsWriteOnly() {
-			blockio, err := NewBlockIO(file.FS, handle)
+			blockio, err := NewBlockIO(fileHandle.FS, handle)
 			if err != nil {
 				logger.WithError(err).Errorf("BlockIO error - %s", irodsPath)
 				return nil, syscall.EREMOTEIO
 			}
 
-			file.BlockIO = blockio
+			fileHandle.BlockIO = blockio
 		}
 	}
 
-	return file, nil
+	return fileHandle, nil
 }
 
 // Read reads file content
-func (file *File) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
+func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
-		"function": "File.Read",
+		"function": "FileHandle.Read",
 	})
 
-	irodsPath := path.Join(file.FS.Config.IRODSPath, file.Path)
+	irodsPath := path.Join(handle.FS.Config.IRODSPath, handle.Path)
 	logger.Infof("Calling Read - %s, %d Offset, %d Bytes", irodsPath, req.Offset, req.Size)
+	logger.Infof("Conn %p, File Descriptor %d", handle.FileHandle.Connection, handle.FileHandle.IRODSHandle.FileDescriptor)
 
-	if file.FileHandle == nil {
-		logger.Errorf("File handle error - %s", file.Path)
+	if handle.FileHandle == nil {
+		logger.Errorf("File handle error - %s", handle.Path)
 		return syscall.EREMOTEIO
 	}
 
-	if !irodsfs_clienttype.IsFileOpenFlagRead(file.FileHandle.OpenMode) {
-		logger.Errorf("Could not read file opened with write mode - %s", file.Path)
+	if !irodsfs_clienttype.IsFileOpenFlagRead(handle.FileHandle.OpenMode) {
+		logger.Errorf("Could not read file opened with write mode - %s", handle.Path)
 		return syscall.EACCES
 	}
 
-	if req.Offset > file.FileHandle.Entry.Size {
+	if req.Offset > handle.FileHandle.Entry.Size {
 		resp.Data = resp.Data[:0]
 		return nil
 	}
 
-	if file.BlockIO != nil {
-		data, err := file.BlockIO.Read(req.Offset, req.Size)
+	if handle.BlockIO != nil {
+		data, err := handle.BlockIO.Read(req.Offset, req.Size)
 		if err != nil {
-			logger.WithError(err).Errorf("Read error - %s, %d", file.Path, req.Size)
+			logger.WithError(err).Errorf("Read error - %s, %d", handle.Path, req.Size)
 			return syscall.EREMOTEIO
 		}
 
@@ -152,20 +168,20 @@ func (file *File) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.Re
 		resp.Data = resp.Data[:copiedLen]
 	} else {
 		// Lock
-		file.FileHandleLock.Lock()
-		defer file.FileHandleLock.Unlock()
+		handle.FileHandleLock.Lock()
+		defer handle.FileHandleLock.Unlock()
 
-		if file.FileHandle.GetOffset() != req.Offset {
-			_, err := file.FileHandle.Seek(req.Offset, irodsfs_clienttype.SeekSet)
+		if handle.FileHandle.GetOffset() != req.Offset {
+			_, err := handle.FileHandle.Seek(req.Offset, irodsfs_clienttype.SeekSet)
 			if err != nil {
-				logger.WithError(err).Errorf("Seek error - %s, %d", file.Path, req.Offset)
+				logger.WithError(err).Errorf("Seek error - %s, %d", handle.Path, req.Offset)
 				return syscall.EREMOTEIO
 			}
 		}
 
-		data, err := file.FileHandle.Read(req.Size)
+		data, err := handle.FileHandle.Read(req.Size)
 		if err != nil {
-			logger.WithError(err).Errorf("Read error - %s, %d", file.Path, req.Size)
+			logger.WithError(err).Errorf("Read error - %s, %d", handle.Path, req.Size)
 			return syscall.EREMOTEIO
 		}
 
@@ -177,49 +193,50 @@ func (file *File) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.Re
 }
 
 // Write writes file content
-func (file *File) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
+func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
-		"function": "File.Write",
+		"function": "FileHandle.Write",
 	})
 
-	irodsPath := path.Join(file.FS.Config.IRODSPath, file.Path)
+	irodsPath := path.Join(handle.FS.Config.IRODSPath, handle.Path)
 	logger.Infof("Calling Write - %s, %d Bytes", irodsPath, len(req.Data))
+	logger.Infof("Conn %p, File Descriptor %d", handle.FileHandle.Connection, handle.FileHandle.IRODSHandle.FileDescriptor)
 
-	if file.FileHandle == nil {
-		logger.Errorf("File handle error - %s", file.Path)
+	if handle.FileHandle == nil {
+		logger.Errorf("File handle error - %s", handle.Path)
 		return syscall.EREMOTEIO
 	}
 
-	if !irodsfs_clienttype.IsFileOpenFlagWrite(file.FileHandle.OpenMode) {
-		logger.Errorf("Could not write file opened with readonly mode - %s", file.Path)
+	if !irodsfs_clienttype.IsFileOpenFlagWrite(handle.FileHandle.OpenMode) {
+		logger.Errorf("Could not write file opened with readonly mode - %s", handle.Path)
 		return syscall.EACCES
 	}
 
-	if file.BlockIO != nil {
-		err := file.BlockIO.Write(req.Offset, req.Data)
+	if handle.BlockIO != nil {
+		err := handle.BlockIO.Write(req.Offset, req.Data)
 		if err != nil {
-			logger.WithError(err).Errorf("Write error - %s, %d", file.Path, len(req.Data))
+			logger.WithError(err).Errorf("Write error - %s, %d", handle.Path, len(req.Data))
 			return syscall.EREMOTEIO
 		}
 
 		resp.Size = len(req.Data)
 	} else {
 		// Lock
-		file.FileHandleLock.Lock()
-		defer file.FileHandleLock.Unlock()
+		handle.FileHandleLock.Lock()
+		defer handle.FileHandleLock.Unlock()
 
-		if file.FileHandle.GetOffset() != req.Offset {
-			_, err := file.FileHandle.Seek(req.Offset, irodsfs_clienttype.SeekSet)
+		if handle.FileHandle.GetOffset() != req.Offset {
+			_, err := handle.FileHandle.Seek(req.Offset, irodsfs_clienttype.SeekSet)
 			if err != nil {
-				logger.WithError(err).Errorf("Seek error - %s, %d", file.Path, req.Offset)
+				logger.WithError(err).Errorf("Seek error - %s, %d", handle.Path, req.Offset)
 				return syscall.EREMOTEIO
 			}
 		}
 
-		err := file.FileHandle.Write(req.Data)
+		err := handle.FileHandle.Write(req.Data)
 		if err != nil {
-			logger.WithError(err).Errorf("Write error - %s, %d", file.Path, len(req.Data))
+			logger.WithError(err).Errorf("Write error - %s, %d", handle.Path, len(req.Data))
 			return syscall.EREMOTEIO
 		}
 
@@ -230,26 +247,26 @@ func (file *File) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.
 }
 
 // Flush flushes content changes
-func (file *File) Flush(ctx context.Context, req *fuse.FlushRequest) error {
+func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
-		"function": "File.Flush",
+		"function": "FileHandle.Flush",
 	})
 
-	irodsPath := path.Join(file.FS.Config.IRODSPath, file.Path)
+	irodsPath := path.Join(handle.FS.Config.IRODSPath, handle.Path)
 	logger.Infof("Calling Flush - %s", irodsPath)
 
-	if file.FileHandle == nil {
-		logger.Errorf("File handle error - %s", file.Path)
+	if handle.FileHandle == nil {
+		logger.Errorf("File handle error - %s", handle.Path)
 		return syscall.EREMOTEIO
 	}
 
-	if irodsfs_clienttype.IsFileOpenFlagWrite(file.FileHandle.OpenMode) {
+	if irodsfs_clienttype.IsFileOpenFlagWrite(handle.FileHandle.OpenMode) {
 		// Flush
-		if file.FS.Config.UseBlockIO && file.BlockIO != nil {
-			err := file.BlockIO.Flush()
+		if handle.FS.Config.UseBlockIO && handle.BlockIO != nil {
+			err := handle.BlockIO.Flush()
 			if err != nil {
-				logger.WithError(err).Errorf("Flush error - %s", file.Path)
+				logger.WithError(err).Errorf("Flush error - %s", handle.Path)
 				return syscall.EREMOTEIO
 			}
 		}
@@ -259,38 +276,39 @@ func (file *File) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 }
 
 // Release closes file handle
-func (file *File) Release(ctx context.Context, req *fuse.ReleaseRequest) error {
+func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
-		"function": "File.Release",
+		"function": "FileHandle.Release",
 	})
 
-	irodsPath := path.Join(file.FS.Config.IRODSPath, file.Path)
+	irodsPath := path.Join(handle.FS.Config.IRODSPath, handle.Path)
 	logger.Infof("Calling Release - %s", irodsPath)
+	logger.Infof("Conn %p, File Descriptor %d", handle.FileHandle.Connection, handle.FileHandle.IRODSHandle.FileDescriptor)
 
-	if file.FileHandle == nil {
-		logger.Errorf("File handle error - %s", file.Path)
+	if handle.FileHandle == nil {
+		logger.Errorf("File handle error - %s", handle.Path)
 		return syscall.EREMOTEIO
 	}
 
-	if irodsfs_clienttype.IsFileOpenFlagWrite(file.FileHandle.OpenMode) {
+	if irodsfs_clienttype.IsFileOpenFlagWrite(handle.FileHandle.OpenMode) {
 		// Flush
-		if file.FS.Config.UseBlockIO && file.BlockIO != nil {
-			err := file.BlockIO.Flush()
+		if handle.FS.Config.UseBlockIO && handle.BlockIO != nil {
+			err := handle.BlockIO.Flush()
 			if err != nil {
-				logger.WithError(err).Errorf("Flush error - %s", file.Path)
+				logger.WithError(err).Errorf("Flush error - %s", handle.Path)
 				return syscall.EREMOTEIO
 			}
 		}
 	}
 
-	if file.BlockIO != nil {
-		file.BlockIO.Release()
+	if handle.BlockIO != nil {
+		handle.BlockIO.Release()
 	}
 
-	err := file.FileHandle.Close()
+	err := handle.FileHandle.Close()
 	if err != nil {
-		logger.Errorf("Close error - %s", file.Path)
+		logger.Errorf("Close error - %s", handle.Path)
 		return syscall.EREMOTEIO
 	}
 

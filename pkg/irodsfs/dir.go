@@ -129,7 +129,6 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 			FS:           dir.FS,
 			Path:         path.Join(dir.Path, name),
 			IRODSFSEntry: entry,
-			FileHandle:   nil,
 		}, nil
 	case irodsfs_client.FSDirectoryEntry:
 		return &Dir{
@@ -312,20 +311,25 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 		return nil, nil, syscall.EREMOTEIO
 	}
 
-	file.FileHandle = handle
+	fileHandle := &FileHandle{
+		FS:           file.FS,
+		Path:         file.Path,
+		IRODSFSEntry: file.IRODSFSEntry,
+		FileHandle:   handle,
+		BlockIO:      nil,
+	}
 
-	file.BlockIO = nil
-	if file.FS.Config.UseBlockIO {
+	if fileHandle.FS.Config.UseBlockIO {
 		if req.Flags.IsWriteOnly() {
-			blockio, err := NewBlockIO(file.FS, handle)
+			blockio, err := NewBlockIO(fileHandle.FS, handle)
 			if err != nil {
 				logger.WithError(err).Errorf("BlockIO error - %s", irodsPath)
 				return nil, nil, syscall.EREMOTEIO
 			}
 
-			file.BlockIO = blockio
+			fileHandle.BlockIO = blockio
 		}
 	}
 
-	return file, file, nil
+	return file, fileHandle, nil
 }

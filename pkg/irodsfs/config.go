@@ -9,6 +9,7 @@ import (
 )
 
 const (
+	PortDefault                  int           = 1247
 	BlockSizeDefault             int           = 1024 * 64 // 64KB
 	ReadAheadMaxDefault          int           = 1024 * 64 // 64KB
 	UseBlockIODefault            bool          = true
@@ -72,7 +73,7 @@ type configAlias struct {
 // NewDefaultConfig creates DefaultConfig
 func NewDefaultConfig() *Config {
 	return &Config{
-		Port: 0,
+		Port: PortDefault,
 
 		BlockSize:             BlockSizeDefault,
 		ReadAheadMax:          ReadAheadMaxDefault,
@@ -91,6 +92,7 @@ func NewDefaultConfig() *Config {
 // NewConfigFromYAML creates Config from YAML
 func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 	alias := configAlias{
+		Port:                 PortDefault,
 		BlockSize:            BlockSizeDefault,
 		ReadAheadMax:         ReadAheadMaxDefault,
 		PerFileBlockCacheMax: PerFileBlockCacheMaxDefault,

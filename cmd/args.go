@@ -63,7 +63,7 @@ func parseIRODSURL(inputURL string) (*IRODSAccessURL, error) {
 	host := ""
 	host = u.Hostname()
 
-	port := 0
+	port := 1247
 	if len(u.Port()) > 0 {
 		port64, err := strconv.ParseInt(u.Port(), 10, 32)
 		if err != nil {
