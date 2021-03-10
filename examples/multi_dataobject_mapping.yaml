@@ -1,0 +1,15 @@
+- irods_path: /iplant/home/iychoi/datasets/MSSA_MRSA/500k_MSSA_MRSA_1.fa
+  mapping_path: /1.fa
+  resource_type: file
+- irods_path: /iplant/home/iychoi/datasets/MSSA_MRSA/500k_MSSA_MRSA_1000.fa
+  mapping_path: /1000.fa
+  resource_type: file
+- irods_path: /iplant/home/iychoi/datasets/MSSA_MRSA/MSSA_pure_500k.fa
+  mapping_path: /500k.fa
+  resource_type: file
+- irods_path: /iplant/home/iychoi/datasets/POV/POV_L.Spr.C.1000m_reads.fa
+  mapping_path: /pov_spr_1000m.fa
+  resource_type: file
+- irods_path: /iplant/home/iychoi/datasets/POV/POV_L.Win.O.1000m_reads.fa
+  mapping_path: /pov_win_1000m.fa
+  resource_type: file

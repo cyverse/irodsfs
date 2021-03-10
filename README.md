@@ -29,8 +29,9 @@ After mounting, `irodsfs` will be executed in the background. To unmount, use `u
 sudo umount -f /mount/irods
 ```
 
-## Mount multiple iRODS Collections
-Run `irodsfs` to mount a collection with following information.
+## Mount multiple iRODS Collections or Data Objects
+Run `irodsfs` to mount multiple collections and data objects with custom path mappings.
+A path mapping file in YAML format must be provided as the first positional argument.
 
 - User: `iychoi`
 - iRODS Host: `data.cyverse.org`
