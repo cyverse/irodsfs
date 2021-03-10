@@ -25,7 +25,7 @@ type BlockIO struct {
 // NewBlockIO create a new BlockIO
 func NewBlockIO(fs *IRODSFS, handle *irodsfs_client.FileHandle) (*BlockIO, error) {
 	logger := log.WithFields(log.Fields{
-		"package":  "blockio",
+		"package":  "irodsfs",
 		"function": "NewBlockIO",
 	})
 
@@ -66,7 +66,7 @@ func (io *BlockIO) Release() {
 // Read reads data
 func (io *BlockIO) Read(offset int64, length int) ([]byte, error) {
 	logger := log.WithFields(log.Fields{
-		"package":  "blockio",
+		"package":  "irodsfs",
 		"function": "Read",
 	})
 
@@ -114,7 +114,7 @@ func (io *BlockIO) Read(offset int64, length int) ([]byte, error) {
 
 func (io *BlockIO) readInBlock(blockID BlockID, offset int, length int) ([]byte, error) {
 	logger := log.WithFields(log.Fields{
-		"package":  "blockio",
+		"package":  "irodsfs",
 		"function": "ReadInBlock",
 	})
 
@@ -158,7 +158,7 @@ func (io *BlockIO) readInBlock(blockID BlockID, offset int, length int) ([]byte,
 // Write writes data
 func (io *BlockIO) Write(offset int64, data []byte) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "blockio",
+		"package":  "irodsfs",
 		"function": "Write",
 	})
 
@@ -243,7 +243,7 @@ func (io *BlockIO) Write(offset int64, data []byte) error {
 // Flush flushes write buffer
 func (io *BlockIO) Flush() error {
 	logger := log.WithFields(log.Fields{
-		"package":  "blockio",
+		"package":  "irodsfs",
 		"function": "Flush",
 	})
 

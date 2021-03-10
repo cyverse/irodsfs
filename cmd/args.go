@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
@@ -15,6 +16,7 @@ import (
 	"github.com/cyverse/go-irodsclient/client"
 	"github.com/cyverse/irodsfs/pkg/irodsfs"
 	"golang.org/x/crypto/ssh/terminal"
+	"gopkg.in/yaml.v2"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -108,10 +110,10 @@ func parseIRODSURL(inputURL string) (*IRODSAccessURL, error) {
 	}, nil
 }
 
-func inputAdditionalParams(config *irodsfs.Config) error {
+func inputMissingParams(config *irodsfs.Config) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
-		"function": "inputAdditionalParams",
+		"function": "inputMissingParams",
 	})
 
 	if len(config.ProxyUser) == 0 {
@@ -238,50 +240,86 @@ func processArguments() (*irodsfs.Config, error) {
 	}
 
 	// the first argument contains irods://HOST:PORT/ZONE/inputPath...
-	irodsInputPath := flag.Arg(0)
-	if !strings.HasPrefix(irodsInputPath, iRODSProtocol) {
-		err := fmt.Errorf("Source path must start with 'irods://host:port/zone/path/to/the/collection'")
+	inputPath := flag.Arg(0)
+	if strings.HasPrefix(inputPath, iRODSProtocol) {
+		// inputPath can be a single iRODS collection stating with irods://,
+		access, err := parseIRODSURL(inputPath)
+		if err != nil {
+			logger.WithError(err).Error("Could not parse iRODS source path")
+			return nil, err
+		}
+
+		if len(access.Host) > 0 {
+			config.Host = access.Host
+		}
+
+		if access.Port > 0 {
+			config.Port = access.Port
+		}
+
+		if len(access.User) > 0 {
+			config.ProxyUser = access.User
+		}
+
+		if len(access.Password) > 0 {
+			config.Password = access.Password
+		}
+
+		if len(access.Zone) > 0 {
+			config.Zone = access.Zone
+		}
+
+		if len(access.Path) > 0 {
+			config.PathMappings = []irodsfs.PathMapping{
+				irodsfs.NewPathMappingForDir(access.Path, "/"),
+			}
+		}
+
+		if len(config.ClientUser) == 0 {
+			config.ClientUser = config.ProxyUser
+		}
+	} else if strings.HasSuffix(inputPath, ".yaml") || strings.HasSuffix(inputPath, ".yml") {
+		// inputPath can be a local file
+		inputAbsPath, err := filepath.Abs(inputPath)
+		if err != nil {
+			logger.WithError(err).Errorf("Could not access the local yaml file %s", inputPath)
+			return nil, err
+		}
+
+		fileinfo, err := os.Stat(inputAbsPath)
+		if err != nil {
+			logger.WithError(err).Errorf("local yaml file (%s) error", inputAbsPath)
+			return nil, err
+		}
+
+		if fileinfo.IsDir() {
+			logger.WithError(err).Errorf("local yaml file (%s) is not a file", inputAbsPath)
+			return nil, fmt.Errorf("local yaml file (%s) is not a file", inputAbsPath)
+		}
+
+		yamlBytes, err := ioutil.ReadFile(inputAbsPath)
+		if err != nil {
+			logger.WithError(err).Errorf("Could not read the local yaml file %s", inputAbsPath)
+			return nil, err
+		}
+
+		pathMappings := []irodsfs.PathMapping{}
+		err = yaml.Unmarshal(yamlBytes, &pathMappings)
+		if err != nil {
+			return nil, fmt.Errorf("YAML Unmarshal Error - %v", err)
+		}
+
+		config.PathMappings = pathMappings
+	} else {
+		//
+		err := fmt.Errorf("Source path must be an iRODS URL ('irods://host:port/zone/path/to/the/collection') or a local path ('/home/user/path/to/the/mapping_file.yaml')")
 		logger.Error(err)
 		return nil, err
 	}
 
-	access, err := parseIRODSURL(irodsInputPath)
+	err := inputMissingParams(config)
 	if err != nil {
-		logger.WithError(err).Error("Could not parse iRODS source path")
-		return nil, err
-	}
-
-	if len(access.Host) > 0 {
-		config.Host = access.Host
-	}
-
-	if access.Port > 0 {
-		config.Port = access.Port
-	}
-
-	if len(access.User) > 0 {
-		config.ProxyUser = access.User
-	}
-
-	if len(access.Password) > 0 {
-		config.Password = access.Password
-	}
-
-	if len(access.Zone) > 0 {
-		config.Zone = access.Zone
-	}
-
-	if len(access.Path) > 0 {
-		config.IRODSPath = access.Path
-	}
-
-	if len(config.ClientUser) == 0 {
-		config.ClientUser = config.ProxyUser
-	}
-
-	err = inputAdditionalParams(config)
-	if err != nil {
-		logger.WithError(err).Error("Could not get input parameters")
+		logger.WithError(err).Error("Could not input missing parameters")
 		return nil, err
 	}
 

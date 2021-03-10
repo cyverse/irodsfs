@@ -2,7 +2,7 @@ package irodsfs
 
 import (
 	"context"
-	"path"
+	"fmt"
 	"sync"
 	"syscall"
 
@@ -15,15 +15,16 @@ import (
 
 // File is a file node
 type File struct {
-	FS           *IRODSFS
-	Path         string
-	IRODSFSEntry *irodsfs_client.FSEntry
+	FS    *IRODSFS
+	Path  string
+	Entry *VFSEntry
 }
 
 // FileHandle is a file handle
 type FileHandle struct {
 	FS             *IRODSFS
 	Path           string
+	Entry          *VFSEntry
 	IRODSFSEntry   *irodsfs_client.FSEntry
 	FileHandle     *irodsfs_client.FileHandle
 	FileHandleLock sync.Mutex
@@ -37,37 +38,56 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 		"function": "File.Attr",
 	})
 
-	irodsPath := path.Join(file.FS.Config.IRODSPath, file.Path)
-	logger.Infof("Calling Attr - %s", irodsPath)
+	logger.Infof("Calling Attr - %s", file.Path)
 
-	// redo to get fresh info
-	entry, err := file.FS.IRODSClient.Stat(irodsPath)
-	if err != nil {
-		if irodsfs_clienttype.IsFileNotFoundError(err) {
-			logger.WithError(err).Errorf("File not found - %s", irodsPath)
-			return syscall.ENOENT
-		}
-
-		logger.WithError(err).Errorf("Stat error - %s", irodsPath)
+	vfsEntry := file.FS.VFS.GetClosestEntry(file.Path)
+	if vfsEntry == nil {
+		logger.Errorf("Could not get VFS Entry for %s", file.Path)
 		return syscall.EREMOTEIO
 	}
 
-	file.IRODSFSEntry = entry
+	if vfsEntry.Type == VFSVirtualDirEntryType {
+		logger.Errorf("Could not get file attribute from a virtual dir mapping")
+		return syscall.EREMOTEIO
+	} else if vfsEntry.Type == VFSIRODSEntryType {
+		irodsPath, err := vfsEntry.GetIRODSPath(file.Path)
+		if err != nil {
+			logger.WithError(err).Errorf("GetIRODSPath error")
+			return syscall.EREMOTEIO
+		}
 
-	attr.Inode = uint64(file.IRODSFSEntry.ID)
-	attr.Ctime = file.IRODSFSEntry.CreateTime
-	attr.Mtime = file.IRODSFSEntry.ModifyTime
-	attr.Atime = file.IRODSFSEntry.ModifyTime
-	attr.Size = uint64(file.IRODSFSEntry.Size)
+		// redo to get fresh info
+		entry, err := file.FS.IRODSClient.Stat(irodsPath)
+		if err != nil {
+			if irodsfs_clienttype.IsFileNotFoundError(err) {
+				logger.WithError(err).Errorf("File not found - %s", irodsPath)
+				return syscall.ENOENT
+			}
 
-	if file.IRODSFSEntry.Owner == file.FS.Config.ClientUser {
-		// mine
-		attr.Mode = 0o600
+			logger.WithError(err).Errorf("Stat error - %s", irodsPath)
+			return syscall.EREMOTEIO
+		}
+
+		file.Entry = NewVFSEntryFromIRODSFSEntry(file.Path, entry)
+
+		attr.Inode = uint64(entry.ID)
+		attr.Ctime = entry.CreateTime
+		attr.Mtime = entry.ModifyTime
+		attr.Atime = entry.ModifyTime
+		attr.Size = uint64(entry.Size)
+		if entry.Owner == file.FS.Config.ClientUser {
+			// mine
+			attr.Mode = 0o600
+		} else {
+			// others - readonly
+			attr.Mode = 0o400
+		}
+		return nil
 	} else {
-		// others - readonly
-		attr.Mode = 0o400
+		logger.Errorf("Unknown VFS Entry type : %s", vfsEntry.Type)
+		return syscall.EREMOTEIO
 	}
-	return nil
+
 }
 
 // Open opens file for the path and returns file handle
@@ -76,8 +96,6 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		"package":  "irodsfs",
 		"function": "File.Open",
 	})
-
-	irodsPath := path.Join(file.FS.Config.IRODSPath, file.Path)
 
 	openMode := string(irodsfs_clienttype.FileOpenModeReadOnly)
 
@@ -93,42 +111,65 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		return nil, syscall.EACCES
 	}
 
-	logger.Infof("Calling Open - %s, %p, mode(%s)", irodsPath, file, openMode)
+	logger.Infof("Calling Open - %s, mode(%s)", file.Path, openMode)
 
-	handle, err := file.FS.IRODSClient.OpenFile(irodsPath, "", openMode)
-	if err != nil {
-		if irodsfs_clienttype.IsFileNotFoundError(err) {
-			logger.WithError(err).Errorf("File not found - %s", irodsPath)
-			return nil, syscall.ENOENT
-		}
-
-		logger.WithError(err).Errorf("OpenFile error - %s", irodsPath)
+	vfsEntry := file.FS.VFS.GetClosestEntry(file.Path)
+	if vfsEntry == nil {
+		logger.Errorf("Could not get VFS Entry for %s", file.Path)
 		return nil, syscall.EREMOTEIO
 	}
 
-	logger.Infof("Conn %p, File Descriptor %d", handle.Connection, handle.IRODSHandle.FileDescriptor)
+	if vfsEntry.Type == VFSVirtualDirEntryType {
+		// cannot open directory
+		err := fmt.Errorf("Cannot open mapped directory entry - %s", vfsEntry.Path)
+		logger.Error(err)
+		return nil, syscall.EACCES
+	} else if vfsEntry.Type == VFSIRODSEntryType {
+		irodsPath, err := vfsEntry.GetIRODSPath(file.Path)
+		if err != nil {
+			logger.WithError(err).Errorf("GetIRODSPath error")
+			return nil, syscall.EREMOTEIO
+		}
 
-	fileHandle := &FileHandle{
-		FS:           file.FS,
-		Path:         file.Path,
-		IRODSFSEntry: file.IRODSFSEntry,
-		FileHandle:   handle,
-		BlockIO:      nil,
-	}
-
-	if fileHandle.FS.Config.UseBlockIO {
-		if req.Flags.IsReadOnly() && req.Flags.IsWriteOnly() {
-			blockio, err := NewBlockIO(fileHandle.FS, handle)
-			if err != nil {
-				logger.WithError(err).Errorf("BlockIO error - %s", irodsPath)
-				return nil, syscall.EREMOTEIO
+		handle, err := file.FS.IRODSClient.OpenFile(irodsPath, "", openMode)
+		if err != nil {
+			if irodsfs_clienttype.IsFileNotFoundError(err) {
+				logger.WithError(err).Errorf("File not found - %s", irodsPath)
+				return nil, syscall.ENOENT
 			}
 
-			fileHandle.BlockIO = blockio
+			logger.WithError(err).Errorf("OpenFile error - %s", irodsPath)
+			return nil, syscall.EREMOTEIO
 		}
-	}
 
-	return fileHandle, nil
+		logger.Infof("Conn %p, File Descriptor %d", handle.Connection, handle.IRODSHandle.FileDescriptor)
+
+		fileHandle := &FileHandle{
+			FS:           file.FS,
+			Path:         file.Path,
+			Entry:        file.Entry,
+			IRODSFSEntry: file.Entry.IRODSEntry,
+			FileHandle:   handle,
+			BlockIO:      nil,
+		}
+
+		if fileHandle.FS.Config.UseBlockIO {
+			if req.Flags.IsReadOnly() && req.Flags.IsWriteOnly() {
+				blockio, err := NewBlockIO(fileHandle.FS, handle)
+				if err != nil {
+					logger.WithError(err).Errorf("BlockIO error - %s", irodsPath)
+					return nil, syscall.EREMOTEIO
+				}
+
+				fileHandle.BlockIO = blockio
+			}
+		}
+
+		return fileHandle, nil
+	} else {
+		logger.Errorf("Unknown VFS Entry type : %s", vfsEntry.Type)
+		return nil, syscall.EREMOTEIO
+	}
 }
 
 // Read reads file content
@@ -138,8 +179,7 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 		"function": "FileHandle.Read",
 	})
 
-	irodsPath := path.Join(handle.FS.Config.IRODSPath, handle.Path)
-	logger.Infof("Calling Read - %s, %d Offset, %d Bytes", irodsPath, req.Offset, req.Size)
+	logger.Infof("Calling Read - %s, %d Offset, %d Bytes", handle.Path, req.Offset, req.Size)
 	logger.Infof("Conn %p, File Descriptor %d", handle.FileHandle.Connection, handle.FileHandle.IRODSHandle.FileDescriptor)
 
 	if handle.FileHandle == nil {
@@ -199,8 +239,7 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 		"function": "FileHandle.Write",
 	})
 
-	irodsPath := path.Join(handle.FS.Config.IRODSPath, handle.Path)
-	logger.Infof("Calling Write - %s, %d Bytes", irodsPath, len(req.Data))
+	logger.Infof("Calling Write - %s, %d Bytes", handle.Path, len(req.Data))
 	logger.Infof("Conn %p, File Descriptor %d", handle.FileHandle.Connection, handle.FileHandle.IRODSHandle.FileDescriptor)
 
 	if handle.FileHandle == nil {
@@ -253,8 +292,7 @@ func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) err
 		"function": "FileHandle.Flush",
 	})
 
-	irodsPath := path.Join(handle.FS.Config.IRODSPath, handle.Path)
-	logger.Infof("Calling Flush - %s", irodsPath)
+	logger.Infof("Calling Flush - %s", handle.Path)
 
 	if handle.FileHandle == nil {
 		logger.Errorf("File handle error - %s", handle.Path)
@@ -282,8 +320,7 @@ func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest)
 		"function": "FileHandle.Release",
 	})
 
-	irodsPath := path.Join(handle.FS.Config.IRODSPath, handle.Path)
-	logger.Infof("Calling Release - %s", irodsPath)
+	logger.Infof("Calling Release - %s", handle.Path)
 	logger.Infof("Conn %p, File Descriptor %d", handle.FileHandle.Connection, handle.FileHandle.IRODSHandle.FileDescriptor)
 
 	if handle.FileHandle == nil {

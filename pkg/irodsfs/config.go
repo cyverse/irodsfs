@@ -23,14 +23,14 @@ const (
 
 // Config holds the parameters list which can be configured
 type Config struct {
-	Host       string `yaml:"host"`
-	Port       int    `yaml:"port"`
-	ProxyUser  string `yaml:"proxy_user,omitempty"`
-	ClientUser string `yaml:"client_user"`
-	Zone       string `yaml:"zone"`
-	Password   string `yaml:"password,omitempty"`
-	IRODSPath  string `yaml:"irods_path,omitempty"` // e.g., /ZONE/home/iychoi
-	MountPath  string `yaml:"mount_path,omitempty"`
+	Host         string        `yaml:"host"`
+	Port         int           `yaml:"port"`
+	ProxyUser    string        `yaml:"proxy_user,omitempty"`
+	ClientUser   string        `yaml:"client_user"`
+	Zone         string        `yaml:"zone"`
+	Password     string        `yaml:"password,omitempty"`
+	PathMappings []PathMapping `yaml:"path_mappings"`
+	MountPath    string        `yaml:"mount_path,omitempty"`
 
 	BlockSize             int           `yaml:"block_size"`
 	ReadAheadMax          int           `yaml:"read_ahead_max"`
@@ -47,14 +47,14 @@ type Config struct {
 }
 
 type configAlias struct {
-	Host       string `yaml:"host"`
-	Port       int    `yaml:"port"`
-	ProxyUser  string `yaml:"proxy_user,omitempty"`
-	ClientUser string `yaml:"client_user"`
-	Zone       string `yaml:"zone"`
-	Password   string `yaml:"password,omitempty"`
-	IRODSPath  string `yaml:"irods_path,omitempty"`
-	MountPath  string `yaml:"mount_path,omitempty"`
+	Host         string        `yaml:"host"`
+	Port         int           `yaml:"port"`
+	ProxyUser    string        `yaml:"proxy_user,omitempty"`
+	ClientUser   string        `yaml:"client_user"`
+	Zone         string        `yaml:"zone"`
+	Password     string        `yaml:"password,omitempty"`
+	PathMappings []PathMapping `yaml:"path_mappings"`
+	MountPath    string        `yaml:"mount_path,omitempty"`
 
 	BlockSize             int    `yaml:"block_size"`
 	ReadAheadMax          int    `yaml:"read_ahead_max"`
@@ -73,7 +73,8 @@ type configAlias struct {
 // NewDefaultConfig creates DefaultConfig
 func NewDefaultConfig() *Config {
 	return &Config{
-		Port: PortDefault,
+		Port:         PortDefault,
+		PathMappings: []PathMapping{},
 
 		BlockSize:             BlockSizeDefault,
 		ReadAheadMax:          ReadAheadMaxDefault,
@@ -93,6 +94,7 @@ func NewDefaultConfig() *Config {
 func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 	alias := configAlias{
 		Port:                 PortDefault,
+		PathMappings:         []PathMapping{},
 		BlockSize:            BlockSizeDefault,
 		ReadAheadMax:         ReadAheadMaxDefault,
 		PerFileBlockCacheMax: PerFileBlockCacheMaxDefault,
@@ -146,14 +148,14 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 	}
 
 	return &Config{
-		Host:       alias.Host,
-		Port:       alias.Port,
-		ProxyUser:  alias.ProxyUser,
-		ClientUser: alias.ClientUser,
-		Zone:       alias.Zone,
-		Password:   alias.Password,
-		IRODSPath:  alias.IRODSPath,
-		MountPath:  alias.MountPath,
+		Host:         alias.Host,
+		Port:         alias.Port,
+		ProxyUser:    alias.ProxyUser,
+		ClientUser:   alias.ClientUser,
+		Zone:         alias.Zone,
+		Password:     alias.Password,
+		PathMappings: alias.PathMappings,
+		MountPath:    alias.MountPath,
 
 		BlockSize:             alias.BlockSize,
 		ReadAheadMax:          alias.ReadAheadMax,
@@ -195,8 +197,13 @@ func (config *Config) Validate() error {
 		return fmt.Errorf("Password must be given")
 	}
 
-	if len(config.IRODSPath) == 0 {
-		return fmt.Errorf("IRODSPath must be given")
+	if len(config.PathMappings) == 0 {
+		return fmt.Errorf("PathMappings must be given")
+	}
+
+	err := ValidatePathMappings(config.PathMappings)
+	if err != nil {
+		return fmt.Errorf("PathMaiings error - %v", err)
 	}
 
 	if len(config.MountPath) == 0 {

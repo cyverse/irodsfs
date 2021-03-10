@@ -28,16 +28,16 @@ func main() {
 	}
 
 	if isChildProc {
-		child_main()
+		childMain()
 	} else {
-		parent_main()
+		parentMain()
 	}
 }
 
-func parent_main() {
+func parentMain() {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
-		"function": "parent_main",
+		"function": "parentMain",
 	})
 
 	config, err := processArguments()
@@ -93,10 +93,10 @@ func parent_main() {
 	}
 }
 
-func child_main() {
+func childMain() {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
-		"function": "child_main",
+		"function": "childMain",
 	})
 
 	// read from stdin
