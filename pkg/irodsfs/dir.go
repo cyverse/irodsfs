@@ -15,8 +15,9 @@ import (
 
 // Dir is a directory node
 type Dir struct {
-	FS   *IRODSFS
-	Path string
+	FS      *IRODSFS
+	InodeID int64
+	Path    string
 }
 
 // Attr returns stat of file entry
@@ -27,6 +28,13 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 	})
 
 	logger.Infof("Calling Attr - %s", dir.Path)
+
+	if update, ok := dir.FS.Updater.Get(dir.InodeID); ok {
+		// update found
+		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
+		dir.Path = update.Path
+		dir.FS.Updater.Delete(dir.InodeID)
+	}
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(dir.Path)
 	if vfsEntry == nil {
@@ -105,6 +113,15 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 
 	logger.Infof("Calling Lookup - %s", targetPath)
 
+	if update, ok := dir.FS.Updater.Get(dir.InodeID); ok {
+		// update found
+		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
+		dir.Path = update.Path
+		dir.FS.Updater.Delete(dir.InodeID)
+
+		targetPath = JoinPath(dir.Path, name)
+	}
+
 	vfsEntry := dir.FS.VFS.GetClosestEntry(targetPath)
 	if vfsEntry == nil {
 		logger.Errorf("Could not get VFS Entry for %s", targetPath)
@@ -114,8 +131,9 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 	if vfsEntry.Type == VFSVirtualDirEntryType {
 		if vfsEntry.Path == targetPath {
 			return &Dir{
-				FS:   dir.FS,
-				Path: targetPath,
+				FS:      dir.FS,
+				InodeID: vfsEntry.VirtualDirEntry.ID,
+				Path:    targetPath,
 			}, nil
 		}
 		return nil, syscall.ENOENT
@@ -140,14 +158,16 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 		switch entry.Type {
 		case irodsfs_client.FSFileEntry:
 			return &File{
-				FS:    dir.FS,
-				Path:  targetPath,
-				Entry: NewVFSEntryFromIRODSFSEntry(targetPath, entry),
+				FS:      dir.FS,
+				InodeID: entry.ID,
+				Path:    targetPath,
+				Entry:   NewVFSEntryFromIRODSFSEntry(targetPath, entry),
 			}, nil
 		case irodsfs_client.FSDirectoryEntry:
 			return &Dir{
-				FS:   dir.FS,
-				Path: targetPath,
+				FS:      dir.FS,
+				InodeID: entry.ID,
+				Path:    targetPath,
 			}, nil
 		default:
 			logger.Errorf("Unknown entry type - %s", entry.Type)
@@ -167,6 +187,13 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	})
 
 	logger.Infof("Calling ReadDirAll - %s", dir.Path)
+
+	if update, ok := dir.FS.Updater.Get(dir.InodeID); ok {
+		// update found
+		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
+		dir.Path = update.Path
+		dir.FS.Updater.Delete(dir.InodeID)
+	}
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(dir.Path)
 	if vfsEntry == nil {
@@ -203,7 +230,7 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 					dirEntry := fuse.Dirent{
 						Inode: uint64(entry.IRODSEntry.ID),
 						Type:  entryType,
-						Name:  entry.IRODSEntry.Name,
+						Name:  GetFileName(entry.Path),
 					}
 
 					dirEntries = append(dirEntries, dirEntry)
@@ -251,6 +278,7 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 			}
 
 			dirEntries = append(dirEntries, dirEntry)
+			logger.Infof("Entry - %s %s", irodsPath, entry.Name)
 		}
 
 		return dirEntries, nil
@@ -270,6 +298,15 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 	targetPath := JoinPath(dir.Path, req.Name)
 
 	logger.Infof("Calling Remove - %s", targetPath)
+
+	if update, ok := dir.FS.Updater.Get(dir.InodeID); ok {
+		// update found
+		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
+		dir.Path = update.Path
+		dir.FS.Updater.Delete(dir.InodeID)
+
+		targetPath = JoinPath(dir.Path, req.Name)
+	}
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(targetPath)
 	if vfsEntry == nil {
@@ -343,6 +380,15 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 
 	logger.Infof("Calling Mkdir - %s", targetPath)
 
+	if update, ok := dir.FS.Updater.Get(dir.InodeID); ok {
+		// update found
+		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
+		dir.Path = update.Path
+		dir.FS.Updater.Delete(dir.InodeID)
+
+		targetPath = JoinPath(dir.Path, req.Name)
+	}
+
 	vfsEntry := dir.FS.VFS.GetClosestEntry(targetPath)
 	if vfsEntry == nil {
 		logger.Errorf("Could not get VFS Entry for %s", targetPath)
@@ -374,9 +420,16 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 			return nil, syscall.EREMOTEIO
 		}
 
+		entry, err := dir.FS.IRODSClient.Stat(irodsPath)
+		if err != nil {
+			logger.WithError(err).Errorf("Stat error - %s", irodsPath)
+			return nil, syscall.EREMOTEIO
+		}
+
 		return &Dir{
-			FS:   dir.FS,
-			Path: targetPath,
+			FS:      dir.FS,
+			InodeID: entry.ID,
+			Path:    targetPath,
 		}, nil
 	} else {
 		logger.Errorf("Unknown VFS Entry type : %s", vfsEntry.Type)
@@ -397,6 +450,16 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 	targetDestPath := JoinPath(newdir.Path, req.NewName)
 
 	logger.Infof("Calling Rename - %s to %s", targetSrcPath, targetDestPath)
+
+	if update, ok := dir.FS.Updater.Get(dir.InodeID); ok {
+		// update found
+		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
+		dir.Path = update.Path
+		dir.FS.Updater.Delete(dir.InodeID)
+
+		targetSrcPath = JoinPath(dir.Path, req.OldName)
+		targetDestPath = JoinPath(newdir.Path, req.NewName)
+	}
 
 	vfsSrcEntry := dir.FS.VFS.GetClosestEntry(targetSrcPath)
 	if vfsSrcEntry == nil {
@@ -465,12 +528,22 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 				logger.WithError(err).Errorf("Could not rename dir - %s to %s", irodsSrcPath, irodsDestPath)
 				return syscall.EREMOTEIO
 			}
+
+			// report update of path
+			if entry.ID > 0 {
+				dir.FS.Updater.Add(entry.ID, targetDestPath)
+			}
 			return nil
 		case irodsfs_client.FSFileEntry:
 			err = dir.FS.IRODSClient.RenameFileToFile(irodsSrcPath, irodsDestPath)
 			if err != nil {
 				logger.WithError(err).Errorf("Could not rename file - %s to %s", irodsSrcPath, irodsDestPath)
 				return syscall.EREMOTEIO
+			}
+
+			// report update of path
+			if entry.ID > 0 {
+				dir.FS.Updater.Add(entry.ID, targetDestPath)
 			}
 			return nil
 		default:
@@ -493,6 +566,15 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 	targetPath := JoinPath(dir.Path, req.Name)
 
 	logger.Infof("Calling Create - %s", targetPath)
+
+	if update, ok := dir.FS.Updater.Get(dir.InodeID); ok {
+		// update found
+		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
+		dir.Path = update.Path
+		dir.FS.Updater.Delete(dir.InodeID)
+
+		targetPath = JoinPath(dir.Path, req.Name)
+	}
 
 	openMode := string(irodsfs_clienttype.FileOpenModeReadOnly)
 

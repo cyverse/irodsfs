@@ -15,9 +15,10 @@ import (
 
 // File is a file node
 type File struct {
-	FS    *IRODSFS
-	Path  string
-	Entry *VFSEntry
+	FS      *IRODSFS
+	InodeID int64
+	Path    string
+	Entry   *VFSEntry
 }
 
 // FileHandle is a file handle
@@ -39,6 +40,13 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 	})
 
 	logger.Infof("Calling Attr - %s", file.Path)
+
+	if update, ok := file.FS.Updater.Get(file.InodeID); ok {
+		// update found
+		logger.Infof("Update found - replace path from %s to %s", file.Path, update.Path)
+		file.Path = update.Path
+		file.FS.Updater.Delete(file.InodeID)
+	}
 
 	vfsEntry := file.FS.VFS.GetClosestEntry(file.Path)
 	if vfsEntry == nil {
@@ -113,6 +121,13 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 
 	logger.Infof("Calling Open - %s, mode(%s)", file.Path, openMode)
 
+	if update, ok := file.FS.Updater.Get(file.InodeID); ok {
+		// update found
+		logger.Infof("Update found - replace path from %s to %s", file.Path, update.Path)
+		file.Path = update.Path
+		file.FS.Updater.Delete(file.InodeID)
+	}
+
 	vfsEntry := file.FS.VFS.GetClosestEntry(file.Path)
 	if vfsEntry == nil {
 		logger.Errorf("Could not get VFS Entry for %s", file.Path)
@@ -180,7 +195,6 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 	})
 
 	logger.Infof("Calling Read - %s, %d Offset, %d Bytes", handle.Path, req.Offset, req.Size)
-	logger.Infof("Conn %p, File Descriptor %d", handle.FileHandle.Connection, handle.FileHandle.IRODSHandle.FileDescriptor)
 
 	if handle.FileHandle == nil {
 		logger.Errorf("File handle error - %s", handle.Path)

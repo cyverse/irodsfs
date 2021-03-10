@@ -43,6 +43,7 @@ type Config struct {
 	CacheCleanupTime      time.Duration `yaml:"cache_cleanup_time"`
 
 	Foreground   bool `yaml:"foreground,omitempty"`
+	AllowOther   bool `yaml:"allow_other,omitempty"`
 	ChildProcess bool `yaml:"childprocess,omitempty"`
 }
 
@@ -67,6 +68,7 @@ type configAlias struct {
 	CacheCleanupTime      string `yaml:"cache_cleanup_time"`
 
 	Foreground   bool `yaml:"foreground,omitempty"`
+	AllowOther   bool `yaml:"allow_other,omitempty"`
 	ChildProcess bool `yaml:"childprocess,omitempty"`
 }
 
@@ -86,7 +88,9 @@ func NewDefaultConfig() *Config {
 		CacheTimeout:          CacheTimeoutDefault,
 		CacheCleanupTime:      CacheCleanupTimeDefault,
 
-		Foreground: false,
+		Foreground:   false,
+		AllowOther:   false,
+		ChildProcess: false,
 	}
 }
 
@@ -167,7 +171,9 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		CacheTimeout:          cacheTimeout,
 		CacheCleanupTime:      cacheCleanupTime,
 
-		Foreground: alias.Foreground,
+		Foreground:   alias.Foreground,
+		AllowOther:   alias.AllowOther,
+		ChildProcess: alias.ChildProcess,
 	}, nil
 }
 

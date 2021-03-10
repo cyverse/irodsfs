@@ -119,7 +119,9 @@ func inputMissingParams(config *irodsfs.Config) error {
 	if len(config.ProxyUser) == 0 {
 		fmt.Print("Username: ")
 		fmt.Scanln(&config.ProxyUser)
+	}
 
+	if len(config.ClientUser) == 0 {
 		config.ClientUser = config.ProxyUser
 	}
 
@@ -158,7 +160,11 @@ func processArguments() (*irodsfs.Config, error) {
 	flag.BoolVar(&version, "v", false, "Print client version information (shorthand form)")
 	flag.BoolVar(&help, "h", false, "Print help")
 	flag.BoolVar(&config.Foreground, "f", false, "Run in foreground")
+	flag.BoolVar(&config.AllowOther, "allow_other", false, "Allow access from other users")
 	flag.BoolVar(&config.ChildProcess, ChildProcessArgument, false, "")
+	flag.StringVar(&config.Host, "host", "", "Set iRODS host")
+	flag.IntVar(&config.Port, "port", 1247, "Set iRODS port")
+	flag.StringVar(&config.Zone, "zone", "", "Set iRODS zone")
 	flag.StringVar(&config.ProxyUser, "proxyuser", "", "Set iRODS proxy user")
 	flag.StringVar(&config.ClientUser, "clientuser", "", "Set iRODS client user")
 	flag.StringVar(&config.ProxyUser, "user", "", "Set iRODS user")

@@ -52,24 +52,16 @@ func (vfs *VFS) GetEntry(vpath string) *VFSEntry {
 
 // GetClosestEntry returns the closest VFS Entry for the path
 func (vfs *VFS) GetClosestEntry(vpath string) *VFSEntry {
-	logger := log.WithFields(log.Fields{
-		"package":  "irodsfs",
-		"function": "GetClosestEntry",
-	})
-
 	entry := vfs.GetEntry(vpath)
 	if entry != nil {
 		return entry
 	}
 
 	parentDirs := GetParentDirs(vpath)
-	logger.Infof("Searching pdirs %v", parentDirs)
 	var closestEntry *VFSEntry
 	for _, parentDir := range parentDirs {
-		logger.Infof("Searching pdir %s", parentDir)
 		if entry, ok := vfs.Entries[parentDir]; ok {
 			closestEntry = entry
-			logger.Infof("Searching pdir %s - found", parentDir)
 		}
 	}
 
@@ -93,7 +85,7 @@ func buildVFS(fsclient *irodsfs_client.FileSystem, entries map[string]*VFSEntry,
 				Type: VFSVirtualDirEntryType,
 				Path: parentDir,
 				VirtualDirEntry: &VFSVirtualDirEntry{
-					ID:         now.UnixNano(),
+					ID:         0,
 					Name:       GetFileName(parentDir),
 					Path:       parentDir,
 					Owner:      fsclient.Account.ClientUser,

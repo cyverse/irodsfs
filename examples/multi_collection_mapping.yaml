@@ -1,0 +1,7 @@
+- irods_path: /iplant/home/iychoi/datasets/POV
+  mapping_path: /pov
+  resource_type: dir
+- irods_path: /iplant/home/iychoi/datasets/MSSA_MRSA
+  mapping_path: /mssa_mrsa
+  resource_type: dir
+  

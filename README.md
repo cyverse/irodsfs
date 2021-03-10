@@ -13,14 +13,14 @@ make build
 Run `irodsfs` to mount a collection with following information.
 
 - User: `iychoi`
-- iRODS Host: `172.16.6.100`
+- iRODS Host: `data.cyverse.org`
 - iRODS Port: `1247` (Default, omitted) 
-- Zone: `cyverse.k8s`
+- Zone: `iplant`
 - Collection: `/home/iychoi`
 - Mount Path: `/mount/irods`
 
 ```shell script
-./bin/irodsfs irods://iychoi@172.16.6.100/cyverse.k8s/home/iychoi /mount/irods
+./bin/irodsfs irods://iychoi@data.cyverse.org/iplant/home/iychoi /mount/irods
 ```
 
 After mounting, `irodsfs` will be executed in the background. To unmount, use `umount` command.
@@ -28,6 +28,27 @@ After mounting, `irodsfs` will be executed in the background. To unmount, use `u
 ```shell script
 sudo umount -f /mount/irods
 ```
+
+## Mount multiple iRODS Collections
+Run `irodsfs` to mount a collection with following information.
+
+- User: `iychoi`
+- iRODS Host: `data.cyverse.org`
+- iRODS Port: `1247` (Default, omitted) 
+- Zone: `iplant`
+- Path Mapping YAML File: `./examples/multi_collection_mapping.yaml`
+- Mount Path: `/mount/irods`
+
+```shell script
+./irodsfs -u iychoi -host data.cyverse.org -zone iplant ../examples/multi_collection_mapping.yaml /mount/irods
+```
+
+After mounting, `irodsfs` will be executed in the background. To unmount, use `umount` command.
+
+```shell script
+sudo umount -f /mount/irods
+```
+
 
 ## License
 

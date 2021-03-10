@@ -22,8 +22,15 @@ func GetFuseMountOptions(config *Config) []fuse.MountOption {
 		fuse.FSName(FSName),
 		fuse.Subtype(Subtype),
 		fuse.AsyncRead(),
+		fuse.WritebackCache(),
 		fuse.MaxReadahead(uint32(config.ReadAheadMax)),
 	}
+
+	// handle allow other
+	if config.AllowOther {
+		options = append(options, fuse.AllowOther())
+	}
+
 	return options
 }
 
@@ -32,6 +39,7 @@ type IRODSFS struct {
 	Config      *Config
 	Fuse        *fusefs.Server
 	VFS         *VFS
+	Updater     *FileUpdater
 	IRODSClient *irodsfs_client.FileSystem
 }
 
@@ -64,10 +72,13 @@ func NewFileSystem(config *Config, fuseServer *fusefs.Server) (*IRODSFS, error) 
 		return nil, fmt.Errorf("Could not create VFS - %v", err)
 	}
 
+	updater := NewFileUpdater()
+
 	return &IRODSFS{
 		Config:      config,
 		Fuse:        fuseServer,
 		VFS:         vfs,
+		Updater:     updater,
 		IRODSClient: fsclient,
 	}, nil
 }
@@ -99,8 +110,9 @@ func (fs *IRODSFS) Root() (fusefs.Node, error) {
 
 	if vfsEntry.Type == VFSVirtualDirEntryType {
 		return &Dir{
-			FS:   fs,
-			Path: "/",
+			FS:      fs,
+			InodeID: vfsEntry.VirtualDirEntry.ID,
+			Path:    "/",
 		}, nil
 	} else if vfsEntry.Type == VFSIRODSEntryType {
 		if vfsEntry.IRODSEntry.Type != irodsfs_client.FSDirectoryEntry {
@@ -109,8 +121,9 @@ func (fs *IRODSFS) Root() (fusefs.Node, error) {
 		}
 
 		return &Dir{
-			FS:   fs,
-			Path: "/",
+			FS:      fs,
+			InodeID: vfsEntry.IRODSEntry.ID,
+			Path:    "/",
 		}, nil
 	} else {
 		logger.Errorf("Unknown VFS Entry type : %s", vfsEntry.Type)

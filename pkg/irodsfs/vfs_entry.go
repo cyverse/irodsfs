@@ -79,5 +79,5 @@ func (entry *VFSEntry) GetIRODSPath(vpath string) (string, error) {
 		return entry.IRODSEntry.Path, nil
 	}
 
-	return JoinPath(entry.IRODSEntry.Path, vpath), nil
+	return JoinPath(entry.IRODSEntry.Path, relPath), nil
 }
