@@ -34,6 +34,64 @@ func main() {
 	}
 }
 
+func RunFSDaemon(irodsfsExec string, config *irodsfs.Config) error {
+	return parentRun(irodsfsExec, config)
+}
+
+func parentRun(irodsfsExec string, config *irodsfs.Config) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "parentRun",
+	})
+
+	err := config.Validate()
+	if err != nil {
+		logger.WithError(err).Error("Argument validation error")
+		return err
+	}
+
+	if !config.Foreground {
+		// run the program in background
+		logger.Info("Running the process in the background mode")
+		childProcessArgument := fmt.Sprintf("-%s", ChildProcessArgument)
+		cmd := exec.Command(irodsfsExec, childProcessArgument)
+		subStdin, err := cmd.StdinPipe()
+		if err != nil {
+			logger.WithError(err).Error("Could not communicate to background process")
+			return err
+		}
+
+		cmd.Start()
+
+		logger.Infof("Process id = %d", cmd.Process.Pid)
+
+		logger.Info("Sending configuration data")
+		configBytes, err := yaml.Marshal(config)
+		if err != nil {
+			logger.WithError(err).Error("Could not serialize configuration")
+			return err
+		}
+
+		// send it to child
+		_, err = io.WriteString(subStdin, string(configBytes))
+		if err != nil {
+			logger.WithError(err).Error("Could not communicate to background process")
+			return err
+		}
+		logger.Info("Successfully sent configuration data")
+
+	} else {
+		// foreground
+		err = run(config)
+		if err != nil {
+			logger.WithError(err).Error("Could not run irodsfs")
+			return err
+		}
+	}
+
+	return nil
+}
+
 func parentMain() {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
@@ -46,51 +104,13 @@ func parentMain() {
 		logger.Fatal(err)
 	}
 
-	err = config.Validate()
+	err = parentRun(os.Args[0], config)
 	if err != nil {
-		logger.WithError(err).Error("Argument validation error")
+		logger.WithError(err).Error("Error occurred while running parent process")
 		logger.Fatal(err)
 	}
 
-	if !config.Foreground {
-		// run the program in background
-		logger.Info("Running the process in the background mode")
-		childProcessArgument := fmt.Sprintf("-%s", ChildProcessArgument)
-		cmd := exec.Command(os.Args[0], childProcessArgument)
-		subStdin, err := cmd.StdinPipe()
-		if err != nil {
-			logger.WithError(err).Error("Could not communicate to background process")
-			logger.Fatal(err)
-		}
-
-		cmd.Start()
-
-		logger.Infof("Process id = %d", cmd.Process.Pid)
-
-		logger.Info("Sending configuration data")
-		configBytes, err := yaml.Marshal(config)
-		if err != nil {
-			logger.WithError(err).Error("Could not serialize configuration")
-			logger.Fatal(err)
-		}
-
-		// send it to child
-		_, err = io.WriteString(subStdin, string(configBytes))
-		if err != nil {
-			logger.WithError(err).Error("Could not communicate to background process")
-			logger.Fatal(err)
-		}
-		logger.Info("Successfully sent configuration data")
-
-		os.Exit(0)
-	}
-
-	// foreground
-	err = run(config)
-	if err != nil {
-		logger.WithError(err).Error("Could not run irodsfs")
-		logger.Fatal(err)
-	}
+	os.Exit(0)
 }
 
 func childMain() {

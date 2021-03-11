@@ -41,7 +41,7 @@ A path mapping file in YAML format must be provided as the first positional argu
 - Mount Path: `/mount/irods`
 
 ```shell script
-./irodsfs -u iychoi -host data.cyverse.org -zone iplant ../examples/multi_collection_mapping.yaml /mount/irods
+./irodsfs -u iychoi -host data.cyverse.org -zone iplant -mapping ../examples/multi_collection_mapping.yaml /mount/irods
 ```
 
 After mounting, `irodsfs` will be executed in the background. To unmount, use `umount` command.

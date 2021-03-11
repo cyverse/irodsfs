@@ -1,0 +1,17 @@
+host: data.cyverse.org
+port: 1247
+proxy_user: iychoi
+client_user: iychoi
+zone: iplant
+password: 
+
+foreground: false
+allow_other: false
+
+path_mappings:
+  - irods_path: /iplant/home/iychoi/datasets/POV
+    mapping_path: /pov
+    resource_type: dir
+  - irods_path: /iplant/home/iychoi/datasets/MSSA_MRSA
+    mapping_path: /mssa_mrsa
+    resource_type: dir

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -110,22 +111,40 @@ func parseIRODSURL(inputURL string) (*IRODSAccessURL, error) {
 	}, nil
 }
 
-func inputMissingParams(config *irodsfs.Config) error {
+func inputMissingParams(config *irodsfs.Config, stdinClosed bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "inputMissingParams",
 	})
 
 	if len(config.ProxyUser) == 0 {
+		if stdinClosed {
+			err := fmt.Errorf("ProxyUser is not set")
+			logger.Error(err)
+			return err
+		}
+
 		fmt.Print("Username: ")
 		fmt.Scanln(&config.ProxyUser)
 	}
 
 	if len(config.ClientUser) == 0 {
+		if stdinClosed {
+			err := fmt.Errorf("ClientUser is not set")
+			logger.Error(err)
+			return err
+		}
+
 		config.ClientUser = config.ProxyUser
 	}
 
 	if len(config.Password) == 0 {
+		if stdinClosed {
+			err := fmt.Errorf("Password is not set")
+			logger.Error(err)
+			return err
+		}
+
 		fmt.Print("Password: ")
 		bytePassword, err := terminal.ReadPassword(int(syscall.Stdin))
 		fmt.Print("\n")
@@ -148,6 +167,8 @@ func processArguments() (*irodsfs.Config, error) {
 
 	var version bool
 	var help bool
+	var mappingFilePath string
+	var configFilePath string
 	var operationTimeout string
 	var connectionIdleTimeout string
 	var cacheTimeout string
@@ -159,6 +180,8 @@ func processArguments() (*irodsfs.Config, error) {
 	flag.BoolVar(&version, "version", false, "Print client version information")
 	flag.BoolVar(&version, "v", false, "Print client version information (shorthand form)")
 	flag.BoolVar(&help, "h", false, "Print help")
+	flag.StringVar(&mappingFilePath, "mapping", "", "Set Path Mapping YAML File")
+	flag.StringVar(&configFilePath, "config", "", "Set Config YAML File")
 	flag.BoolVar(&config.Foreground, "f", false, "Run in foreground")
 	flag.BoolVar(&config.AllowOther, "allow_other", false, "Allow access from other users")
 	flag.BoolVar(&config.ChildProcess, ChildProcessArgument, false, "")
@@ -197,11 +220,87 @@ func processArguments() (*irodsfs.Config, error) {
 		os.Exit(0)
 	}
 
-	if flag.NArg() != 2 {
-		flag.Usage()
-		err := fmt.Errorf("Illegal arguments given, required 2, but received %d", flag.NArg())
-		logger.Error(err)
-		return nil, err
+	stdinClosed := false
+	if len(configFilePath) > 0 {
+		if configFilePath == "-" {
+			// read from stdin
+			stdinReader := bufio.NewReader(os.Stdin)
+			yamlBytes, err := ioutil.ReadAll(stdinReader)
+			if err != nil {
+				logger.WithError(err).Error("Could not read STDIN")
+				return nil, err
+			}
+
+			err = yaml.Unmarshal(yamlBytes, &config)
+			if err != nil {
+				return nil, fmt.Errorf("YAML Unmarshal Error - %v", err)
+			}
+
+			stdinClosed = true
+		} else {
+			// read config
+			configFileAbsPath, err := filepath.Abs(configFilePath)
+			if err != nil {
+				logger.WithError(err).Errorf("Could not access the local yaml file %s", configFilePath)
+				return nil, err
+			}
+
+			fileinfo, err := os.Stat(configFileAbsPath)
+			if err != nil {
+				logger.WithError(err).Errorf("local yaml file (%s) error", configFileAbsPath)
+				return nil, err
+			}
+
+			if fileinfo.IsDir() {
+				logger.WithError(err).Errorf("local yaml file (%s) is not a file", configFileAbsPath)
+				return nil, fmt.Errorf("local yaml file (%s) is not a file", configFileAbsPath)
+			}
+
+			yamlBytes, err := ioutil.ReadFile(configFileAbsPath)
+			if err != nil {
+				logger.WithError(err).Errorf("Could not read the local yaml file %s", configFileAbsPath)
+				return nil, err
+			}
+
+			err = yaml.Unmarshal(yamlBytes, &config)
+			if err != nil {
+				return nil, fmt.Errorf("YAML Unmarshal Error - %v", err)
+			}
+		}
+	}
+
+	if len(mappingFilePath) > 0 {
+		// inputPath can be a local file
+		mappingFileAbsPath, err := filepath.Abs(mappingFilePath)
+		if err != nil {
+			logger.WithError(err).Errorf("Could not access the local yaml file %s", mappingFilePath)
+			return nil, err
+		}
+
+		fileinfo, err := os.Stat(mappingFileAbsPath)
+		if err != nil {
+			logger.WithError(err).Errorf("local yaml file (%s) error", mappingFileAbsPath)
+			return nil, err
+		}
+
+		if fileinfo.IsDir() {
+			logger.WithError(err).Errorf("local yaml file (%s) is not a file", mappingFileAbsPath)
+			return nil, fmt.Errorf("local yaml file (%s) is not a file", mappingFileAbsPath)
+		}
+
+		yamlBytes, err := ioutil.ReadFile(mappingFileAbsPath)
+		if err != nil {
+			logger.WithError(err).Errorf("Could not read the local yaml file %s", mappingFileAbsPath)
+			return nil, err
+		}
+
+		pathMappings := []irodsfs.PathMapping{}
+		err = yaml.Unmarshal(yamlBytes, &pathMappings)
+		if err != nil {
+			return nil, fmt.Errorf("YAML Unmarshal Error - %v", err)
+		}
+
+		config.PathMappings = pathMappings
 	}
 
 	// time
@@ -245,94 +344,80 @@ func processArguments() (*irodsfs.Config, error) {
 		config.CacheCleanupTime = timeout
 	}
 
-	// the first argument contains irods://HOST:PORT/ZONE/inputPath...
-	inputPath := flag.Arg(0)
-	if strings.HasPrefix(inputPath, iRODSProtocol) {
-		// inputPath can be a single iRODS collection stating with irods://,
-		access, err := parseIRODSURL(inputPath)
-		if err != nil {
-			logger.WithError(err).Error("Could not parse iRODS source path")
+	// positional arguments
+	mountPath := ""
+	if len(config.PathMappings) > 0 {
+		if flag.NArg() != 1 {
+			flag.Usage()
+			err := fmt.Errorf("Illegal arguments given, required mount target, but received %d", flag.NArg())
+			logger.Error(err)
 			return nil, err
 		}
 
-		if len(access.Host) > 0 {
-			config.Host = access.Host
+		mountPath = flag.Arg(0)
+	} else {
+		if flag.NArg() != 2 {
+			flag.Usage()
+			err := fmt.Errorf("Illegal arguments given, required 2, but received %d", flag.NArg())
+			logger.Error(err)
+			return nil, err
 		}
 
-		if access.Port > 0 {
-			config.Port = access.Port
-		}
+		// first arg is shorthand form of config
+		// the first argument contains irods://HOST:PORT/ZONE/inputPath...
+		inputPath := flag.Arg(0)
+		if strings.HasPrefix(inputPath, iRODSProtocol) {
+			// inputPath can be a single iRODS collection stating with irods://,
+			access, err := parseIRODSURL(inputPath)
+			if err != nil {
+				logger.WithError(err).Error("Could not parse iRODS source path")
+				return nil, err
+			}
 
-		if len(access.User) > 0 {
-			config.ProxyUser = access.User
-		}
+			if len(access.Host) > 0 {
+				config.Host = access.Host
+			}
 
-		if len(access.Password) > 0 {
-			config.Password = access.Password
-		}
+			if access.Port > 0 {
+				config.Port = access.Port
+			}
 
-		if len(access.Zone) > 0 {
-			config.Zone = access.Zone
-		}
+			if len(access.User) > 0 {
+				config.ProxyUser = access.User
+			}
 
-		if len(access.Path) > 0 {
-			config.PathMappings = []irodsfs.PathMapping{
-				irodsfs.NewPathMappingForDir(access.Path, "/"),
+			if len(access.Password) > 0 {
+				config.Password = access.Password
+			}
+
+			if len(access.Zone) > 0 {
+				config.Zone = access.Zone
+			}
+
+			if len(access.Path) > 0 {
+				config.PathMappings = []irodsfs.PathMapping{
+					irodsfs.NewPathMappingForDir(access.Path, "/"),
+				}
+			}
+
+			if len(config.ClientUser) == 0 {
+				config.ClientUser = config.ProxyUser
 			}
 		}
 
-		if len(config.ClientUser) == 0 {
-			config.ClientUser = config.ProxyUser
-		}
-	} else if strings.HasSuffix(inputPath, ".yaml") || strings.HasSuffix(inputPath, ".yml") {
-		// inputPath can be a local file
-		inputAbsPath, err := filepath.Abs(inputPath)
-		if err != nil {
-			logger.WithError(err).Errorf("Could not access the local yaml file %s", inputPath)
-			return nil, err
-		}
-
-		fileinfo, err := os.Stat(inputAbsPath)
-		if err != nil {
-			logger.WithError(err).Errorf("local yaml file (%s) error", inputAbsPath)
-			return nil, err
-		}
-
-		if fileinfo.IsDir() {
-			logger.WithError(err).Errorf("local yaml file (%s) is not a file", inputAbsPath)
-			return nil, fmt.Errorf("local yaml file (%s) is not a file", inputAbsPath)
-		}
-
-		yamlBytes, err := ioutil.ReadFile(inputAbsPath)
-		if err != nil {
-			logger.WithError(err).Errorf("Could not read the local yaml file %s", inputAbsPath)
-			return nil, err
-		}
-
-		pathMappings := []irodsfs.PathMapping{}
-		err = yaml.Unmarshal(yamlBytes, &pathMappings)
-		if err != nil {
-			return nil, fmt.Errorf("YAML Unmarshal Error - %v", err)
-		}
-
-		config.PathMappings = pathMappings
-	} else {
-		//
-		err := fmt.Errorf("Source path must be an iRODS URL ('irods://host:port/zone/path/to/the/collection') or a local path ('/home/user/path/to/the/mapping_file.yaml')")
-		logger.Error(err)
-		return nil, err
+		mountPath = flag.Arg(1)
 	}
 
-	err := inputMissingParams(config)
+	err := inputMissingParams(config, stdinClosed)
 	if err != nil {
 		logger.WithError(err).Error("Could not input missing parameters")
 		return nil, err
 	}
 
 	// the second argument is local directory that irodsfs will be mounted
-	mountpoint, err := filepath.Abs(flag.Arg(1))
+	mountpoint, err := filepath.Abs(mountPath)
 	if err != nil {
-		logger.WithError(err).Errorf("Could not access the mount point %s", flag.Arg(1))
+		logger.WithError(err).Errorf("Could not access the mount point %s", mountPath)
 		return nil, err
 	}
 
