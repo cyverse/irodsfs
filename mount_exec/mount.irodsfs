@@ -1,0 +1,99 @@
+#! /usr/bin/env python3
+
+import os
+import sys
+import subprocess
+import time
+
+from os import listdir
+from urllib.parse import urlparse
+
+# mount -t irodsfs URL /opt/mount
+#[0] /sbin/mount.irodsfs
+#[1] URL
+#[2] /opt/mount
+
+def which(program):
+    pathenv = os.getenv('PATH')
+    if not pathenv:
+        pathenv = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+    for p in pathenv.split(os.path.pathsep):
+        binpath = os.path.join(p, program)
+        if os.path.exists(binpath) and os.access(binpath, os.X_OK):
+            return binpath
+    return None
+
+
+def check_mount(mountPoint):
+    fuse_mounted = False
+
+    retry = 0
+    while retry < 10:
+        try:
+            time.sleep(1)
+
+            with open('/proc/mounts', 'r') as f:
+                for line in f.readlines():
+                    fields = line.split()
+                    if len(fields) >= 3:
+                        program = fields[0].strip()
+
+                        if program.lower() == "irodsfs":
+                            mountPath = fields[1].strip()
+                            mountType = fields[2].strip()
+
+                            if os.path.samefile(mountPath, mountPoint) and mountType.lower() == "fuse.irodsfs":
+                                fuse_mounted = True
+                                break
+
+            if fuse_mounted:
+                break
+
+            retry += 1
+        except FileNotFoundError:
+            retry += 1
+        except OSError:
+            retry += 1
+
+    if not fuse_mounted:
+        print("fuse mount not found for %s" % mountPoint, file=sys.stderr)
+        return False
+
+    accessible = os.access(mountPoint, os.R_OK)
+    if not accessible:
+        print("mount point %s is not accessible" % mountPoint, file=sys.stderr)
+        return False
+
+    # done
+    return True
+
+
+def run_command(command_argv):
+    os.spawnvpe(os.P_WAIT, command_argv[0], command_argv, os.environ)
+
+def main(argv):
+    irodsBin = which("irodsFs")
+
+    if not irodsBin:
+        print("Cannot find irodsFs (iRODS FUSE) installed from PATH environment", file=sys.stderr)
+        sys.exit(1)
+
+    if len(argv) <= 2:
+        print("Not enough number of arguments given", file=sys.stderr)
+        sys.exit(1)
+
+    command = "%s %s" % (irodsBin, " ".join(argv[1:]))
+    #print("executing > %s" % command)
+    run_command(command.split())
+
+    mountPoint = argv[-1]
+    if not check_mount(mountPoint):
+        print("Mount failed", file=sys.stderr)
+        sys.exit(1)
+
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main(sys.argv)
