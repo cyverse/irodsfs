@@ -24,6 +24,50 @@ def which(program):
             return binpath
     return None
 
+def reorderArgs(argv):
+    command = ""
+    options = []
+    positionalArgs = []
+    skipCount = 0
+    for idx, arg in enumerate(argv):
+        if idx == 0:
+            command = arg
+            continue
+
+        if skipCount > 0:
+            skipCount -= 1
+            continue
+
+        if arg == "-o":
+            # option
+            fuseOptions = argv[idx+1].split(",")
+            for fo in fuseOptions:
+                fokv = fo.split("=")
+                if len(fokv) == 1:
+                    # -o xxx
+                    options.append("-o")
+                    options.append(fokv[0])
+                elif len(fokv) == 2:
+                    # -o kk=vv
+                    options.append("-%s" % fokv[0])
+                    options.append(fokv[1])
+
+            skipCount = 1
+        else:
+            positionalArgs.append(arg)
+
+    reorderedArgs = []
+    reorderedArgs.append(command)
+    reorderedArgs.extend(options)
+
+    if len(positionalArgs) > 1:
+        if positionalArgs[0] == "irodsfs":
+            # device type
+            positionalArgs = positionalArgs[1:]
+
+    reorderedArgs.extend(positionalArgs)
+
+    return reorderedArgs
 
 def check_mount(mountPoint):
     fuse_mounted = False
@@ -70,24 +114,35 @@ def check_mount(mountPoint):
 
 
 def run_command(command_argv):
+    pathenv = os.getenv('PATH')
+    if not pathenv:
+        pathenv = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        vars_dict = {}
+        vars_dict["PATH"] = pathenv
+        os.environ.update(vars_dict)
+
     os.spawnvpe(os.P_WAIT, command_argv[0], command_argv, os.environ)
 
 def main(argv):
-    irodsBin = which("irodsFs")
+    irodsBin = which("irodsfs")
 
     if not irodsBin:
-        print("Cannot find irodsFs (iRODS FUSE) installed from PATH environment", file=sys.stderr)
+        print("Cannot find irodsfs (iRODS FUSE) installed from PATH environment", file=sys.stderr)
         sys.exit(1)
 
-    if len(argv) <= 2:
+    print("found irodsfs > %s" % irodsBin)
+
+    reorderedArgv = reorderArgs(argv)
+
+    if len(reorderedArgv) <= 2:
         print("Not enough number of arguments given", file=sys.stderr)
         sys.exit(1)
 
-    command = "%s %s" % (irodsBin, " ".join(argv[1:]))
-    #print("executing > %s" % command)
+    command = "%s %s" % (irodsBin, " ".join(reorderedArgv[1:]))
+    print("executing > %s" % command)
     run_command(command.split())
 
-    mountPoint = argv[-1]
+    mountPoint = reorderedArgv[-1]
     if not check_mount(mountPoint):
         print("Mount failed", file=sys.stderr)
         sys.exit(1)

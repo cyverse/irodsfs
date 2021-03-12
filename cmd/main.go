@@ -61,7 +61,11 @@ func parentRun(irodsfsExec string, config *irodsfs.Config) error {
 			return err
 		}
 
-		cmd.Start()
+		err = cmd.Start()
+		if err != nil {
+			logger.WithError(err).Errorf("Could not start a child process")
+			return err
+		}
 
 		logger.Infof("Process id = %d", cmd.Process.Pid)
 
@@ -119,8 +123,16 @@ func childMain() {
 		"function": "childMain",
 	})
 
+	// output to default log
+	logFile, err := os.OpenFile("/tmp/irodsfs.log", os.O_WRONLY|os.O_CREATE, 0755)
+	if err != nil {
+		logger.WithError(err).Error("Could not create log file")
+	} else {
+		log.SetOutput(logFile)
+	}
+
 	// read from stdin
-	_, err := os.Stdin.Stat()
+	_, err = os.Stdin.Stat()
 	if err != nil {
 		logger.WithError(err).Error("Could not communicate to foreground process")
 		logger.Fatal(err)
@@ -136,6 +148,16 @@ func childMain() {
 	if err != nil {
 		logger.WithError(err).Error("Could not read configuration")
 		logger.Fatal(err)
+	}
+
+	// output to default log
+	if len(config.LogPath) > 0 {
+		logFile, err = os.OpenFile(config.LogPath, os.O_WRONLY|os.O_CREATE, 0755)
+		if err != nil {
+			logger.WithError(err).Error("Could not create log file")
+		} else {
+			log.SetOutput(logFile)
+		}
 	}
 
 	err = config.Validate()

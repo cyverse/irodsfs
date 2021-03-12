@@ -27,6 +27,17 @@ const (
 	iRODSProtocol        = "irods://"
 )
 
+type FuseOptions []string
+
+func (f *FuseOptions) String() string {
+	return strings.Join(*f, " ")
+}
+
+func (f *FuseOptions) Set(val string) error {
+	*f = append(*f, val)
+	return nil
+}
+
 // IRODSAccessURL ...
 type IRODSAccessURL struct {
 	User     string
@@ -167,6 +178,7 @@ func processArguments() (*irodsfs.Config, error) {
 
 	var version bool
 	var help bool
+	var fuseOptions FuseOptions
 	var mappingFilePath string
 	var configFilePath string
 	var operationTimeout string
@@ -201,6 +213,8 @@ func processArguments() (*irodsfs.Config, error) {
 	flag.StringVar(&connectionIdleTimeout, "connectionidletimeout", "", "Set idle data transfer timeout")
 	flag.StringVar(&cacheTimeout, "cachetimeout", "", "Set filesystem cache timeout")
 	flag.StringVar(&cacheCleanupTime, "cachecleanuptime", "", "Set filesystem cache cleanup time")
+	flag.Var(&fuseOptions, "o", "Other fuse options")
+	flag.StringVar(&config.LogPath, "log", "", "Set log file path")
 
 	flag.Parse()
 
@@ -218,6 +232,15 @@ func processArguments() (*irodsfs.Config, error) {
 	if help {
 		flag.Usage()
 		os.Exit(0)
+	}
+
+	if len(config.LogPath) > 0 {
+		logFile, err := os.OpenFile(config.LogPath, os.O_WRONLY|os.O_CREATE, 0755)
+		if err != nil {
+			logger.WithError(err).Error("Could not create log file - %s", config.LogPath)
+		} else {
+			log.SetOutput(logFile)
+		}
 	}
 
 	stdinClosed := false
@@ -358,7 +381,7 @@ func processArguments() (*irodsfs.Config, error) {
 	} else {
 		if flag.NArg() != 2 {
 			flag.Usage()
-			err := fmt.Errorf("Illegal arguments given, required 2, but received %d", flag.NArg())
+			err := fmt.Errorf("Illegal arguments given, required 2, but received %d (%s)", flag.NArg(), strings.Join(flag.Args(), " "))
 			logger.Error(err)
 			return nil, err
 		}

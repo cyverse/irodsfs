@@ -42,6 +42,8 @@ type Config struct {
 	CacheTimeout          time.Duration `yaml:"cache_timeout"`
 	CacheCleanupTime      time.Duration `yaml:"cache_cleanup_time"`
 
+	LogPath string `yaml:"log_path,omitempty"`
+
 	Foreground   bool `yaml:"foreground,omitempty"`
 	AllowOther   bool `yaml:"allow_other,omitempty"`
 	ChildProcess bool `yaml:"childprocess,omitempty"`
@@ -67,6 +69,8 @@ type configAlias struct {
 	CacheTimeout          string `yaml:"cache_timeout"`
 	CacheCleanupTime      string `yaml:"cache_cleanup_time"`
 
+	LogPath string `yaml:"log_path,omitempty"`
+
 	Foreground   bool `yaml:"foreground,omitempty"`
 	AllowOther   bool `yaml:"allow_other,omitempty"`
 	ChildProcess bool `yaml:"childprocess,omitempty"`
@@ -87,6 +91,8 @@ func NewDefaultConfig() *Config {
 		ConnectionMax:         ConnectionMaxDefault,
 		CacheTimeout:          CacheTimeoutDefault,
 		CacheCleanupTime:      CacheCleanupTimeDefault,
+
+		LogPath: "",
 
 		Foreground:   false,
 		AllowOther:   false,
@@ -170,6 +176,8 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		ConnectionMax:         alias.ConnectionMax,
 		CacheTimeout:          cacheTimeout,
 		CacheCleanupTime:      cacheCleanupTime,
+
+		LogPath: alias.LogPath,
 
 		Foreground:   alias.Foreground,
 		AllowOther:   alias.AllowOther,
