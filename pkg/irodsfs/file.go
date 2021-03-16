@@ -3,6 +3,8 @@ package irodsfs
 import (
 	"context"
 	"fmt"
+	"os/user"
+	"strconv"
 	"sync"
 	"syscall"
 
@@ -54,6 +56,25 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 		return syscall.EREMOTEIO
 	}
 
+	// user
+	user, err := user.Current()
+	if err != nil {
+		logger.WithError(err).Error("User.Current error")
+		return syscall.EREMOTEIO
+	}
+
+	uid, err := strconv.ParseUint(user.Uid, 10, 32)
+	if err != nil {
+		logger.WithError(err).Errorf("Could not parse uid - %s", user.Uid)
+		return syscall.EREMOTEIO
+	}
+
+	gid, err := strconv.ParseUint(user.Gid, 10, 32)
+	if err != nil {
+		logger.WithError(err).Errorf("Could not parse gid - %s", user.Gid)
+		return syscall.EREMOTEIO
+	}
+
 	if vfsEntry.Type == VFSVirtualDirEntryType {
 		logger.Errorf("Could not get file attribute from a virtual dir mapping")
 		return syscall.EREMOTEIO
@@ -79,6 +100,8 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 		file.Entry = NewVFSEntryFromIRODSFSEntry(file.Path, entry)
 
 		attr.Inode = uint64(entry.ID)
+		attr.Uid = uint32(uid)
+		attr.Gid = uint32(gid)
 		attr.Ctime = entry.CreateTime
 		attr.Mtime = entry.ModifyTime
 		attr.Atime = entry.ModifyTime
@@ -110,8 +133,18 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 	if req.Flags.IsReadOnly() {
 		openMode = string(irodsfs_clienttype.FileOpenModeReadOnly)
 		resp.Flags |= fuse.OpenKeepCache
+		resp.Flags &^= fuse.OpenDirectIO // disable
 	} else if req.Flags.IsWriteOnly() {
 		openMode = string(irodsfs_clienttype.FileOpenModeWriteOnly)
+
+		if req.Flags&fuse.OpenAppend == fuse.OpenAppend {
+			// append
+			openMode = string(irodsfs_clienttype.FileOpenModeAppend)
+		} else if req.Flags&fuse.OpenTruncate == fuse.OpenTruncate {
+			// truncate
+			openMode = string(irodsfs_clienttype.FileOpenModeWriteTruncate)
+		}
+		resp.Flags |= fuse.OpenDirectIO
 	} else if req.Flags.IsReadWrite() {
 		openMode = string(irodsfs_clienttype.FileOpenModeReadWrite)
 	} else {
@@ -198,12 +231,12 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 
 	if handle.FileHandle == nil {
 		logger.Errorf("File handle error - %s", handle.Path)
-		return syscall.EREMOTEIO
+		return syscall.EBADFD
 	}
 
 	if !irodsfs_clienttype.IsFileOpenFlagRead(handle.FileHandle.OpenMode) {
 		logger.Errorf("Could not read file opened with write mode - %s", handle.Path)
-		return syscall.EACCES
+		return syscall.EBADFD
 	}
 
 	if req.Offset > handle.FileHandle.Entry.Size {
@@ -258,12 +291,12 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 
 	if handle.FileHandle == nil {
 		logger.Errorf("File handle error - %s", handle.Path)
-		return syscall.EREMOTEIO
+		return syscall.EBADFD
 	}
 
 	if !irodsfs_clienttype.IsFileOpenFlagWrite(handle.FileHandle.OpenMode) {
 		logger.Errorf("Could not write file opened with readonly mode - %s", handle.Path)
-		return syscall.EACCES
+		return syscall.EBADFD
 	}
 
 	if handle.BlockIO != nil {
