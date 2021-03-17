@@ -7,8 +7,6 @@ import (
 	"os"
 	"os/exec"
 
-	"bazil.org/fuse"
-	fusefs "bazil.org/fuse/fs"
 	"github.com/cyverse/irodsfs/pkg/irodsfs"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -180,23 +178,19 @@ func run(config *irodsfs.Config) error {
 		"function": "run",
 	})
 
-	fuseConn, err := fuse.Mount(config.MountPath, irodsfs.GetFuseMountOptions(config)...)
-	if err != nil {
-		logger.WithError(err).Error("Could not connect to FUSE")
-		return err
-	}
-	defer fuseConn.Close()
-
-	fuseServer := fusefs.New(fuseConn, nil)
-	fs, err := irodsfs.NewFileSystem(config, fuseServer)
+	fs, err := irodsfs.NewFileSystem(config)
 	if err != nil {
 		logger.WithError(err).Error("Could not create filesystem")
 		return err
 	}
+	defer fs.Destroy()
 
-	if err := fuseServer.Serve(fs); err != nil {
-		logger.WithError(err).Error("Could not start FUSE server")
+	err = fs.StartFuse()
+	if err != nil {
+		logger.WithError(err).Error("Could not start FUSE")
 		return err
 	}
+
+	// returns if mount fails, or stopped.
 	return nil
 }

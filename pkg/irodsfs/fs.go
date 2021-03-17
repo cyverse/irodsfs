@@ -44,7 +44,7 @@ type IRODSFS struct {
 }
 
 // NewFileSystem creates a new file system
-func NewFileSystem(config *Config, fuseServer *fusefs.Server) (*IRODSFS, error) {
+func NewFileSystem(config *Config) (*IRODSFS, error) {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"function": "NewFileSystem",
@@ -64,7 +64,11 @@ func NewFileSystem(config *Config, fuseServer *fusefs.Server) (*IRODSFS, error) 
 		config.ConnectionMax, config.CacheTimeout,
 		config.CacheCleanupTime)
 
-	fsclient := irodsfs_client.NewFileSystem(account, fsconfig)
+	fsclient, err := irodsfs_client.NewFileSystem(account, fsconfig)
+	if err != nil {
+		logger.WithError(err).Error("Could not create IRODS FileSystem Client")
+		return nil, fmt.Errorf("Could not create IRODS FileSystem Client - %v", err)
+	}
 
 	vfs, err := NewVFS(fsclient, config.PathMappings)
 	if err != nil {
@@ -76,11 +80,34 @@ func NewFileSystem(config *Config, fuseServer *fusefs.Server) (*IRODSFS, error) 
 
 	return &IRODSFS{
 		Config:      config,
-		Fuse:        fuseServer,
+		Fuse:        nil,
 		VFS:         vfs,
 		Updater:     updater,
 		IRODSClient: fsclient,
 	}, nil
+}
+
+func (fs *IRODSFS) StartFuse() error {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"function": "StartFuse",
+	})
+
+	fuseConn, err := fuse.Mount(fs.Config.MountPath, GetFuseMountOptions(fs.Config)...)
+	if err != nil {
+		logger.WithError(err).Error("Could not connect to FUSE")
+		return err
+	}
+	defer fuseConn.Close()
+
+	fuseServer := fusefs.New(fuseConn, nil)
+	fs.Fuse = fuseServer
+
+	if err := fuseServer.Serve(fs); err != nil {
+		logger.WithError(err).Error("Could not start FUSE server")
+		return err
+	}
+	return nil
 }
 
 // Destroy destroys the file system
