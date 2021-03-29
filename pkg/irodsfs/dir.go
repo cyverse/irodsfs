@@ -31,11 +31,11 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 
 	logger.Infof("Calling Attr - %s", dir.Path)
 
-	if update, ok := dir.FS.Updater.Get(dir.InodeID); ok {
+	if update, ok := dir.FS.FileMetaUpdater.Get(dir.InodeID); ok {
 		// update found
 		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
 		dir.Path = update.Path
-		dir.FS.Updater.Delete(dir.InodeID)
+		dir.FS.FileMetaUpdater.Delete(dir.InodeID)
 	}
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(dir.Path)
@@ -139,11 +139,11 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 
 	logger.Infof("Calling Lookup - %s", targetPath)
 
-	if update, ok := dir.FS.Updater.Get(dir.InodeID); ok {
+	if update, ok := dir.FS.FileMetaUpdater.Get(dir.InodeID); ok {
 		// update found
 		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
 		dir.Path = update.Path
-		dir.FS.Updater.Delete(dir.InodeID)
+		dir.FS.FileMetaUpdater.Delete(dir.InodeID)
 
 		targetPath = JoinPath(dir.Path, name)
 	}
@@ -214,11 +214,11 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 
 	logger.Infof("Calling ReadDirAll - %s", dir.Path)
 
-	if update, ok := dir.FS.Updater.Get(dir.InodeID); ok {
+	if update, ok := dir.FS.FileMetaUpdater.Get(dir.InodeID); ok {
 		// update found
 		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
 		dir.Path = update.Path
-		dir.FS.Updater.Delete(dir.InodeID)
+		dir.FS.FileMetaUpdater.Delete(dir.InodeID)
 	}
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(dir.Path)
@@ -325,11 +325,11 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 
 	logger.Infof("Calling Remove - %s", targetPath)
 
-	if update, ok := dir.FS.Updater.Get(dir.InodeID); ok {
+	if update, ok := dir.FS.FileMetaUpdater.Get(dir.InodeID); ok {
 		// update found
 		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
 		dir.Path = update.Path
-		dir.FS.Updater.Delete(dir.InodeID)
+		dir.FS.FileMetaUpdater.Delete(dir.InodeID)
 
 		targetPath = JoinPath(dir.Path, req.Name)
 	}
@@ -406,11 +406,11 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 
 	logger.Infof("Calling Mkdir - %s", targetPath)
 
-	if update, ok := dir.FS.Updater.Get(dir.InodeID); ok {
+	if update, ok := dir.FS.FileMetaUpdater.Get(dir.InodeID); ok {
 		// update found
 		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
 		dir.Path = update.Path
-		dir.FS.Updater.Delete(dir.InodeID)
+		dir.FS.FileMetaUpdater.Delete(dir.InodeID)
 
 		targetPath = JoinPath(dir.Path, req.Name)
 	}
@@ -477,11 +477,11 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 
 	logger.Infof("Calling Rename - %s to %s", targetSrcPath, targetDestPath)
 
-	if update, ok := dir.FS.Updater.Get(dir.InodeID); ok {
+	if update, ok := dir.FS.FileMetaUpdater.Get(dir.InodeID); ok {
 		// update found
 		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
 		dir.Path = update.Path
-		dir.FS.Updater.Delete(dir.InodeID)
+		dir.FS.FileMetaUpdater.Delete(dir.InodeID)
 
 		targetSrcPath = JoinPath(dir.Path, req.OldName)
 		targetDestPath = JoinPath(newdir.Path, req.NewName)
@@ -557,7 +557,7 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 
 			// report update of path
 			if entry.ID > 0 {
-				dir.FS.Updater.Add(entry.ID, targetDestPath)
+				dir.FS.FileMetaUpdater.Add(entry.ID, targetDestPath)
 			}
 			return nil
 		case irodsfs_client.FSFileEntry:
@@ -569,7 +569,7 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 
 			// report update of path
 			if entry.ID > 0 {
-				dir.FS.Updater.Add(entry.ID, targetDestPath)
+				dir.FS.FileMetaUpdater.Add(entry.ID, targetDestPath)
 			}
 			return nil
 		default:
@@ -593,11 +593,11 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 
 	logger.Infof("Calling Create - %s", targetPath)
 
-	if update, ok := dir.FS.Updater.Get(dir.InodeID); ok {
+	if update, ok := dir.FS.FileMetaUpdater.Get(dir.InodeID); ok {
 		// update found
 		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
 		dir.Path = update.Path
-		dir.FS.Updater.Delete(dir.InodeID)
+		dir.FS.FileMetaUpdater.Delete(dir.InodeID)
 
 		targetPath = JoinPath(dir.Path, req.Name)
 	}

@@ -36,11 +36,11 @@ func GetFuseMountOptions(config *Config) []fuse.MountOption {
 
 // IRODSFS is a file system object
 type IRODSFS struct {
-	Config      *Config
-	Fuse        *fusefs.Server
-	VFS         *VFS
-	Updater     *FileUpdater
-	IRODSClient *irodsfs_client.FileSystem
+	Config          *Config
+	Fuse            *fusefs.Server
+	VFS             *VFS
+	FileMetaUpdater *FileMetaUpdater
+	IRODSClient     *irodsfs_client.FileSystem
 }
 
 // NewFileSystem creates a new file system
@@ -76,14 +76,14 @@ func NewFileSystem(config *Config) (*IRODSFS, error) {
 		return nil, fmt.Errorf("Could not create VFS - %v", err)
 	}
 
-	updater := NewFileUpdater()
+	fileMetaUpdater := NewFileMetaUpdater()
 
 	return &IRODSFS{
-		Config:      config,
-		Fuse:        nil,
-		VFS:         vfs,
-		Updater:     updater,
-		IRODSClient: fsclient,
+		Config:          config,
+		Fuse:            nil,
+		VFS:             vfs,
+		FileMetaUpdater: fileMetaUpdater,
+		IRODSClient:     fsclient,
 	}, nil
 }
 

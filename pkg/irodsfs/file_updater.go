@@ -1,33 +1,35 @@
 package irodsfs
 
-type FileUpdater struct {
-	UpdatedFiles map[int64]*FileUpdated
+// FileMetaUpdater records updates on file metadata temporarily.
+// So subsequent fs operations find them to renew info.
+type FileMetaUpdater struct {
+	UpdatedFiles map[int64]*FileMetaUpdated
 }
 
-type FileUpdated struct {
+type FileMetaUpdated struct {
 	Path string
 }
 
-// NewFileUpdater create a new FileUpdater
-func NewFileUpdater() *FileUpdater {
-	return &FileUpdater{
-		UpdatedFiles: map[int64]*FileUpdated{},
+// NewFileMetaUpdater create a new FileMetaUpdater
+func NewFileMetaUpdater() *FileMetaUpdater {
+	return &FileMetaUpdater{
+		UpdatedFiles: map[int64]*FileMetaUpdated{},
 	}
 }
 
-func (updater *FileUpdater) Add(inode int64, path string) {
-	u := &FileUpdated{
+func (updater *FileMetaUpdater) Add(inode int64, path string) {
+	u := &FileMetaUpdated{
 		Path: path,
 	}
 
 	updater.UpdatedFiles[inode] = u
 }
 
-func (updater *FileUpdater) Get(inode int64) (*FileUpdated, bool) {
+func (updater *FileMetaUpdater) Get(inode int64) (*FileMetaUpdated, bool) {
 	u, ok := updater.UpdatedFiles[inode]
 	return u, ok
 }
 
-func (updater *FileUpdater) Delete(inode int64) {
+func (updater *FileMetaUpdater) Delete(inode int64) {
 	delete(updater.UpdatedFiles, inode)
 }

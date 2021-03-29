@@ -43,11 +43,11 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 
 	logger.Infof("Calling Attr - %s", file.Path)
 
-	if update, ok := file.FS.Updater.Get(file.InodeID); ok {
+	if update, ok := file.FS.FileMetaUpdater.Get(file.InodeID); ok {
 		// update found
 		logger.Infof("Update found - replace path from %s to %s", file.Path, update.Path)
 		file.Path = update.Path
-		file.FS.Updater.Delete(file.InodeID)
+		file.FS.FileMetaUpdater.Delete(file.InodeID)
 	}
 
 	vfsEntry := file.FS.VFS.GetClosestEntry(file.Path)
@@ -154,11 +154,11 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 
 	logger.Infof("Calling Open - %s, mode(%s)", file.Path, openMode)
 
-	if update, ok := file.FS.Updater.Get(file.InodeID); ok {
+	if update, ok := file.FS.FileMetaUpdater.Get(file.InodeID); ok {
 		// update found
 		logger.Infof("Update found - replace path from %s to %s", file.Path, update.Path)
 		file.Path = update.Path
-		file.FS.Updater.Delete(file.InodeID)
+		file.FS.FileMetaUpdater.Delete(file.InodeID)
 	}
 
 	vfsEntry := file.FS.VFS.GetClosestEntry(file.Path)
