@@ -7,7 +7,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// VFS ...
+// VFS is used to provide custom path mapping.
+// physical resources in iRODS are mapped to VFS entries.
 type VFS struct {
 	Entries map[string]*VFSEntry
 }
