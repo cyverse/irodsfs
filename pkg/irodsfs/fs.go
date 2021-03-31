@@ -41,6 +41,7 @@ type IRODSFS struct {
 	VFS             *VFS
 	FileMetaUpdater *FileMetaUpdater
 	IRODSClient     *irodsfs_client.FileSystem
+	FileCache       *FileCache
 }
 
 // NewFileSystem creates a new file system
@@ -61,8 +62,8 @@ func NewFileSystem(config *Config) (*IRODSFS, error) {
 	fsconfig := irodsfs_client.NewFileSystemConfig(
 		FSName,
 		config.OperationTimeout, config.ConnectionIdleTimeout,
-		config.ConnectionMax, config.CacheTimeout,
-		config.CacheCleanupTime)
+		config.ConnectionMax, config.MetadataCacheTimeout,
+		config.MetadataCacheCleanupTime)
 
 	fsclient, err := irodsfs_client.NewFileSystem(account, fsconfig)
 	if err != nil {
@@ -78,12 +79,19 @@ func NewFileSystem(config *Config) (*IRODSFS, error) {
 
 	fileMetaUpdater := NewFileMetaUpdater()
 
+	fileCache, err := NewFileCache(config.FileCacheStoragePath, config.FileCacheSizeMax)
+	if err != nil {
+		logger.WithError(err).Error("Could not create FileCache")
+		return nil, fmt.Errorf("Could not create FileCache - %v", err)
+	}
+
 	return &IRODSFS{
 		Config:          config,
 		Fuse:            nil,
 		VFS:             vfs,
 		FileMetaUpdater: fileMetaUpdater,
 		IRODSClient:     fsclient,
+		FileCache:       fileCache,
 	}, nil
 }
 
@@ -120,6 +128,7 @@ func (fs *IRODSFS) Destroy() {
 	logger.Info("Destroying FileSystem")
 
 	fs.IRODSClient.Release()
+	fs.FileCache.Destroy()
 }
 
 // Root returns root directory node

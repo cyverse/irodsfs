@@ -183,8 +183,8 @@ func processArguments() (*irodsfs.Config, error) {
 	var configFilePath string
 	var operationTimeout string
 	var connectionIdleTimeout string
-	var cacheTimeout string
-	var cacheCleanupTime string
+	var metadataCacheTimeout string
+	var metadataCacheCleanupTime string
 
 	config := irodsfs.NewDefaultConfig()
 
@@ -211,8 +211,10 @@ func processArguments() (*irodsfs.Config, error) {
 	flag.IntVar(&config.ConnectionMax, "connectionmax", irodsfs.ConnectionMaxDefault, "Set max data transfer connections")
 	flag.StringVar(&operationTimeout, "operationtimeout", "", "Set filesystem operation timeout")
 	flag.StringVar(&connectionIdleTimeout, "connectionidletimeout", "", "Set idle data transfer timeout")
-	flag.StringVar(&cacheTimeout, "cachetimeout", "", "Set filesystem cache timeout")
-	flag.StringVar(&cacheCleanupTime, "cachecleanuptime", "", "Set filesystem cache cleanup time")
+	flag.StringVar(&metadataCacheTimeout, "metadatacachetimeout", "", "Set filesystem metadata cache timeout")
+	flag.StringVar(&metadataCacheCleanupTime, "metadatacachecleanuptime", "", "Set filesystem metadata cache cleanup time")
+	flag.StringVar(&config.FileCacheStoragePath, "filecachestoragepath", irodsfs.FileCacheStoragePathDefault, "Set file cache storage path")
+	flag.Int64Var(&config.FileCacheSizeMax, "filecachesizemax", irodsfs.FileCacheSizeMaxDefault, "Set file cache max size")
 	flag.Var(&fuseOptions, "o", "Other fuse options")
 	flag.StringVar(&config.LogPath, "log", "", "Set log file path")
 
@@ -347,24 +349,24 @@ func processArguments() (*irodsfs.Config, error) {
 		config.ConnectionIdleTimeout = timeout
 	}
 
-	if len(cacheTimeout) > 0 {
-		timeout, err := time.ParseDuration(cacheTimeout)
+	if len(metadataCacheTimeout) > 0 {
+		timeout, err := time.ParseDuration(metadataCacheTimeout)
 		if err != nil {
-			logger.WithError(err).Error("Could not parse Cache Timeout parameter into time.duration")
+			logger.WithError(err).Error("Could not parse Metadata Cache Timeout parameter into time.duration")
 			return nil, err
 		}
 
-		config.CacheTimeout = timeout
+		config.MetadataCacheTimeout = timeout
 	}
 
-	if len(cacheCleanupTime) > 0 {
-		timeout, err := time.ParseDuration(cacheCleanupTime)
+	if len(metadataCacheCleanupTime) > 0 {
+		timeout, err := time.ParseDuration(metadataCacheCleanupTime)
 		if err != nil {
-			logger.WithError(err).Error("Could not parse Cache Cleanup Time parameter into time.duration")
+			logger.WithError(err).Error("Could not parse Metadata Cache Cleanup Time parameter into time.duration")
 			return nil, err
 		}
 
-		config.CacheCleanupTime = timeout
+		config.MetadataCacheCleanupTime = timeout
 	}
 
 	// positional arguments
