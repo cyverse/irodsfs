@@ -4,33 +4,33 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
-	"syscall"
 
+	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
 	irodsfs_clienttype "github.com/cyverse/go-irodsclient/irods/types"
 	channels "github.com/eapache/channels"
 	log "github.com/sirupsen/logrus"
 )
 
-const (
-	WriteBlockSize int = 1024 * 1024 * 1 // 1MB
-)
-
 // AsyncWrite helps async write
 type AsyncWrite struct {
 	FS             *IRODSFS
-	BlockIO        *BlockIO
-	DiskBlockCache *FileCache
+	FileHandle     *irodsfs_client.FileHandle
+	FileHandleLock *sync.Mutex
+
+	FileBuffer     *FileBuffer
 	WriteWaitTasks sync.WaitGroup
 	WriteQueue     channels.Channel
 	WriteIOErrors  []error
 }
 
 // NewAsyncWrite create a new AsyncWrite
-func NewAsyncWrite(fs *IRODSFS, blockio *BlockIO) (*AsyncWrite, error) {
+func NewAsyncWrite(fs *IRODSFS, fileHandle *irodsfs_client.FileHandle, fileHandleLock *sync.Mutex) (*AsyncWrite, error) {
 	asyncWrite := &AsyncWrite{
 		FS:             fs,
-		BlockIO:        blockio,
-		DiskBlockCache: fs.FileCache,
+		FileHandle:     fileHandle,
+		FileHandleLock: fileHandleLock,
+
+		FileBuffer:     fs.FileBuffer,
 		WriteWaitTasks: sync.WaitGroup{},
 		WriteQueue:     channels.NewInfiniteChannel(),
 		WriteIOErrors:  []error{},
@@ -46,9 +46,9 @@ func (asyncWrite *AsyncWrite) Release() {
 	// wait until all queued tasks complete
 	asyncWrite.WaitBackgroundWrites()
 
-	if asyncWrite.DiskBlockCache != nil {
-		sectionName := asyncWrite.getFileCacheWriteSectionName()
-		asyncWrite.DiskBlockCache.ClearSection(sectionName)
+	if asyncWrite.FileBuffer != nil {
+		sectionName := asyncWrite.getFileBufferSectionName()
+		asyncWrite.FileBuffer.ClearSection(sectionName)
 	}
 
 	asyncWrite.WriteQueue.Close()
@@ -65,25 +65,25 @@ func (asyncWrite *AsyncWrite) Write(offset int64, data []byte) error {
 		return nil
 	}
 
-	sectionName := asyncWrite.getFileCacheWriteSectionName()
-	cacheKey := asyncWrite.getFileCacheWriteKey(offset)
+	sectionName := asyncWrite.getFileBufferSectionName()
+	bufferKey := asyncWrite.getFileBufferKey(offset)
 
-	err := asyncWrite.DiskBlockCache.WaitForSpace(int64(len(data)))
+	err := asyncWrite.FileBuffer.WaitForSpace(int64(len(data)))
 	if err != nil {
-		logger.WithError(err).Errorf("Cache write wait error - %s, %s", sectionName, cacheKey)
-		return syscall.EREMOTEIO
+		logger.WithError(err).Errorf("Cache write wait error - %s, %s", sectionName, bufferKey)
+		return err
 	}
 
-	err = asyncWrite.DiskBlockCache.Put(sectionName, cacheKey, data)
+	err = asyncWrite.FileBuffer.Put(sectionName, bufferKey, data)
 	if err != nil {
-		logger.WithError(err).Errorf("Cache write error - %s, %s", sectionName, cacheKey)
-		return syscall.EREMOTEIO
+		logger.WithError(err).Errorf("Cache write error - %s, %s", sectionName, bufferKey)
+		return err
 	}
 
-	err = asyncWrite.queueBackgroundWrite(cacheKey)
+	err = asyncWrite.queueBackgroundWrite(bufferKey)
 	if err != nil {
-		logger.WithError(err).Errorf("Queue background write error - %s, %s", sectionName, cacheKey)
-		return syscall.EREMOTEIO
+		logger.WithError(err).Errorf("Queue background write error - %s, %s", sectionName, bufferKey)
+		return err
 	}
 
 	err = asyncWrite.GetAsyncError()
@@ -132,8 +132,8 @@ func (asyncWrite *AsyncWrite) backgroundWriteTask() {
 		"function": "backgroundWriteTask",
 	})
 
-	sectionName := asyncWrite.getFileCacheWriteSectionName()
-	filePath := asyncWrite.BlockIO.FileHandle.Entry.Path
+	sectionName := asyncWrite.getFileBufferSectionName()
+	filePath := asyncWrite.FileHandle.Entry.Path
 
 	for {
 		outData, channelOpened := <-asyncWrite.WriteQueue.Out()
@@ -145,22 +145,22 @@ func (asyncWrite *AsyncWrite) backgroundWriteTask() {
 		if outData != nil {
 			key := outData.(string)
 
-			// check key is still in file cache
-			if cacheEntry, ok := asyncWrite.DiskBlockCache.GetCacheEntry(sectionName, key); ok {
+			// buffer key is still in file buffer
+			if bufferEntry, ok := asyncWrite.FileBuffer.GetBufferEntry(sectionName, key); ok {
 				// write
 				hasError := false
 
-				if cacheEntry.Status == FileCacheEntryStatusReady {
-					cacheData, err := asyncWrite.DiskBlockCache.Get(sectionName, key)
+				if bufferEntry.Status == FileBufferEntryStatusReady {
+					bufferData, err := asyncWrite.FileBuffer.Pop(sectionName, key)
 					if err != nil {
-						logger.WithError(err).Errorf("Reading disk block cache error - %s, %s", sectionName, key)
+						logger.WithError(err).Errorf("Reading disk buffer error - %s, %s", sectionName, key)
 						asyncWrite.addAsyncError(err)
 						hasError = true
 					}
 
 					if !hasError {
-						// upload cache data
-						offset, err := asyncWrite.getFileCacheWriteOffsetFromKey(key)
+						// upload buffer data
+						offset, err := asyncWrite.getFileBufferOffsetFromKey(key)
 						if err != nil {
 							logger.WithError(err).Errorf("Reading cache offset error - %s, %s", sectionName, key)
 							asyncWrite.addAsyncError(err)
@@ -168,10 +168,10 @@ func (asyncWrite *AsyncWrite) backgroundWriteTask() {
 						} else {
 							logger.Infof("Async Writing - %s, Offset %d", filePath, offset)
 
-							asyncWrite.BlockIO.FileHandleLock.Lock()
+							asyncWrite.FileHandleLock.Lock()
 
-							if asyncWrite.BlockIO.FileHandle.GetOffset() != offset {
-								_, err := asyncWrite.BlockIO.FileHandle.Seek(offset, irodsfs_clienttype.SeekSet)
+							if asyncWrite.FileHandle.GetOffset() != offset {
+								_, err := asyncWrite.FileHandle.Seek(offset, irodsfs_clienttype.SeekSet)
 								if err != nil {
 									logger.WithError(err).Errorf("Seek error - %s, %d", filePath, offset)
 									asyncWrite.addAsyncError(err)
@@ -180,17 +180,15 @@ func (asyncWrite *AsyncWrite) backgroundWriteTask() {
 							}
 
 							if !hasError {
-								err := asyncWrite.BlockIO.FileHandle.Write(cacheData)
+								err := asyncWrite.FileHandle.Write(bufferData)
 								if err != nil {
-									logger.WithError(err).Errorf("Write error - %s, %d", filePath, len(cacheData))
+									logger.WithError(err).Errorf("Write error - %s, %d", filePath, len(bufferData))
 									asyncWrite.addAsyncError(err)
 									hasError = true
 								}
 							}
 
-							asyncWrite.BlockIO.FileHandleLock.Unlock()
-
-							asyncWrite.DiskBlockCache.Remove(sectionName, key)
+							asyncWrite.FileHandleLock.Unlock()
 						}
 					}
 				}
@@ -201,14 +199,14 @@ func (asyncWrite *AsyncWrite) backgroundWriteTask() {
 	}
 }
 
-func (asyncWrite *AsyncWrite) getFileCacheWriteSectionName() string {
-	return fmt.Sprintf("write:%s", asyncWrite.BlockIO.FileHandle.Entry.Path)
+func (asyncWrite *AsyncWrite) getFileBufferSectionName() string {
+	return fmt.Sprintf("write:%s", asyncWrite.FileHandle.Entry.Path)
 }
 
-func (asyncWrite *AsyncWrite) getFileCacheWriteKey(startOffset int64) string {
+func (asyncWrite *AsyncWrite) getFileBufferKey(startOffset int64) string {
 	return fmt.Sprintf("%d", startOffset)
 }
 
-func (asyncWrite *AsyncWrite) getFileCacheWriteOffsetFromKey(key string) (int64, error) {
+func (asyncWrite *AsyncWrite) getFileBufferOffsetFromKey(key string) (int64, error) {
 	return strconv.ParseInt(key, 10, 64)
 }

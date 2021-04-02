@@ -1,6 +1,7 @@
 package irodsfs
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os/user"
@@ -13,6 +14,10 @@ import (
 	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
 	irodsfs_clienttype "github.com/cyverse/go-irodsclient/irods/types"
 	log "github.com/sirupsen/logrus"
+)
+
+const (
+	WriteBlockSize int = 1024 * 1024 * 1 // 1MB
 )
 
 // File is a file node
@@ -30,8 +35,11 @@ type FileHandle struct {
 	Entry          *VFSEntry
 	IRODSFSEntry   *irodsfs_client.FSEntry
 	FileHandle     *irodsfs_client.FileHandle
-	FileHandleLock sync.Mutex
-	BlockIO        *BlockIO
+	FileHandleLock *sync.Mutex
+
+	WriteBuffer            bytes.Buffer
+	WriteBufferStartOffset int64
+	AsyncWrite             *AsyncWrite
 }
 
 // Attr returns stat of directory entry
@@ -192,25 +200,28 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 
 		logger.Infof("Conn %p, File Descriptor %d", handle.Connection, handle.IRODSHandle.FileDescriptor)
 
-		fileHandle := &FileHandle{
-			FS:           file.FS,
-			Path:         file.Path,
-			Entry:        file.Entry,
-			IRODSFSEntry: file.Entry.IRODSEntry,
-			FileHandle:   handle,
-			BlockIO:      nil,
+		handleMutex := &sync.Mutex{}
+
+		var asyncWrite *AsyncWrite
+		if req.Flags.IsWriteOnly() {
+			asyncWrite, err = NewAsyncWrite(file.FS, handle, handleMutex)
+			if err != nil {
+				logger.WithError(err).Errorf("AsyncWrite creation error - %s", irodsPath)
+				return nil, syscall.EREMOTEIO
+			}
 		}
 
-		if fileHandle.FS.Config.UseBlockIO {
-			if req.Flags.IsReadOnly() && req.Flags.IsWriteOnly() {
-				blockio, err := NewBlockIO(fileHandle.FS, handle)
-				if err != nil {
-					logger.WithError(err).Errorf("BlockIO error - %s", irodsPath)
-					return nil, syscall.EREMOTEIO
-				}
+		fileHandle := &FileHandle{
+			FS:             file.FS,
+			Path:           file.Path,
+			Entry:          file.Entry,
+			IRODSFSEntry:   file.Entry.IRODSEntry,
+			FileHandle:     handle,
+			FileHandleLock: handleMutex,
 
-				fileHandle.BlockIO = blockio
-			}
+			WriteBuffer:            bytes.Buffer{},
+			WriteBufferStartOffset: 0,
+			AsyncWrite:             asyncWrite,
 		}
 
 		return fileHandle, nil
@@ -244,37 +255,26 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 		return nil
 	}
 
-	if handle.BlockIO != nil {
-		data, err := handle.BlockIO.Read(req.Offset, req.Size)
+	// Lock
+	handle.FileHandleLock.Lock()
+	defer handle.FileHandleLock.Unlock()
+
+	if handle.FileHandle.GetOffset() != req.Offset {
+		_, err := handle.FileHandle.Seek(req.Offset, irodsfs_clienttype.SeekSet)
 		if err != nil {
-			logger.WithError(err).Errorf("Read error - %s, %d", handle.Path, req.Size)
+			logger.WithError(err).Errorf("Seek error - %s, %d", handle.Path, req.Offset)
 			return syscall.EREMOTEIO
 		}
-
-		copiedLen := copy(resp.Data[:req.Size], data)
-		resp.Data = resp.Data[:copiedLen]
-	} else {
-		// Lock
-		handle.FileHandleLock.Lock()
-		defer handle.FileHandleLock.Unlock()
-
-		if handle.FileHandle.GetOffset() != req.Offset {
-			_, err := handle.FileHandle.Seek(req.Offset, irodsfs_clienttype.SeekSet)
-			if err != nil {
-				logger.WithError(err).Errorf("Seek error - %s, %d", handle.Path, req.Offset)
-				return syscall.EREMOTEIO
-			}
-		}
-
-		data, err := handle.FileHandle.Read(req.Size)
-		if err != nil {
-			logger.WithError(err).Errorf("Read error - %s, %d", handle.Path, req.Size)
-			return syscall.EREMOTEIO
-		}
-
-		copiedLen := copy(resp.Data[:req.Size], data)
-		resp.Data = resp.Data[:copiedLen]
 	}
+
+	data, err := handle.FileHandle.Read(req.Size)
+	if err != nil {
+		logger.WithError(err).Errorf("Read error - %s, %d", handle.Path, req.Size)
+		return syscall.EREMOTEIO
+	}
+
+	copiedLen := copy(resp.Data[:req.Size], data)
+	resp.Data = resp.Data[:copiedLen]
 
 	return nil
 }
@@ -299,19 +299,71 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 		return syscall.EBADFD
 	}
 
-	if handle.BlockIO != nil {
-		err := handle.BlockIO.Write(req.Offset, req.Data)
-		if err != nil {
-			logger.WithError(err).Errorf("Write error - %s, %d", handle.Path, len(req.Data))
-			return syscall.EREMOTEIO
+	if len(req.Data) == 0 || req.Offset < 0 {
+		return nil
+	}
+
+	handle.FileHandleLock.Lock()
+	defer handle.FileHandleLock.Unlock()
+
+	if handle.AsyncWrite != nil {
+		// write async
+		// check if data is continuous from prior write
+		if handle.WriteBuffer.Len() > 0 {
+			// has data
+			if handle.WriteBufferStartOffset+int64(handle.WriteBuffer.Len()) != req.Offset {
+				// not continuous
+				// Spill to disk cache
+				err := handle.AsyncWrite.Write(handle.WriteBufferStartOffset, handle.WriteBuffer.Bytes())
+				if err != nil {
+					logger.WithError(err).Errorf("Spill error - %s, %d", handle.Path, handle.WriteBufferStartOffset)
+					return err
+				}
+
+				handle.WriteBufferStartOffset = 0
+				handle.WriteBuffer.Reset()
+
+				// write to buffer
+				_, err = handle.WriteBuffer.Write(req.Data)
+				if err != nil {
+					logger.WithError(err).Errorf("Could not buffer data for file %s, offset %d, length %d", handle.Path, req.Offset, len(req.Data))
+					return err
+				}
+				handle.WriteBufferStartOffset = req.Offset
+			} else {
+				// continuous
+				// write to buffer
+				_, err := handle.WriteBuffer.Write(req.Data)
+				if err != nil {
+					logger.WithError(err).Errorf("Could not buffer data for file %s, offset %d, length %d", handle.Path, req.Offset, len(req.Data))
+					return err
+				}
+			}
+		} else {
+			// write to buffer
+			_, err := handle.WriteBuffer.Write(req.Data)
+			if err != nil {
+				logger.WithError(err).Errorf("Could not buffer data for file %s, offset %d, length %d", handle.Path, req.Offset, len(req.Data))
+				return err
+			}
+			handle.WriteBufferStartOffset = req.Offset
+		}
+
+		if handle.WriteBuffer.Len() >= WriteBlockSize {
+			// Spill to disk cache
+			err := handle.AsyncWrite.Write(handle.WriteBufferStartOffset, handle.WriteBuffer.Bytes())
+			if err != nil {
+				logger.WithError(err).Errorf("Spill error - %s, %d", handle.Path, handle.WriteBufferStartOffset)
+				return err
+			}
+
+			handle.WriteBufferStartOffset = 0
+			handle.WriteBuffer.Reset()
 		}
 
 		resp.Size = len(req.Data)
 	} else {
-		// Lock
-		handle.FileHandleLock.Lock()
-		defer handle.FileHandleLock.Unlock()
-
+		// write immediately
 		if handle.FileHandle.GetOffset() != req.Offset {
 			_, err := handle.FileHandle.Seek(req.Offset, irodsfs_clienttype.SeekSet)
 			if err != nil {
@@ -346,14 +398,27 @@ func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) err
 		return syscall.EREMOTEIO
 	}
 
-	if irodsfs_clienttype.IsFileOpenFlagWrite(handle.FileHandle.OpenMode) {
-		// Flush
-		if handle.FS.Config.UseBlockIO && handle.BlockIO != nil {
-			err := handle.BlockIO.Flush()
+	// Flush
+	if handle.AsyncWrite != nil {
+		// spill
+		if handle.WriteBuffer.Len() > 0 {
+			err := handle.AsyncWrite.Write(handle.WriteBufferStartOffset, handle.WriteBuffer.Bytes())
 			if err != nil {
-				logger.WithError(err).Errorf("Flush error - %s", handle.Path)
-				return syscall.EREMOTEIO
+				logger.WithError(err).Errorf("Spill error - %s, %d", handle.Path, handle.WriteBufferStartOffset)
+				return err
 			}
+
+			handle.WriteBufferStartOffset = 0
+			handle.WriteBuffer.Reset()
+		}
+
+		// wait until all queued tasks complete
+		handle.AsyncWrite.WaitBackgroundWrites()
+
+		err := handle.AsyncWrite.GetAsyncError()
+		if err != nil {
+			logger.WithError(err).Errorf("Async write error - %s, %v", handle.Path, err)
+			return err
 		}
 	}
 
@@ -375,19 +440,10 @@ func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest)
 		return syscall.EREMOTEIO
 	}
 
-	if irodsfs_clienttype.IsFileOpenFlagWrite(handle.FileHandle.OpenMode) {
-		// Flush
-		if handle.FS.Config.UseBlockIO && handle.BlockIO != nil {
-			err := handle.BlockIO.Flush()
-			if err != nil {
-				logger.WithError(err).Errorf("Flush error - %s", handle.Path)
-				return syscall.EREMOTEIO
-			}
-		}
-	}
-
-	if handle.BlockIO != nil {
-		handle.BlockIO.Release()
+	// Flush
+	if handle.AsyncWrite != nil {
+		// wait until all queued tasks complete
+		handle.AsyncWrite.Release()
 	}
 
 	err := handle.FileHandle.Close()

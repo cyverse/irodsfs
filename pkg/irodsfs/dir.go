@@ -1,11 +1,13 @@
 package irodsfs
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"os/user"
 	"strconv"
+	"sync"
 	"syscall"
 
 	fuse "bazil.org/fuse"
@@ -679,25 +681,28 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 			return nil, nil, syscall.EREMOTEIO
 		}
 
-		fileHandle := &FileHandle{
-			FS:           file.FS,
-			Path:         file.Path,
-			Entry:        file.Entry,
-			IRODSFSEntry: file.Entry.IRODSEntry,
-			FileHandle:   handle,
-			BlockIO:      nil,
+		handleMutex := &sync.Mutex{}
+
+		var asyncWrite *AsyncWrite
+		if req.Flags.IsWriteOnly() {
+			asyncWrite, err = NewAsyncWrite(file.FS, handle, handleMutex)
+			if err != nil {
+				logger.WithError(err).Errorf("AsyncWrite creation error - %s", irodsPath)
+				return nil, nil, syscall.EREMOTEIO
+			}
 		}
 
-		if fileHandle.FS.Config.UseBlockIO {
-			if req.Flags.IsWriteOnly() {
-				blockio, err := NewBlockIO(fileHandle.FS, handle)
-				if err != nil {
-					logger.WithError(err).Errorf("BlockIO error - %s", irodsPath)
-					return nil, nil, syscall.EREMOTEIO
-				}
+		fileHandle := &FileHandle{
+			FS:             file.FS,
+			Path:           file.Path,
+			Entry:          file.Entry,
+			IRODSFSEntry:   file.Entry.IRODSEntry,
+			FileHandle:     handle,
+			FileHandleLock: handleMutex,
 
-				fileHandle.BlockIO = blockio
-			}
+			WriteBuffer:            bytes.Buffer{},
+			WriteBufferStartOffset: 0,
+			AsyncWrite:             asyncWrite,
 		}
 
 		return file, fileHandle, nil
