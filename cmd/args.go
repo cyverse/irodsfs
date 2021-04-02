@@ -420,7 +420,7 @@ func processArguments() (*irodsfs.Config, error) {
 
 			if len(access.Path) > 0 {
 				config.PathMappings = []irodsfs.PathMapping{
-					irodsfs.NewPathMappingForDir(access.Path, "/"),
+					irodsfs.NewPathMappingForDir(access.Path, "/", false),
 				}
 			}
 

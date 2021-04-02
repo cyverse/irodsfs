@@ -79,10 +79,10 @@ func buildVFS(fsclient *irodsfs_client.FileSystem, entries map[string]*VFSEntry,
 
 	parentDirs := GetParentDirs(mapping.MappingPath)
 	for idx, parentDir := range parentDirs {
-		dirEntry, ok := entries[parentDir]
+		_, ok := entries[parentDir]
 		if !ok {
 			// add parentDir if not exists
-			dirEntry = &VFSEntry{
+			dirEntry := &VFSEntry{
 				Type: VFSVirtualDirEntryType,
 				Path: parentDir,
 				VirtualDirEntry: &VFSVirtualDirEntry{
@@ -108,9 +108,24 @@ func buildVFS(fsclient *irodsfs_client.FileSystem, entries map[string]*VFSEntry,
 		}
 	}
 
+	if mapping.ResourceType == PathMappingDirectory && mapping.CreateDir {
+		if !fsclient.ExistsDir(mapping.IRODSPath) {
+			err := fsclient.MakeDir(mapping.IRODSPath, true)
+			if err != nil {
+				logger.WithError(err).Errorf("MakeDir error - %s", mapping.IRODSPath)
+				// fall
+			}
+		}
+	}
+
 	// add leaf
 	fsEntry, err := fsclient.Stat(mapping.IRODSPath)
 	if err != nil {
+		if mapping.IgnoreNotExist {
+			// ignore
+			return nil
+		}
+
 		logger.WithError(err).Errorf("Stat error - %s", mapping.IRODSPath)
 		return err
 	}
