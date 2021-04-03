@@ -670,6 +670,7 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 		file := fileNode.(*File)
 
 		// reopen - to open file with openmode
+		logger.Infof("Calling Open - %s, mode(%s)", irodsPath, openMode)
 		handle, err = file.FS.IRODSClient.OpenFile(irodsPath, "", openMode)
 		if err != nil {
 			if irodsfs_clienttype.IsFileNotFoundError(err) {

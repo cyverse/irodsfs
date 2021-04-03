@@ -231,6 +231,11 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 	}
 }
 
+// Fsync syncs file
+func (file *File) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
+	return nil
+}
+
 // Read reads file content
 func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
 	logger := log.WithFields(log.Fields{
