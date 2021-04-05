@@ -63,7 +63,9 @@ func NewFileSystem(config *Config) (*IRODSFS, error) {
 		FSName,
 		config.OperationTimeout, config.ConnectionIdleTimeout,
 		config.ConnectionMax, config.MetadataCacheTimeout,
-		config.MetadataCacheCleanupTime)
+		config.MetadataCacheCleanupTime,
+		true,
+	)
 
 	fsclient, err := irodsfs_client.NewFileSystem(account, fsconfig)
 	if err != nil {

@@ -7,6 +7,8 @@ github.com/cyverse/go-irodsclient v0.3.0 h1:8AZYPCkE0lQbVmMpGzqVu6m/xQiC7nvf5v3m
 github.com/cyverse/go-irodsclient v0.3.0/go.mod h1:Dv01ydAthODj/DDswb+JqH9z2oXOQ1WFtwoZeIEfQX8=
 github.com/cyverse/go-irodsclient v0.4.0 h1:T/bwDDwH7fCe41ywX9cKsd/3uhut5iZoXKCiORp/ID4=
 github.com/cyverse/go-irodsclient v0.4.0/go.mod h1:Dv01ydAthODj/DDswb+JqH9z2oXOQ1WFtwoZeIEfQX8=
+github.com/cyverse/go-irodsclient v0.4.4 h1:vMM1/ogC/gqMHDtavi/+yv9MUQ9u16tnAePIEK0HAp8=
+github.com/cyverse/go-irodsclient v0.4.4/go.mod h1:Dv01ydAthODj/DDswb+JqH9z2oXOQ1WFtwoZeIEfQX8=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

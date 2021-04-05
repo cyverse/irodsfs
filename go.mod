@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	bazil.org/fuse v0.0.0-20200524192727-fb710f7dfd05
-	github.com/cyverse/go-irodsclient v0.4.0
+	github.com/cyverse/go-irodsclient v0.4.4
 	github.com/eapache/channels v1.1.0
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.4
