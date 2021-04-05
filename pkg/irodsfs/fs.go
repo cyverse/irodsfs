@@ -129,6 +129,9 @@ func (fs *IRODSFS) Destroy() {
 
 	logger.Info("Destroying FileSystem")
 
+	// try to unmount (error may occur but ignore it)
+	fuse.Unmount(fs.Config.MountPath)
+
 	fs.IRODSClient.Release()
 	fs.FileBuffer.Destroy()
 }

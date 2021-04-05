@@ -6,6 +6,8 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"os/signal"
+	"syscall"
 
 	"github.com/cyverse/irodsfs/pkg/irodsfs"
 	log "github.com/sirupsen/logrus"
@@ -183,10 +185,18 @@ func run(config *irodsfs.Config) error {
 		logger.WithError(err).Error("Could not create filesystem")
 		return err
 	}
-	defer fs.Destroy()
+
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL, syscall.SIGQUIT)
+
+	go func() {
+		<-signalChan
+		fs.Destroy()
+	}()
 
 	err = fs.StartFuse()
 	if err != nil {
+		fs.Destroy()
 		logger.WithError(err).Error("Could not start FUSE")
 		return err
 	}
