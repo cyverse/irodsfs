@@ -15,6 +15,25 @@ import (
 )
 
 func main() {
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "main",
+	})
+
+	fuseCheckResult := checkFuse()
+	switch fuseCheckResult {
+	case CheckFUSEStatusFound:
+		// okay
+		logger.Info("Found FUSE Device. Starting iRODS FUSE Lite.")
+	case CheckFUSEStatusUnknown:
+		// try to go
+		logger.Info("It is not sure whether FUSE is running. Starting iRODS FUSE Lite, anyway.")
+	case CheckFUSEStatusNotFound:
+		logger.Fatal("FUSE is not running. Terminating iRODS FUSE Lite.")
+	case CheckFUSEStatusCannotRun:
+		logger.Fatal("FUSE is not supported. Terminating iRODS FUSE Lite.")
+	}
+
 	// check if this is subprocess running in the background
 	isChildProc := false
 
