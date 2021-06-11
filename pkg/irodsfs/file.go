@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	WriteBlockSize int = 1024 * 1024 * 1 // 1MB
+	WriteBlockSize int = 1024 * 1024 * 8 // 8MB
 )
 
 // File is a file node
