@@ -103,10 +103,15 @@ func parentMain() {
 	})
 
 	// parse argument
-	config, err := processArguments()
+	config, err, exit := processArguments()
 	if err != nil {
 		logger.WithError(err).Error("Error occurred while processing arguments")
-		logger.Fatal(err)
+		if exit {
+			logger.Fatal(err)
+		}
+	}
+	if exit {
+		os.Exit(0)
 	}
 
 	// check fuse

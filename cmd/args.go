@@ -170,7 +170,7 @@ func inputMissingParams(config *irodsfs.Config, stdinClosed bool) error {
 	return nil
 }
 
-func processArguments() (*irodsfs.Config, error) {
+func processArguments() (*irodsfs.Config, error, bool) {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "processArguments",
@@ -223,16 +223,16 @@ func processArguments() (*irodsfs.Config, error) {
 		info, err := client.GetVersionJSON()
 		if err != nil {
 			logger.WithError(err).Error("Could not get client version info")
-			return nil, err
+			return nil, err, true
 		}
 
 		fmt.Println(info)
-		os.Exit(0)
+		return nil, nil, true
 	}
 
 	if help {
 		flag.Usage()
-		os.Exit(0)
+		return nil, nil, true
 	}
 
 	if len(config.LogPath) > 0 {
@@ -252,12 +252,12 @@ func processArguments() (*irodsfs.Config, error) {
 			yamlBytes, err := ioutil.ReadAll(stdinReader)
 			if err != nil {
 				logger.WithError(err).Error("Could not read STDIN")
-				return nil, err
+				return nil, err, true
 			}
 
 			err = yaml.Unmarshal(yamlBytes, &config)
 			if err != nil {
-				return nil, fmt.Errorf("YAML Unmarshal Error - %v", err)
+				return nil, fmt.Errorf("YAML Unmarshal Error - %v", err), true
 			}
 
 			stdinClosed = true
@@ -266,29 +266,29 @@ func processArguments() (*irodsfs.Config, error) {
 			configFileAbsPath, err := filepath.Abs(configFilePath)
 			if err != nil {
 				logger.WithError(err).Errorf("Could not access the local yaml file %s", configFilePath)
-				return nil, err
+				return nil, err, true
 			}
 
 			fileinfo, err := os.Stat(configFileAbsPath)
 			if err != nil {
 				logger.WithError(err).Errorf("local yaml file (%s) error", configFileAbsPath)
-				return nil, err
+				return nil, err, true
 			}
 
 			if fileinfo.IsDir() {
 				logger.WithError(err).Errorf("local yaml file (%s) is not a file", configFileAbsPath)
-				return nil, fmt.Errorf("local yaml file (%s) is not a file", configFileAbsPath)
+				return nil, fmt.Errorf("local yaml file (%s) is not a file", configFileAbsPath), true
 			}
 
 			yamlBytes, err := ioutil.ReadFile(configFileAbsPath)
 			if err != nil {
 				logger.WithError(err).Errorf("Could not read the local yaml file %s", configFileAbsPath)
-				return nil, err
+				return nil, err, true
 			}
 
 			err = yaml.Unmarshal(yamlBytes, &config)
 			if err != nil {
-				return nil, fmt.Errorf("YAML Unmarshal Error - %v", err)
+				return nil, fmt.Errorf("YAML Unmarshal Error - %v", err), true
 			}
 		}
 	}
@@ -298,30 +298,30 @@ func processArguments() (*irodsfs.Config, error) {
 		mappingFileAbsPath, err := filepath.Abs(mappingFilePath)
 		if err != nil {
 			logger.WithError(err).Errorf("Could not access the local yaml file %s", mappingFilePath)
-			return nil, err
+			return nil, err, true
 		}
 
 		fileinfo, err := os.Stat(mappingFileAbsPath)
 		if err != nil {
 			logger.WithError(err).Errorf("local yaml file (%s) error", mappingFileAbsPath)
-			return nil, err
+			return nil, err, true
 		}
 
 		if fileinfo.IsDir() {
 			logger.WithError(err).Errorf("local yaml file (%s) is not a file", mappingFileAbsPath)
-			return nil, fmt.Errorf("local yaml file (%s) is not a file", mappingFileAbsPath)
+			return nil, fmt.Errorf("local yaml file (%s) is not a file", mappingFileAbsPath), true
 		}
 
 		yamlBytes, err := ioutil.ReadFile(mappingFileAbsPath)
 		if err != nil {
 			logger.WithError(err).Errorf("Could not read the local yaml file %s", mappingFileAbsPath)
-			return nil, err
+			return nil, err, true
 		}
 
 		pathMappings := []irodsfs.PathMapping{}
 		err = yaml.Unmarshal(yamlBytes, &pathMappings)
 		if err != nil {
-			return nil, fmt.Errorf("YAML Unmarshal Error - %v", err)
+			return nil, fmt.Errorf("YAML Unmarshal Error - %v", err), true
 		}
 
 		config.PathMappings = pathMappings
@@ -332,7 +332,7 @@ func processArguments() (*irodsfs.Config, error) {
 		timeout, err := time.ParseDuration(operationTimeout)
 		if err != nil {
 			logger.WithError(err).Error("Could not parse Operation Timeout parameter into time.duration")
-			return nil, err
+			return nil, err, true
 		}
 
 		config.OperationTimeout = timeout
@@ -342,7 +342,7 @@ func processArguments() (*irodsfs.Config, error) {
 		timeout, err := time.ParseDuration(connectionIdleTimeout)
 		if err != nil {
 			logger.WithError(err).Error("Could not parse Connection Idle Timeout parameter into time.duration")
-			return nil, err
+			return nil, err, true
 		}
 
 		config.ConnectionIdleTimeout = timeout
@@ -352,7 +352,7 @@ func processArguments() (*irodsfs.Config, error) {
 		timeout, err := time.ParseDuration(metadataCacheTimeout)
 		if err != nil {
 			logger.WithError(err).Error("Could not parse Metadata Cache Timeout parameter into time.duration")
-			return nil, err
+			return nil, err, true
 		}
 
 		config.MetadataCacheTimeout = timeout
@@ -362,7 +362,7 @@ func processArguments() (*irodsfs.Config, error) {
 		timeout, err := time.ParseDuration(metadataCacheCleanupTime)
 		if err != nil {
 			logger.WithError(err).Error("Could not parse Metadata Cache Cleanup Time parameter into time.duration")
-			return nil, err
+			return nil, err, true
 		}
 
 		config.MetadataCacheCleanupTime = timeout
@@ -375,16 +375,21 @@ func processArguments() (*irodsfs.Config, error) {
 			flag.Usage()
 			err := fmt.Errorf("Illegal arguments given, required mount target, but received %d", flag.NArg())
 			logger.Error(err)
-			return nil, err
+			return nil, err, true
 		}
 
 		mountPath = flag.Arg(0)
 	} else {
+		if flag.NArg() == 0 {
+			flag.Usage()
+			return nil, nil, true
+		}
+
 		if flag.NArg() != 2 {
 			flag.Usage()
 			err := fmt.Errorf("Illegal arguments given, required 2, but received %d (%s)", flag.NArg(), strings.Join(flag.Args(), " "))
 			logger.Error(err)
-			return nil, err
+			return nil, err, true
 		}
 
 		// first arg is shorthand form of config
@@ -395,7 +400,7 @@ func processArguments() (*irodsfs.Config, error) {
 			access, err := parseIRODSURL(inputPath)
 			if err != nil {
 				logger.WithError(err).Error("Could not parse iRODS source path")
-				return nil, err
+				return nil, err, true
 			}
 
 			if len(access.Host) > 0 {
@@ -435,17 +440,17 @@ func processArguments() (*irodsfs.Config, error) {
 	err := inputMissingParams(config, stdinClosed)
 	if err != nil {
 		logger.WithError(err).Error("Could not input missing parameters")
-		return nil, err
+		return nil, err, true
 	}
 
 	// the second argument is local directory that irodsfs will be mounted
 	mountpoint, err := filepath.Abs(mountPath)
 	if err != nil {
 		logger.WithError(err).Errorf("Could not access the mount point %s", mountPath)
-		return nil, err
+		return nil, err, true
 	}
 
 	config.MountPath = mountpoint
 
-	return config, nil
+	return config, nil, false
 }
