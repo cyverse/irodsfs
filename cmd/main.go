@@ -102,12 +102,29 @@ func parentMain() {
 		"function": "parentMain",
 	})
 
+	// parse argument
 	config, err := processArguments()
 	if err != nil {
 		logger.WithError(err).Error("Error occurred while processing arguments")
 		logger.Fatal(err)
 	}
 
+	// check fuse
+	fuseCheckResult := checkFuse()
+	switch fuseCheckResult {
+	case CheckFUSEStatusFound:
+		// okay
+		logger.Info("Found FUSE Device. Starting iRODS FUSE Lite.")
+	case CheckFUSEStatusUnknown:
+		// try to go
+		logger.Info("It is not sure whether FUSE is running. Starting iRODS FUSE Lite, anyway.")
+	case CheckFUSEStatusNotFound:
+		logger.Fatal("FUSE is not running. Terminating iRODS FUSE Lite.")
+	case CheckFUSEStatusCannotRun:
+		logger.Fatal("FUSE is not supported. Terminating iRODS FUSE Lite.")
+	}
+
+	// run
 	err = parentRun(os.Args[0], config)
 	if err != nil {
 		logger.WithError(err).Error("Error occurred while running parent process")
