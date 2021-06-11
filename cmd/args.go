@@ -16,7 +16,7 @@ import (
 
 	"github.com/cyverse/go-irodsclient/client"
 	"github.com/cyverse/irodsfs/pkg/irodsfs"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 	"gopkg.in/yaml.v2"
 
 	log "github.com/sirupsen/logrus"
@@ -157,7 +157,7 @@ func inputMissingParams(config *irodsfs.Config, stdinClosed bool) error {
 		}
 
 		fmt.Print("Password: ")
-		bytePassword, err := terminal.ReadPassword(int(syscall.Stdin))
+		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
 		fmt.Print("\n")
 		if err != nil {
 			logger.WithError(err).Error("Error occurred while reading password")
