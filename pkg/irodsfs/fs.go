@@ -37,6 +37,7 @@ func GetFuseMountOptions(config *Config) []fuse.MountOption {
 // IRODSFS is a file system object
 type IRODSFS struct {
 	Config          *Config
+	FuseConnection  *fuse.Conn
 	Fuse            *fusefs.Server
 	VFS             *VFS
 	FileMetaUpdater *FileMetaUpdater
@@ -97,10 +98,10 @@ func NewFileSystem(config *Config) (*IRODSFS, error) {
 	}, nil
 }
 
-func (fs *IRODSFS) StartFuse() error {
+func (fs *IRODSFS) ConnectToFuse() error {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
-		"function": "StartFuse",
+		"function": "ConnectToFuse",
 	})
 
 	fuseConn, err := fuse.Mount(fs.Config.MountPath, GetFuseMountOptions(fs.Config)...)
@@ -108,9 +109,23 @@ func (fs *IRODSFS) StartFuse() error {
 		logger.WithError(err).Error("Could not connect to FUSE")
 		return err
 	}
-	defer fuseConn.Close()
 
-	fuseServer := fusefs.New(fuseConn, nil)
+	fs.FuseConnection = fuseConn
+	return nil
+}
+
+func (fs *IRODSFS) StartFuse() error {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"function": "StartFuse",
+	})
+
+	if fs.FuseConnection == nil {
+		logger.Error("Could not start FUSE server without connection")
+		return fmt.Errorf("Could not start FUSE server without connection")
+	}
+
+	fuseServer := fusefs.New(fs.FuseConnection, nil)
 	fs.Fuse = fuseServer
 
 	if err := fuseServer.Serve(fs); err != nil {
@@ -129,9 +144,17 @@ func (fs *IRODSFS) Destroy() {
 
 	logger.Info("Destroying FileSystem")
 
+	if fs.FuseConnection != nil {
+		logger.Info("Closing fuse connection")
+		fs.FuseConnection.Close()
+		fs.FuseConnection = nil
+	}
+
 	// try to unmount (error may occur but ignore it)
+	logger.Info("Unmounting mountpath")
 	fuse.Unmount(fs.Config.MountPath)
 
+	logger.Info("Releasing resources")
 	fs.IRODSClient.Release()
 	fs.FileBuffer.Destroy()
 }
