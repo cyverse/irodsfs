@@ -20,8 +20,10 @@ func checkFuse() CheckFUSEStatus {
 	if runtime.GOOS == "linux" {
 		return checkDevFuse()
 	} else if runtime.GOOS == "darwin" {
-		return checkDevFuse()
+		// cannot run on MacOS, bazil.org/fuse does not support
+		return CheckFUSEStatusCannotRun
 	} else if runtime.GOOS == "windows" {
+		// no fuse on Windows
 		return CheckFUSEStatusCannotRun
 	}
 
