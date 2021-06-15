@@ -51,7 +51,7 @@ func mapFileACL(file *File, entry *irodsfs_client.FSEntry) os.FileMode {
 
 	if entry.Owner == file.FS.Config.ClientUser {
 		// mine
-		return 0o600
+		return 0o700
 	}
 
 	logger.Infof("Checking ACL information of the Entry for %s and user %s", entry.Path, file.FS.Config.ClientUser)
@@ -66,11 +66,11 @@ func mapFileACL(file *File, entry *irodsfs_client.FSEntry) os.FileMode {
 			// found
 			switch access.AccessLevel {
 			case irodsfs_clienttype.IRODSAccessLevelOwner:
-				return 0o600
+				return 0o700
 			case irodsfs_clienttype.IRODSAccessLevelWrite:
-				return 0o006
+				return 0o600
 			case irodsfs_clienttype.IRODSAccessLevelRead:
-				return 0o004
+				return 0o400
 			case irodsfs_clienttype.IRODSAccessLevelNone:
 				return 0o000
 			}
@@ -80,7 +80,7 @@ func mapFileACL(file *File, entry *irodsfs_client.FSEntry) os.FileMode {
 	logger.Errorf("Could not find ACL information of the Entry for %s and user %s", entry.Path, file.FS.Config.ClientUser)
 
 	// others - readonly
-	return 0o004
+	return 0o000
 }
 
 // Attr returns stat of directory entry
