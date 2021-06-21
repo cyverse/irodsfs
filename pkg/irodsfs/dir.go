@@ -24,6 +24,46 @@ type Dir struct {
 	Path    string
 }
 
+func mapDirACL(dir *Dir, entry *irodsfs_client.FSEntry) os.FileMode {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"function": "mapDirACL",
+	})
+
+	if entry.Owner == dir.FS.Config.ClientUser {
+		// mine
+		return 0o700
+	}
+
+	logger.Infof("Checking ACL information of the Entry for %s and user %s", entry.Path, dir.FS.Config.ClientUser)
+
+	accesses, err := dir.FS.IRODSClient.ListDirACLsWithGroupUsers(entry.Path)
+	if err != nil {
+		logger.Errorf("Could not get ACL information of the Entry for %s", entry.Path)
+	}
+
+	for _, access := range accesses {
+		if access.UserName == dir.FS.Config.ClientUser {
+			// found
+			switch access.AccessLevel {
+			case irodsfs_clienttype.IRODSAccessLevelOwner:
+				return 0o700
+			case irodsfs_clienttype.IRODSAccessLevelWrite:
+				return 0o600
+			case irodsfs_clienttype.IRODSAccessLevelRead:
+				return 0o400
+			case irodsfs_clienttype.IRODSAccessLevelNone:
+				return 0o000
+			}
+		}
+	}
+
+	logger.Errorf("Could not find ACL information of the Entry for %s and user %s", entry.Path, dir.FS.Config.ClientUser)
+
+	// others - readonly
+	return 0o000
+}
+
 // Attr returns stat of file entry
 func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 	logger := log.WithFields(log.Fields{
@@ -115,14 +155,7 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 		attr.Mtime = entry.ModifyTime
 		attr.Atime = entry.ModifyTime
 		attr.Size = 0
-
-		if entry.Owner == dir.FS.Config.ClientUser {
-			// mine
-			attr.Mode = os.ModeDir | 0o600
-		} else {
-			// others - readonly
-			attr.Mode = os.ModeDir | 0o400
-		}
+		attr.Mode = os.ModeDir | mapDirACL(dir, entry)
 		return nil
 	} else {
 		logger.Errorf("Unknown VFS Entry type : %s", vfsEntry.Type)
