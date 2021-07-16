@@ -2,6 +2,7 @@ package irodsfs
 
 import (
 	"fmt"
+	"io/ioutil"
 	"syscall"
 
 	"bazil.org/fuse"
@@ -55,6 +56,18 @@ func NewFileSystem(config *Config) (*IRODSFS, error) {
 	account, err := irodsfs_clienttype.CreateIRODSProxyAccount(config.Host, config.Port,
 		config.ClientUser, config.Zone, config.ProxyUser, config.Zone,
 		irodsfs_clienttype.AuthSchemeNative, config.Password)
+
+	if config.AuthScheme == "pam" {
+		// Read SSL account configuration from YAML file
+		yaml, err := ioutil.ReadFile(config.SSLAccountFile)
+		if err != nil {
+			logger.WithError(err).Error("Could not read account yaml file")
+			panic(err)
+		}
+
+		account, err = irodsfs_clienttype.CreateIRODSAccountFromYAML(yaml)
+	}
+
 	if err != nil {
 		logger.WithError(err).Error("Could not create IRODS Account")
 		return nil, fmt.Errorf("Could not create IRODS Account - %v", err)
