@@ -57,7 +57,7 @@ func NewFileSystem(config *Config) (*IRODSFS, error) {
 		config.ClientUser, config.Zone, config.ProxyUser, config.Zone,
 		irodsfs_clienttype.AuthSchemeNative, config.Password)
 
-	if config.AuthScheme == "pam" {
+	if config.AuthScheme == AuthSchemePAM {
 		// Read SSL account configuration from YAML file
 		yaml, err := ioutil.ReadFile(config.SSLAccountFile)
 		if err != nil {

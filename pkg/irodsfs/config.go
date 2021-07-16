@@ -19,6 +19,7 @@ const (
 	FileBufferStoragePathDefault    string        = "/tmp/irodsfs"
 	FileBufferSizeMaxDefault        int64         = 1024 * 1024 * 1024 // 1GB
 	AuthSchemeDefault               string        = "native"
+	AuthSchemePAM                   string        = "pam"
 )
 
 // Config holds the parameters list which can be configured
@@ -252,14 +253,12 @@ func (config *Config) Validate() error {
 		return fmt.Errorf("FileBufferSizeMax must be equal or greater than 10485760")
 	}
 
-	if len(config.AuthScheme) == 0 {
-		return fmt.Errorf("AuthScheme must be either native or pam")
-	}
-
-	if config.AuthScheme == "pam" {
+	if config.AuthScheme == AuthSchemePAM {
 		if _, err := os.Stat(config.SSLAccountFile); os.IsNotExist(err) {
 			return fmt.Errorf("SSL account file error - %v", err)
 		}
+	} else if config.AuthScheme != AuthSchemeDefault {
+		return fmt.Errorf("AuthScheme must be either native or pam")
 	}
 
 	return nil
