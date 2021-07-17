@@ -29,6 +29,28 @@ After mounting, `irodsfs` will be executed in the background. To unmount, use `u
 sudo umount -f /mount/irods
 ```
 
+## Mount iRODS Collections with PAM Authentication (with SSL)
+Run `irodsfs` to mount a collection with PAM Authentication (with SSL) with following information.
+
+- User: `iychoi`
+- iRODS Host: `data.cyverse.org`
+- iRODS Port: `1247` (Default, omitted) 
+- Zone: `iplant`
+- Collection: `/home/iychoi`
+- Mount Path: `/mount/irods`
+- Authentication Scheme: `pam`
+- SSL Account File: `./examples/ssl_account_file.yml`
+
+```shell script
+./bin/irodsfs -auth_scheme pam -ssl_account_file ./examples/ssl_account_file.yml irods://iychoi@data.cyverse.org/iplant/home/iychoi /mount/irods
+```
+
+After mounting, `irodsfs` will be executed in the background. To unmount, use `umount` command.
+
+```shell script
+sudo umount -f /mount/irods
+```
+
 ## Mount multiple iRODS Collections or Data Objects
 Run `irodsfs` to mount multiple collections and data objects with custom path mappings.
 A path mapping file in YAML format must be provided as the first positional argument.
