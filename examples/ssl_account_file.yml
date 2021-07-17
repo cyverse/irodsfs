@@ -14,3 +14,4 @@ ssl:
   algorithm: "AES-256-CBC"
   salt_size: 8
   hash_rounds: 16
+  
