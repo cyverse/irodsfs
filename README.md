@@ -31,6 +31,7 @@ sudo umount -f /mount/irods
 
 ## Mount iRODS Collections with PAM Authentication (with SSL)
 Run `irodsfs` to mount a collection with PAM Authentication (with SSL) with following information.
+A configuration file describing the conneciton information in YAML format `./examples/ssl_config.yaml` must be provided with `-config` argument in the command line.
 
 - User: `iychoi`
 - iRODS Host: `data.cyverse.org`
@@ -39,10 +40,14 @@ Run `irodsfs` to mount a collection with PAM Authentication (with SSL) with foll
 - Collection: `/home/iychoi`
 - Mount Path: `/mount/irods`
 - Authentication Scheme: `pam`
-- SSL Account File: `./examples/ssl_account_file.yml`
+- CA Cert File: `/etc/ssl/certs/ca-certificates.crt`
+- Encryption Key Size: `32`
+- Encryption Algorithm: `AES-256-CBC`
+- Encryption Salt Size: `8`
+- Hash Rounds: `16`
 
 ```shell script
-./bin/irodsfs -auth_scheme pam -ssl_account_file ./examples/ssl_account_file.yml irods://iychoi@data.cyverse.org/iplant/home/iychoi /mount/irods
+./bin/irodsfs -config ./examples/ssl_config.yml irods:///iplant/home/iychoi /mount/irods
 ```
 
 After mounting, `irodsfs` will be executed in the background. To unmount, use `umount` command.

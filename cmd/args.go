@@ -376,29 +376,16 @@ func processArguments() (*irodsfs.Config, error, bool) {
 
 	// positional arguments
 	mountPath := ""
-	if len(config.PathMappings) > 0 {
-		if flag.NArg() != 1 {
-			flag.Usage()
-			err := fmt.Errorf("Illegal arguments given, required mount target, but received %d", flag.NArg())
-			logger.Error(err)
-			return nil, err, true
-		}
+	if flag.NArg() == 0 {
+		flag.Usage()
+		return nil, nil, true
+	}
 
-		mountPath = flag.Arg(0)
-	} else {
-		if flag.NArg() == 0 {
-			flag.Usage()
-			return nil, nil, true
-		}
+	lastArgIdx := flag.NArg() - 1
+	mountPath = flag.Arg(lastArgIdx)
 
-		if flag.NArg() != 2 {
-			flag.Usage()
-			err := fmt.Errorf("Illegal arguments given, required 2, but received %d (%s)", flag.NArg(), strings.Join(flag.Args(), " "))
-			logger.Error(err)
-			return nil, err, true
-		}
-
-		// first arg is shorthand form of config
+	if flag.NArg() == 2 {
+		// first arg may be shorthand form of config
 		// the first argument contains irods://HOST:PORT/ZONE/inputPath...
 		inputPath := flag.Arg(0)
 		if strings.HasPrefix(inputPath, iRODSProtocol) {
@@ -439,8 +426,6 @@ func processArguments() (*irodsfs.Config, error, bool) {
 				config.ClientUser = config.ProxyUser
 			}
 		}
-
-		mountPath = flag.Arg(1)
 	}
 
 	err := inputMissingParams(config, stdinClosed)

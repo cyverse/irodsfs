@@ -3,7 +3,7 @@ port: 1247
 proxy_user: iychoi
 client_user: iychoi
 zone: iplant
-password: 
+password:
 
 auth_scheme: "pam"
 ssl_ca_cert_file: "/etc/ssl/certs/ca-certificates.crt"
