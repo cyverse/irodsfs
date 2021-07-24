@@ -18,6 +18,8 @@ const (
 	MetadataCacheCleanupTimeDefault time.Duration = 5 * time.Minute
 	FileBufferStoragePathDefault    string        = "/tmp/irodsfs"
 	FileBufferSizeMaxDefault        int64         = 1024 * 1024 * 1024 // 1GB
+	AuthSchemeDefault               string        = "native"
+	AuthSchemePAM                   string        = "pam"
 )
 
 // Config holds the parameters list which can be configured
@@ -42,9 +44,11 @@ type Config struct {
 
 	LogPath string `yaml:"log_path,omitempty"`
 
-	Foreground   bool `yaml:"foreground,omitempty"`
-	AllowOther   bool `yaml:"allow_other,omitempty"`
-	ChildProcess bool `yaml:"childprocess,omitempty"`
+	Foreground     bool   `yaml:"foreground,omitempty"`
+	AllowOther     bool   `yaml:"allow_other,omitempty"`
+	ChildProcess   bool   `yaml:"childprocess,omitempty"`
+	AuthScheme     string `yaml:"authscheme"`
+	SSLAccountFile string `yaml:"ssl_account_file"`
 }
 
 type configAlias struct {
@@ -68,9 +72,11 @@ type configAlias struct {
 
 	LogPath string `yaml:"log_path,omitempty"`
 
-	Foreground   bool `yaml:"foreground,omitempty"`
-	AllowOther   bool `yaml:"allow_other,omitempty"`
-	ChildProcess bool `yaml:"childprocess,omitempty"`
+	Foreground     bool   `yaml:"foreground,omitempty"`
+	AllowOther     bool   `yaml:"allow_other,omitempty"`
+	ChildProcess   bool   `yaml:"childprocess,omitempty"`
+	AuthScheme     string `yaml:"authscheme"`
+	SSLAccountFile string `yaml:"ssl_account_file"`
 }
 
 // NewDefaultConfig creates DefaultConfig
@@ -93,6 +99,7 @@ func NewDefaultConfig() *Config {
 		Foreground:   false,
 		AllowOther:   false,
 		ChildProcess: false,
+		AuthScheme:   AuthSchemeDefault,
 	}
 }
 
@@ -105,6 +112,7 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		ConnectionMax:         ConnectionMaxDefault,
 		FileBufferStoragePath: FileBufferStoragePathDefault,
 		FileBufferSizeMax:     FileBufferSizeMaxDefault,
+		AuthScheme:            AuthSchemeDefault,
 	}
 
 	err := yaml.Unmarshal(yamlBytes, &alias)
@@ -173,9 +181,11 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 
 		LogPath: alias.LogPath,
 
-		Foreground:   alias.Foreground,
-		AllowOther:   alias.AllowOther,
-		ChildProcess: alias.ChildProcess,
+		Foreground:     alias.Foreground,
+		AllowOther:     alias.AllowOther,
+		ChildProcess:   alias.ChildProcess,
+		AuthScheme:     alias.AuthScheme,
+		SSLAccountFile: alias.SSLAccountFile,
 	}, nil
 }
 
@@ -241,6 +251,14 @@ func (config *Config) Validate() error {
 
 	if config.FileBufferSizeMax < 10485760 {
 		return fmt.Errorf("FileBufferSizeMax must be equal or greater than 10485760")
+	}
+
+	if config.AuthScheme == AuthSchemePAM {
+		if _, err := os.Stat(config.SSLAccountFile); os.IsNotExist(err) {
+			return fmt.Errorf("SSL account file error - %v", err)
+		}
+	} else if config.AuthScheme != AuthSchemeDefault {
+		return fmt.Errorf("AuthScheme must be either native or pam")
 	}
 
 	return nil

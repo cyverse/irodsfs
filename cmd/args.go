@@ -216,6 +216,8 @@ func processArguments() (*irodsfs.Config, error, bool) {
 	flag.Int64Var(&config.FileBufferSizeMax, "filecachesizemax", irodsfs.FileBufferSizeMaxDefault, "Set file cache max size")
 	flag.Var(&fuseOptions, "o", "Other fuse options")
 	flag.StringVar(&config.LogPath, "log", "", "Set log file path")
+	flag.StringVar(&config.AuthScheme, "auth_scheme", irodsfs.AuthSchemeDefault, "Set authentication scheme (eg. native or pam)")
+	flag.StringVar(&config.SSLAccountFile, "ssl_account_file", "", "Set SSL account file when auth_scheme is pam")
 
 	flag.Parse()
 
