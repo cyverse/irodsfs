@@ -1,17 +1,16 @@
-host:
-  hostname: "<hostname>"
-  port: 1247
-user:
-  username: "<username>"
-  password: "<password>"
-  zone: "<zone>"
+host: data.cyverse.org
+port: 1247
+proxy_user: iychoi
+client_user: iychoi
+zone: iplant
+password: 
+
 auth_scheme: "pam"
-cs_negotiation: true
-cs_negotiation_policy: "CS_NEG_REQUIRE"
-ssl:
-  ca_cert_file: "/etc/ssl/certs/ca-certificates.crt"
-  key_size: 32
-  algorithm: "AES-256-CBC"
-  salt_size: 8
-  hash_rounds: 16
-  
+ssl_ca_cert_file: "/etc/ssl/certs/ca-certificates.crt"
+ssl_encryption_key_size: 32
+ssl_encryption_algorithm: "AES-256-CBC"
+ssl_encryption_salt_size: 8
+ssl_encryption_hash_rounds: 16
+
+foreground: false
+allow_other: false

@@ -217,7 +217,11 @@ func processArguments() (*irodsfs.Config, error, bool) {
 	flag.Var(&fuseOptions, "o", "Other fuse options")
 	flag.StringVar(&config.LogPath, "log", "", "Set log file path")
 	flag.StringVar(&config.AuthScheme, "auth_scheme", irodsfs.AuthSchemeDefault, "Set authentication scheme (eg. native or pam)")
-	flag.StringVar(&config.SSLAccountFile, "ssl_account_file", "", "Set SSL account file when auth_scheme is pam")
+	flag.StringVar(&config.CACertificateFile, "ssl_ca_cert", "", "Set SSL CA cert file when auth_scheme is pam")
+	flag.IntVar(&config.EncryptionKeySize, "ssl_key_size", irodsfs.EncryptionKeySizeDefault, "Set SSL encryption key size when auth_scheme is pam")
+	flag.StringVar(&config.EncryptionAlgorithm, "ssl_algorithm", irodsfs.EncryptionAlgorithmDefault, "Set SSL encryption algorithm when auth_scheme is pam")
+	flag.IntVar(&config.SaltSize, "ssl_salt_size", irodsfs.SaltSizeDefault, "Set SSL encryption salt size when auth_scheme is pam")
+	flag.IntVar(&config.HashRounds, "ssl_hash_rounds", irodsfs.HashRoundsDefault, "Set SSL hash rounds when auth_scheme is pam")
 
 	flag.Parse()
 

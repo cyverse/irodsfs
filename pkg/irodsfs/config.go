@@ -18,8 +18,13 @@ const (
 	MetadataCacheCleanupTimeDefault time.Duration = 5 * time.Minute
 	FileBufferStoragePathDefault    string        = "/tmp/irodsfs"
 	FileBufferSizeMaxDefault        int64         = 1024 * 1024 * 1024 // 1GB
-	AuthSchemeDefault               string        = "native"
 	AuthSchemePAM                   string        = "pam"
+	AuthSchemeNative                string        = "native"
+	AuthSchemeDefault               string        = AuthSchemeNative
+	EncryptionKeySizeDefault        int           = 32
+	EncryptionAlgorithmDefault      string        = "AES-256-CBC"
+	SaltSizeDefault                 int           = 8
+	HashRoundsDefault               int           = 16
 )
 
 // Config holds the parameters list which can be configured
@@ -33,6 +38,13 @@ type Config struct {
 	PathMappings []PathMapping `yaml:"path_mappings"`
 	MountPath    string        `yaml:"mount_path,omitempty"`
 
+	AuthScheme          string `yaml:"authscheme"`
+	CACertificateFile   string `yaml:"ssl_ca_cert_file"`
+	EncryptionKeySize   int    `yaml:"ssl_encryption_key_size"`
+	EncryptionAlgorithm string `yaml:"ssl_encryption_algorithm"`
+	SaltSize            int    `yaml:"ssl_encryption_salt_size"`
+	HashRounds          int    `yaml:"ssl_encryption_hash_rounds"`
+
 	ReadAheadMax             int           `yaml:"read_ahead_max"`
 	OperationTimeout         time.Duration `yaml:"operation_timeout"`
 	ConnectionIdleTimeout    time.Duration `yaml:"connection_idle_timeout"`
@@ -44,11 +56,9 @@ type Config struct {
 
 	LogPath string `yaml:"log_path,omitempty"`
 
-	Foreground     bool   `yaml:"foreground,omitempty"`
-	AllowOther     bool   `yaml:"allow_other,omitempty"`
-	ChildProcess   bool   `yaml:"childprocess,omitempty"`
-	AuthScheme     string `yaml:"authscheme"`
-	SSLAccountFile string `yaml:"ssl_account_file"`
+	Foreground   bool `yaml:"foreground,omitempty"`
+	AllowOther   bool `yaml:"allow_other,omitempty"`
+	ChildProcess bool `yaml:"childprocess,omitempty"`
 }
 
 type configAlias struct {
@@ -61,6 +71,13 @@ type configAlias struct {
 	PathMappings []PathMapping `yaml:"path_mappings"`
 	MountPath    string        `yaml:"mount_path,omitempty"`
 
+	AuthScheme          string `yaml:"authscheme"`
+	CACertificateFile   string `yaml:"ssl_ca_cert_file"`
+	EncryptionKeySize   int    `yaml:"ssl_encryption_key_size"`
+	EncryptionAlgorithm string `yaml:"ssl_encryption_algorithm"`
+	SaltSize            int    `yaml:"ssl_encryption_salt_size"`
+	HashRounds          int    `yaml:"ssl_encryption_hash_rounds"`
+
 	ReadAheadMax             int    `yaml:"read_ahead_max"`
 	OperationTimeout         string `yaml:"operation_timeout"`
 	ConnectionIdleTimeout    string `yaml:"connection_idle_timeout"`
@@ -72,11 +89,9 @@ type configAlias struct {
 
 	LogPath string `yaml:"log_path,omitempty"`
 
-	Foreground     bool   `yaml:"foreground,omitempty"`
-	AllowOther     bool   `yaml:"allow_other,omitempty"`
-	ChildProcess   bool   `yaml:"childprocess,omitempty"`
-	AuthScheme     string `yaml:"authscheme"`
-	SSLAccountFile string `yaml:"ssl_account_file"`
+	Foreground   bool `yaml:"foreground,omitempty"`
+	AllowOther   bool `yaml:"allow_other,omitempty"`
+	ChildProcess bool `yaml:"childprocess,omitempty"`
 }
 
 // NewDefaultConfig creates DefaultConfig
@@ -84,6 +99,12 @@ func NewDefaultConfig() *Config {
 	return &Config{
 		Port:         PortDefault,
 		PathMappings: []PathMapping{},
+
+		AuthScheme:          AuthSchemeDefault,
+		EncryptionKeySize:   EncryptionKeySizeDefault,
+		EncryptionAlgorithm: EncryptionAlgorithmDefault,
+		SaltSize:            SaltSizeDefault,
+		HashRounds:          HashRoundsDefault,
 
 		ReadAheadMax:             ReadAheadMaxDefault,
 		OperationTimeout:         OperationTimeoutDefault,
@@ -99,7 +120,6 @@ func NewDefaultConfig() *Config {
 		Foreground:   false,
 		AllowOther:   false,
 		ChildProcess: false,
-		AuthScheme:   AuthSchemeDefault,
 	}
 }
 
@@ -113,6 +133,10 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		FileBufferStoragePath: FileBufferStoragePathDefault,
 		FileBufferSizeMax:     FileBufferSizeMaxDefault,
 		AuthScheme:            AuthSchemeDefault,
+		EncryptionKeySize:     EncryptionKeySizeDefault,
+		EncryptionAlgorithm:   EncryptionAlgorithmDefault,
+		SaltSize:              SaltSizeDefault,
+		HashRounds:            HashRoundsDefault,
 	}
 
 	err := yaml.Unmarshal(yamlBytes, &alias)
@@ -170,6 +194,13 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		PathMappings: alias.PathMappings,
 		MountPath:    alias.MountPath,
 
+		AuthScheme:          alias.AuthScheme,
+		CACertificateFile:   alias.CACertificateFile,
+		EncryptionKeySize:   alias.EncryptionKeySize,
+		EncryptionAlgorithm: alias.EncryptionAlgorithm,
+		SaltSize:            alias.SaltSize,
+		HashRounds:          alias.HashRounds,
+
 		ReadAheadMax:             alias.ReadAheadMax,
 		OperationTimeout:         operationTimeout,
 		ConnectionIdleTimeout:    connectionIdleTimeout,
@@ -181,11 +212,9 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 
 		LogPath: alias.LogPath,
 
-		Foreground:     alias.Foreground,
-		AllowOther:     alias.AllowOther,
-		ChildProcess:   alias.ChildProcess,
-		AuthScheme:     alias.AuthScheme,
-		SSLAccountFile: alias.SSLAccountFile,
+		Foreground:   alias.Foreground,
+		AllowOther:   alias.AllowOther,
+		ChildProcess: alias.ChildProcess,
 	}, nil
 }
 
@@ -253,12 +282,30 @@ func (config *Config) Validate() error {
 		return fmt.Errorf("FileBufferSizeMax must be equal or greater than 10485760")
 	}
 
+	if config.AuthScheme != AuthSchemePAM && config.AuthScheme != AuthSchemeNative {
+		return fmt.Errorf("Unknown auth scheme - %v", config.AuthScheme)
+	}
+
 	if config.AuthScheme == AuthSchemePAM {
-		if _, err := os.Stat(config.SSLAccountFile); os.IsNotExist(err) {
-			return fmt.Errorf("SSL account file error - %v", err)
+		if _, err := os.Stat(config.CACertificateFile); os.IsNotExist(err) {
+			return fmt.Errorf("SSL CA Certificate file error - %v", err)
 		}
-	} else if config.AuthScheme != AuthSchemeDefault {
-		return fmt.Errorf("AuthScheme must be either native or pam")
+
+		if config.EncryptionKeySize <= 0 {
+			return fmt.Errorf("SSL encryption key size must be given")
+		}
+
+		if len(config.EncryptionAlgorithm) == 0 {
+			return fmt.Errorf("SSL encryption algorithm must be given")
+		}
+
+		if config.SaltSize <= 0 {
+			return fmt.Errorf("SSL salt size must be given")
+		}
+
+		if config.HashRounds <= 0 {
+			return fmt.Errorf("SSL hash rounds must be given")
+		}
 	}
 
 	return nil
