@@ -1,4 +1,4 @@
-# irodsfs
+# iRODS FUSE Lite
 FUSE implementation of iRODS Client written in Golang
 
 
