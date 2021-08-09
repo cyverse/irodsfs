@@ -102,15 +102,6 @@ func (asyncWrite *AsyncWrite) GetAsyncError() error {
 	return nil
 }
 
-func (asyncWrite *AsyncWrite) popAsyncError() error {
-	if len(asyncWrite.WriteIOErrors) > 0 {
-		err := asyncWrite.WriteIOErrors[0]
-		asyncWrite.WriteIOErrors = asyncWrite.WriteIOErrors[1:]
-		return err
-	}
-	return nil
-}
-
 func (asyncWrite *AsyncWrite) addAsyncError(err error) {
 	asyncWrite.WriteIOErrors = append(asyncWrite.WriteIOErrors, err)
 }
@@ -186,6 +177,9 @@ func (asyncWrite *AsyncWrite) backgroundWriteTask() {
 									asyncWrite.addAsyncError(err)
 									hasError = true
 								}
+
+								// Report
+								asyncWrite.FS.MonitoringReporter.ReportFileTransfer(asyncWrite.FileHandle.IRODSHandle.Path, offset, int64(len(bufferData)))
 							}
 
 							asyncWrite.FileHandleLock.Unlock()

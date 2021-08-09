@@ -54,7 +54,8 @@ type Config struct {
 	FileBufferStoragePath    string        `yaml:"file_buffer_storage_path"`
 	FileBufferSizeMax        int64         `yaml:"file_buffer_size_max"`
 
-	LogPath string `yaml:"log_path,omitempty"`
+	LogPath    string `yaml:"log_path,omitempty"`
+	MonitorURL string `yaml:"monitor_url,omitempty"`
 
 	Foreground   bool `yaml:"foreground,omitempty"`
 	AllowOther   bool `yaml:"allow_other,omitempty"`
@@ -87,7 +88,8 @@ type configAlias struct {
 	FileBufferStoragePath    string `yaml:"file_buffer_storage_path"`
 	FileBufferSizeMax        int64  `yaml:"file_buffer_size_max"`
 
-	LogPath string `yaml:"log_path,omitempty"`
+	LogPath    string `yaml:"log_path,omitempty"`
+	MonitorURL string `yaml:"monitor_url,omitempty"`
 
 	Foreground   bool `yaml:"foreground,omitempty"`
 	AllowOther   bool `yaml:"allow_other,omitempty"`
@@ -115,7 +117,8 @@ func NewDefaultConfig() *Config {
 		FileBufferStoragePath:    FileBufferStoragePathDefault,
 		FileBufferSizeMax:        FileBufferSizeMaxDefault,
 
-		LogPath: "",
+		LogPath:    "",
+		MonitorURL: "",
 
 		Foreground:   false,
 		AllowOther:   false,
@@ -210,7 +213,8 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		FileBufferStoragePath:    alias.FileBufferStoragePath,
 		FileBufferSizeMax:        alias.FileBufferSizeMax,
 
-		LogPath: alias.LogPath,
+		LogPath:    alias.LogPath,
+		MonitorURL: alias.MonitorURL,
 
 		Foreground:   alias.Foreground,
 		AllowOther:   alias.AllowOther,

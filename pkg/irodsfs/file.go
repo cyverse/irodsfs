@@ -157,11 +157,10 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 		attr.Size = uint64(entry.Size)
 		attr.Mode = mapFileACL(file, entry)
 		return nil
-	} else {
-		logger.Errorf("Unknown VFS Entry type : %s", vfsEntry.Type)
-		return syscall.EREMOTEIO
 	}
 
+	logger.Errorf("Unknown VFS Entry type : %s", vfsEntry.Type)
+	return syscall.EREMOTEIO
 }
 
 // Open opens file for the path and returns file handle
@@ -237,6 +236,10 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 
 		handleMutex := &sync.Mutex{}
 
+		if file.FS.MonitoringReporter != nil {
+			file.FS.MonitoringReporter.ReportNewFileTransferStart(file.Entry.IRODSEntry.Path, file.Entry.IRODSEntry.Size)
+		}
+
 		var asyncWrite *AsyncWrite
 		if req.Flags.IsWriteOnly() {
 			asyncWrite, err = NewAsyncWrite(file.FS, handle, handleMutex)
@@ -260,10 +263,10 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		}
 
 		return fileHandle, nil
-	} else {
-		logger.Errorf("Unknown VFS Entry type : %s", vfsEntry.Type)
-		return nil, syscall.EREMOTEIO
 	}
+
+	logger.Errorf("Unknown VFS Entry type : %s", vfsEntry.Type)
+	return nil, syscall.EREMOTEIO
 }
 
 // Fsync syncs file
@@ -315,6 +318,11 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 
 	copiedLen := copy(resp.Data[:req.Size], data)
 	resp.Data = resp.Data[:copiedLen]
+
+	// Report
+	if handle.FS.MonitoringReporter != nil {
+		handle.FS.MonitoringReporter.ReportFileTransfer(handle.IRODSFSEntry.Path, req.Offset, int64(req.Size))
+	}
 
 	return nil
 }
@@ -419,6 +427,9 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 		}
 
 		resp.Size = len(req.Data)
+
+		// Report
+		handle.FS.MonitoringReporter.ReportFileTransfer(handle.IRODSFSEntry.Path, req.Offset, int64(resp.Size))
 	}
 
 	return nil
@@ -490,6 +501,13 @@ func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest)
 	if err != nil {
 		logger.Errorf("Close error - %s", handle.Path)
 		return syscall.EREMOTEIO
+	}
+
+	// Report
+	err = handle.FS.MonitoringReporter.ReportFileTransferDone(handle.IRODSFSEntry.Path)
+	if err != nil {
+		logger.WithError(err).Error("Could not report the file transfer to monitoring service")
+		return err
 	}
 
 	return nil

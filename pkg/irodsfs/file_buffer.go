@@ -113,13 +113,13 @@ func (buffer *FileBuffer) Clear() {
 	buffer.Lock()
 	defer buffer.Unlock()
 
-	for key, _ := range buffer.EntryMap {
+	for key := range buffer.EntryMap {
 		delete(buffer.EntryMap, key)
 	}
 
 	buffer.clearStorage()
 
-	for key, _ := range buffer.SectionMap {
+	for key := range buffer.SectionMap {
 		delete(buffer.SectionMap, key)
 	}
 

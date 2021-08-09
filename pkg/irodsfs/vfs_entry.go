@@ -48,7 +48,7 @@ func NewVFSEntryFromIRODSFSEntry(path string, fsEntry *irodsfs_client.FSEntry) *
 
 // ToString stringifies the object
 func (entry *VFSEntry) ToString() string {
-	return fmt.Sprintf("<VFSEntry %s %p %p>", entry.Type, entry.Path, entry.VirtualDirEntry, entry.IRODSEntry)
+	return fmt.Sprintf("<VFSEntry %s %s %p %p>", entry.Type, entry.Path, entry.VirtualDirEntry, entry.IRODSEntry)
 }
 
 // GetIRODSPath returns relative path

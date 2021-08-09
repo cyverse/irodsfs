@@ -43,6 +43,8 @@ type IRODSFS struct {
 	FileMetaUpdater *FileMetaUpdater
 	IRODSClient     *irodsfs_client.FileSystem
 	FileBuffer      *FileBuffer
+
+	MonitoringReporter *MonitoringReporter
 }
 
 // NewFileSystem creates a new file system
@@ -100,15 +102,17 @@ func NewFileSystem(config *Config) (*IRODSFS, error) {
 	}
 
 	return &IRODSFS{
-		Config:          config,
-		Fuse:            nil,
-		VFS:             vfs,
-		FileMetaUpdater: fileMetaUpdater,
-		IRODSClient:     fsclient,
-		FileBuffer:      fileBuffer,
+		Config:             config,
+		Fuse:               nil,
+		VFS:                vfs,
+		FileMetaUpdater:    fileMetaUpdater,
+		IRODSClient:        fsclient,
+		FileBuffer:         fileBuffer,
+		MonitoringReporter: NewMonitoringReporter(config.MonitorURL),
 	}, nil
 }
 
+// ConnectToFuse connects to FUSE, must be performed before calling StartFuse
 func (fs *IRODSFS) ConnectToFuse() error {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
@@ -122,9 +126,19 @@ func (fs *IRODSFS) ConnectToFuse() error {
 	}
 
 	fs.FuseConnection = fuseConn
+
+	// register a new client
+	if fs.MonitoringReporter != nil {
+		err = fs.MonitoringReporter.ReportNewInstance(fs.Config)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
+// StartFuse starts fuse server, must be performed after calling ConnectToFuse
 func (fs *IRODSFS) StartFuse() error {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
@@ -154,6 +168,11 @@ func (fs *IRODSFS) Destroy() {
 	})
 
 	logger.Info("Destroying FileSystem")
+
+	if fs.MonitoringReporter != nil {
+		fs.MonitoringReporter.ReportInstanceTermination()
+		fs.MonitoringReporter = nil
+	}
 
 	if fs.FuseConnection != nil {
 		logger.Info("Closing fuse connection")

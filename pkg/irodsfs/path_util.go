@@ -101,10 +101,7 @@ func GetParentDirs(p string) []string {
 
 	// sort
 	sort.Slice(parents, func(i int, j int) bool {
-		if len(parents[i]) < len(parents[j]) {
-			return true
-		}
-		return false
+		return len(parents[i]) < len(parents[j])
 	})
 
 	return parents
