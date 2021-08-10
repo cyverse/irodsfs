@@ -28,7 +28,7 @@ type VFSVirtualDirEntry struct {
 	DirEntries []*VFSEntry
 }
 
-// VFSEntry ...
+// VFSEntry is a VFS entry struct
 type VFSEntry struct {
 	Type            VFSEntryType
 	Path            string
@@ -36,7 +36,7 @@ type VFSEntry struct {
 	IRODSEntry      *irodsfs_client.FSEntry
 }
 
-// NewVFSEntryFromIRODSFSEntry ...
+// NewVFSEntryFromIRODSFSEntry creates a new VFSEntry from IRODSFSEntry
 func NewVFSEntryFromIRODSFSEntry(path string, fsEntry *irodsfs_client.FSEntry) *VFSEntry {
 	return &VFSEntry{
 		Type:            VFSIRODSEntryType,

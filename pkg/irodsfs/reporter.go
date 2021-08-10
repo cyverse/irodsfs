@@ -12,6 +12,7 @@ const (
 	MaxTransferBlockLen int = 100
 )
 
+// MonitoringReporter reports metrics to monitoring service
 type MonitoringReporter struct {
 	MonitorURL        string
 	MonitoringClient  *monitor_client.APIClient

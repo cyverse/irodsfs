@@ -2,12 +2,10 @@ package irodsfs
 
 import (
 	"fmt"
-	"log"
 	"path"
 	"path/filepath"
 	"sort"
 	"strings"
-	"testing"
 )
 
 // JoinPath makes the path from dir and file paths
@@ -74,11 +72,6 @@ func GetPathDepth(p string) int {
 
 	pArr := strings.Split(p[1:], "/")
 	return len(pArr) - 1
-}
-
-func TestGetParentDirs(t *testing.T) {
-	dirs := GetParentDirs("/a/b/c")
-	log.Printf("%v", dirs)
 }
 
 // GetParentDirs returns all parent dirs

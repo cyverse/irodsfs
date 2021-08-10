@@ -24,6 +24,7 @@ const (
 	FileBufferEntryMax int = 1000
 )
 
+// FileBufferEntry is an entry in FileBuffer
 type FileBufferEntry struct {
 	Key          string
 	Section      string
@@ -33,6 +34,7 @@ type FileBufferEntry struct {
 	CreationTime time.Time
 }
 
+// FileBufferSection defines a section in FileBuffer
 type FileBufferSection struct {
 	Name   string
 	KeyMap map[string]string
