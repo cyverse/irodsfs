@@ -83,6 +83,10 @@ func mapFileACL(file *File, entry *irodsfs_client.FSEntry) os.FileMode {
 
 // Attr returns stat of directory entry
 func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
+	if file.FS.Terminated {
+		return syscall.ECONNABORTED
+	}
+
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"function": "File.Attr",
@@ -90,11 +94,10 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 
 	logger.Infof("Calling Attr - %s", file.Path)
 
-	if update, ok := file.FS.FileMetaUpdater.Get(file.InodeID); ok {
+	if update, ok := file.FS.FileMetaUpdater.Pop(file.InodeID); ok {
 		// update found
 		logger.Infof("Update found - replace path from %s to %s", file.Path, update.Path)
 		file.Path = update.Path
-		file.FS.FileMetaUpdater.Delete(file.InodeID)
 	}
 
 	vfsEntry := file.FS.VFS.GetClosestEntry(file.Path)
@@ -144,6 +147,10 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 
 // Open opens file for the path and returns file handle
 func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenResponse) (fusefs.Handle, error) {
+	if file.FS.Terminated {
+		return nil, syscall.ECONNABORTED
+	}
+
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"function": "File.Open",
@@ -175,11 +182,10 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 
 	logger.Infof("Calling Open - %s, mode(%s)", file.Path, openMode)
 
-	if update, ok := file.FS.FileMetaUpdater.Get(file.InodeID); ok {
+	if update, ok := file.FS.FileMetaUpdater.Pop(file.InodeID); ok {
 		// update found
 		logger.Infof("Update found - replace path from %s to %s", file.Path, update.Path)
 		file.Path = update.Path
-		file.FS.FileMetaUpdater.Delete(file.InodeID)
 	}
 
 	vfsEntry := file.FS.VFS.GetClosestEntry(file.Path)
@@ -250,11 +256,19 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 
 // Fsync syncs file
 func (file *File) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
+	if file.FS.Terminated {
+		return syscall.ECONNABORTED
+	}
+
 	return nil
 }
 
 // Read reads file content
 func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
+	if handle.FS.Terminated {
+		return syscall.ECONNABORTED
+	}
+
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"function": "FileHandle.Read",
@@ -308,6 +322,10 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 
 // Write writes file content
 func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
+	if handle.FS.Terminated {
+		return syscall.ECONNABORTED
+	}
+
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"function": "FileHandle.Write",
@@ -416,6 +434,10 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 
 // Flush flushes content changes
 func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) error {
+	if handle.FS.Terminated {
+		return syscall.ECONNABORTED
+	}
+
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"function": "FileHandle.Flush",
@@ -457,6 +479,10 @@ func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) err
 
 // Release closes file handle
 func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest) error {
+	if handle.FS.Terminated {
+		return syscall.ECONNABORTED
+	}
+
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"function": "FileHandle.Release",

@@ -50,6 +50,8 @@ type IRODSFS struct {
 	GID uint32
 
 	MonitoringReporter *MonitoringReporter
+
+	Terminated bool
 }
 
 // NewFileSystem creates a new file system
@@ -137,6 +139,7 @@ func NewFileSystem(config *Config) (*IRODSFS, error) {
 		GID: uint32(gid),
 
 		MonitoringReporter: NewMonitoringReporter(config.MonitorURL),
+		Terminated:         false,
 	}, nil
 }
 
@@ -190,6 +193,11 @@ func (fs *IRODSFS) StartFuse() error {
 
 // Destroy destroys the file system
 func (fs *IRODSFS) Destroy() {
+	if fs.Terminated {
+		// already terminated
+		return
+	}
+
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"function": "Destroy",
@@ -213,12 +221,25 @@ func (fs *IRODSFS) Destroy() {
 	fuse.Unmount(fs.Config.MountPath)
 
 	logger.Info("Releasing resources")
-	fs.IRODSClient.Release()
-	fs.FileBuffer.Destroy()
+	if fs.IRODSClient != nil {
+		fs.IRODSClient.Release()
+		fs.IRODSClient = nil
+	}
+
+	if fs.FileBuffer != nil {
+		fs.FileBuffer.Destroy()
+		fs.FileBuffer = nil
+	}
+
+	fs.Terminated = true
 }
 
 // Root returns root directory node
 func (fs *IRODSFS) Root() (fusefs.Node, error) {
+	if fs.Terminated {
+		return nil, syscall.ECONNABORTED
+	}
+
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"function": "Root",

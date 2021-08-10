@@ -23,22 +23,28 @@ import (
 )
 
 const (
+	// ChildProcessArgument is a command-line parameter used to make the process as a child
+	// used internally
 	ChildProcessArgument = "child_process"
-	iRODSProtocol        = "irods://"
+	// iRODSProtocol is a scheme for iRODS Access URL
+	iRODSProtocol = "irods://"
 )
 
+// FuseOptions holds options for FUSE
 type FuseOptions []string
 
+// String returns FUSE options as a string
 func (f *FuseOptions) String() string {
 	return strings.Join(*f, " ")
 }
 
+// Set adds a new FUSE option
 func (f *FuseOptions) Set(val string) error {
 	*f = append(*f, val)
 	return nil
 }
 
-// IRODSAccessURL ...
+// IRODSAccessURL is used to extract iRODS access information from iRODS Access URL (irods://host:port/zone/path)
 type IRODSAccessURL struct {
 	User     string
 	Password string
@@ -48,6 +54,7 @@ type IRODSAccessURL struct {
 	Path     string
 }
 
+// parseIRODSURL parses iRODS Access URL string and returns IRODSAccessURL struct
 func parseIRODSURL(inputURL string) (*IRODSAccessURL, error) {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
@@ -122,6 +129,7 @@ func parseIRODSURL(inputURL string) (*IRODSAccessURL, error) {
 	}, nil
 }
 
+// inputMissingParams gets user inputs for parameters missing, such as username and password
 func inputMissingParams(config *irodsfs.Config, stdinClosed bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
@@ -170,6 +178,7 @@ func inputMissingParams(config *irodsfs.Config, stdinClosed bool) error {
 	return nil
 }
 
+// processArguments processes command-line parameters
 func processArguments() (*irodsfs.Config, error, bool) {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
@@ -200,20 +209,20 @@ func processArguments() (*irodsfs.Config, error, bool) {
 	flag.StringVar(&config.Host, "host", "", "Set iRODS host")
 	flag.IntVar(&config.Port, "port", 1247, "Set iRODS port")
 	flag.StringVar(&config.Zone, "zone", "", "Set iRODS zone")
-	flag.StringVar(&config.ProxyUser, "proxyuser", "", "Set iRODS proxy user")
-	flag.StringVar(&config.ClientUser, "clientuser", "", "Set iRODS client user")
+	flag.StringVar(&config.ProxyUser, "proxy_user", "", "Set iRODS proxy user")
+	flag.StringVar(&config.ClientUser, "client_user", "", "Set iRODS client user")
 	flag.StringVar(&config.ProxyUser, "user", "", "Set iRODS user")
 	flag.StringVar(&config.ProxyUser, "u", "", "Set iRODS user (shorthand form)")
 	flag.StringVar(&config.Password, "password", "", "Set iRODS client password")
 	flag.StringVar(&config.Password, "p", "", "Set iRODS client password (shorthand form)")
 	flag.IntVar(&config.ReadAheadMax, "readahead", irodsfs.ReadAheadMaxDefault, "Set read-ahead size")
-	flag.IntVar(&config.ConnectionMax, "connectionmax", irodsfs.ConnectionMaxDefault, "Set max data transfer connections")
-	flag.StringVar(&operationTimeout, "operationtimeout", "", "Set filesystem operation timeout")
-	flag.StringVar(&connectionIdleTimeout, "connectionidletimeout", "", "Set idle data transfer timeout")
-	flag.StringVar(&metadataCacheTimeout, "metadatacachetimeout", "", "Set filesystem metadata cache timeout")
-	flag.StringVar(&metadataCacheCleanupTime, "metadatacachecleanuptime", "", "Set filesystem metadata cache cleanup time")
-	flag.StringVar(&config.FileBufferStoragePath, "filecachestoragepath", irodsfs.FileBufferStoragePathDefault, "Set file cache storage path")
-	flag.Int64Var(&config.FileBufferSizeMax, "filecachesizemax", irodsfs.FileBufferSizeMaxDefault, "Set file cache max size")
+	flag.IntVar(&config.ConnectionMax, "connection_max", irodsfs.ConnectionMaxDefault, "Set max data transfer connections")
+	flag.StringVar(&operationTimeout, "operation_timeout", "", "Set filesystem operation timeout")
+	flag.StringVar(&connectionIdleTimeout, "connection_idle_timeout", "", "Set idle data transfer timeout")
+	flag.StringVar(&metadataCacheTimeout, "metadata_cache_timeout", "", "Set filesystem metadata cache timeout")
+	flag.StringVar(&metadataCacheCleanupTime, "metadata_cache_cleanup_time", "", "Set filesystem metadata cache cleanup time")
+	flag.StringVar(&config.FileBufferStoragePath, "file_cache_storage_path", irodsfs.FileBufferStoragePathDefault, "Set file cache storage path")
+	flag.Int64Var(&config.FileBufferSizeMax, "file_cache_size_max", irodsfs.FileBufferSizeMaxDefault, "Set file cache max size")
 	flag.Var(&fuseOptions, "o", "Other fuse options")
 	flag.StringVar(&config.LogPath, "log", "", "Set log file path")
 	flag.StringVar(&config.MonitorURL, "monitor", "", "Set monitoring service URL")

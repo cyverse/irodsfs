@@ -11,7 +11,7 @@ const (
 	PathMappingDirectory PathMappingResourceType = "dir"
 )
 
-// PathMapping ...
+// PathMapping defines a path mapping between iRODS DataObject/Collection and local file/directory
 type PathMapping struct {
 	IRODSPath      string                  `yaml:"irods_path"`
 	MappingPath    string                  `yaml:"mapping_path"`
@@ -84,7 +84,7 @@ func ValidatePathMappings(mappings []PathMapping) error {
 	}
 
 	if len(mappings) == 0 {
-		return fmt.Errorf("No mapping is given")
+		return fmt.Errorf("No path mapping is given")
 	}
 	return nil
 }

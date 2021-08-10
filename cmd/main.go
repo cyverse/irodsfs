@@ -17,10 +17,13 @@ import (
 )
 
 const (
+	// InterProcessCommunicationFinishSuccess is the message that parent process receives when child process is executed successfully
 	InterProcessCommunicationFinishSuccess string = "<<COMMUNICATION_CLOSE_SUCCESS>>"
-	InterProcessCommunicationFinishError   string = "<<COMMUNICATION_CLOSE_ERROR>>"
+	// InterProcessCommunicationFinishError is the message that parent process receives when child process fails to run
+	InterProcessCommunicationFinishError string = "<<COMMUNICATION_CLOSE_ERROR>>"
 )
 
+// NilWriter drains output
 type NilWriter struct{}
 
 // Write does nothing
@@ -35,23 +38,26 @@ func main() {
 	childProcessArgument := fmt.Sprintf("-%s", ChildProcessArgument)
 	for _, arg := range os.Args[1:] {
 		if arg == childProcessArgument {
-			// background
 			isChildProc = true
 			break
 		}
 	}
 
 	if isChildProc {
+		// child process
 		childMain()
 	} else {
+		// parent process
 		parentMain()
 	}
 }
 
+// RunFSDaemon runs irodsfs as a daemon
 func RunFSDaemon(irodsfsExec string, config *irodsfs.Config) error {
 	return parentRun(irodsfsExec, config)
 }
 
+// parentRun executes irodsfs with the config given
 func parentRun(irodsfsExec string, config *irodsfs.Config) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
@@ -65,7 +71,8 @@ func parentRun(irodsfsExec string, config *irodsfs.Config) error {
 	}
 
 	if !config.Foreground {
-		// run the program in background
+		// run child process in background and pass parameters via stdin PIPE
+		// receives result from the child process
 		logger.Info("Running the process in the background mode")
 		childProcessArgument := fmt.Sprintf("-%s", ChildProcessArgument)
 		cmd := exec.Command(irodsfsExec, childProcessArgument)
@@ -151,6 +158,7 @@ func parentRun(irodsfsExec string, config *irodsfs.Config) error {
 	return nil
 }
 
+// parentMain handles command-line parameters and run parent process
 func parentMain() {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
@@ -194,6 +202,7 @@ func parentMain() {
 	os.Exit(0)
 }
 
+// childMain runs child process
 func childMain() {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
@@ -251,6 +260,7 @@ func childMain() {
 	}
 }
 
+// run runs irodsfs
 func run(config *irodsfs.Config, isChildProcess bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
