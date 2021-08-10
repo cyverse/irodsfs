@@ -2,6 +2,8 @@ package irodsfs
 
 import (
 	"fmt"
+	"os/user"
+	"strconv"
 	"syscall"
 
 	"bazil.org/fuse"
@@ -44,6 +46,9 @@ type IRODSFS struct {
 	IRODSClient     *irodsfs_client.FileSystem
 	FileBuffer      *FileBuffer
 
+	UID uint32
+	GID uint32
+
 	MonitoringReporter *MonitoringReporter
 }
 
@@ -53,6 +58,25 @@ func NewFileSystem(config *Config) (*IRODSFS, error) {
 		"package":  "irodsfs",
 		"function": "NewFileSystem",
 	})
+
+	// user
+	user, err := user.Current()
+	if err != nil {
+		logger.WithError(err).Error("User.Current error")
+		return nil, fmt.Errorf("Could not get current system user info - %v", err)
+	}
+
+	uid, err := strconv.ParseUint(user.Uid, 10, 32)
+	if err != nil {
+		logger.WithError(err).Errorf("Could not parse uid - %s", user.Uid)
+		return nil, fmt.Errorf("Could not parse uid - %s", user.Uid)
+	}
+
+	gid, err := strconv.ParseUint(user.Gid, 10, 32)
+	if err != nil {
+		logger.WithError(err).Errorf("Could not parse gid - %s", user.Gid)
+		return nil, fmt.Errorf("Could not parse gid - %s", user.Gid)
+	}
 
 	account, err := irodsfs_clienttype.CreateIRODSProxyAccount(config.Host, config.Port,
 		config.ClientUser, config.Zone, config.ProxyUser, config.Zone,
@@ -102,12 +126,16 @@ func NewFileSystem(config *Config) (*IRODSFS, error) {
 	}
 
 	return &IRODSFS{
-		Config:             config,
-		Fuse:               nil,
-		VFS:                vfs,
-		FileMetaUpdater:    fileMetaUpdater,
-		IRODSClient:        fsclient,
-		FileBuffer:         fileBuffer,
+		Config:          config,
+		Fuse:            nil,
+		VFS:             vfs,
+		FileMetaUpdater: fileMetaUpdater,
+		IRODSClient:     fsclient,
+		FileBuffer:      fileBuffer,
+
+		UID: uint32(uid),
+		GID: uint32(gid),
+
 		MonitoringReporter: NewMonitoringReporter(config.MonitorURL),
 	}, nil
 }

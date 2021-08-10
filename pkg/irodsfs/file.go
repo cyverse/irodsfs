@@ -5,8 +5,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/user"
-	"strconv"
 	"sync"
 	"syscall"
 
@@ -105,25 +103,6 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 		return syscall.EREMOTEIO
 	}
 
-	// user
-	user, err := user.Current()
-	if err != nil {
-		logger.WithError(err).Error("User.Current error")
-		return syscall.EREMOTEIO
-	}
-
-	uid, err := strconv.ParseUint(user.Uid, 10, 32)
-	if err != nil {
-		logger.WithError(err).Errorf("Could not parse uid - %s", user.Uid)
-		return syscall.EREMOTEIO
-	}
-
-	gid, err := strconv.ParseUint(user.Gid, 10, 32)
-	if err != nil {
-		logger.WithError(err).Errorf("Could not parse gid - %s", user.Gid)
-		return syscall.EREMOTEIO
-	}
-
 	if vfsEntry.Type == VFSVirtualDirEntryType {
 		logger.Errorf("Could not get file attribute from a virtual dir mapping")
 		return syscall.EREMOTEIO
@@ -149,8 +128,8 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 		file.Entry = NewVFSEntryFromIRODSFSEntry(file.Path, entry)
 
 		attr.Inode = uint64(entry.ID)
-		attr.Uid = uint32(uid)
-		attr.Gid = uint32(gid)
+		attr.Uid = file.FS.UID
+		attr.Gid = file.FS.GID
 		attr.Ctime = entry.CreateTime
 		attr.Mtime = entry.ModifyTime
 		attr.Atime = entry.ModifyTime
@@ -321,7 +300,7 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 
 	// Report
 	if handle.FS.MonitoringReporter != nil {
-		handle.FS.MonitoringReporter.ReportFileTransfer(handle.IRODSFSEntry.Path, req.Offset, int64(req.Size))
+		handle.FS.MonitoringReporter.ReportFileTransfer(handle.IRODSFSEntry.Path, req.Offset, int64(copiedLen))
 	}
 
 	return nil

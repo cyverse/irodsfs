@@ -5,8 +5,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/user"
-	"strconv"
 	"sync"
 	"syscall"
 
@@ -86,30 +84,11 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 		return syscall.EREMOTEIO
 	}
 
-	// user
-	user, err := user.Current()
-	if err != nil {
-		logger.WithError(err).Error("User.Current error")
-		return syscall.EREMOTEIO
-	}
-
-	uid, err := strconv.ParseUint(user.Uid, 10, 32)
-	if err != nil {
-		logger.WithError(err).Errorf("Could not parse uid - %s", user.Uid)
-		return syscall.EREMOTEIO
-	}
-
-	gid, err := strconv.ParseUint(user.Gid, 10, 32)
-	if err != nil {
-		logger.WithError(err).Errorf("Could not parse gid - %s", user.Gid)
-		return syscall.EREMOTEIO
-	}
-
 	if vfsEntry.Type == VFSVirtualDirEntryType {
 		if vfsEntry.Path == dir.Path {
 			attr.Inode = uint64(vfsEntry.VirtualDirEntry.ID)
-			attr.Uid = uint32(uid)
-			attr.Gid = uint32(gid)
+			attr.Uid = dir.FS.UID
+			attr.Gid = dir.FS.GID
 			attr.Ctime = vfsEntry.VirtualDirEntry.CreateTime
 			attr.Mtime = vfsEntry.VirtualDirEntry.ModifyTime
 			attr.Atime = vfsEntry.VirtualDirEntry.ModifyTime
@@ -149,8 +128,8 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 		}
 
 		attr.Inode = uint64(entry.ID)
-		attr.Uid = uint32(uid)
-		attr.Gid = uint32(gid)
+		attr.Uid = dir.FS.UID
+		attr.Gid = dir.FS.GID
 		attr.Ctime = entry.CreateTime
 		attr.Mtime = entry.ModifyTime
 		attr.Atime = entry.ModifyTime

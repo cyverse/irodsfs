@@ -9,14 +9,15 @@ import (
 )
 
 const (
-	MaxTransferBlockLen int = 1000
+	MaxTransferBlockLen int = 100
 )
 
 type MonitoringReporter struct {
-	MonitorURL       string
-	MonitoringClient *monitor_client.APIClient
-	InstanceID       string
-	FileTransferMap  map[string]*monitor_types.ReportFileTransfer
+	MonitorURL        string
+	MonitoringClient  *monitor_client.APIClient
+	InstanceID        string
+	FileTransferMap   map[string]*monitor_types.ReportFileTransfer
+	NextFileOffsetMap map[string]int64
 }
 
 // NewMonitoringReporter creates a new monitoring reporter
@@ -27,9 +28,11 @@ func NewMonitoringReporter(monitorURL string) *MonitoringReporter {
 	}
 
 	return &MonitoringReporter{
-		MonitorURL:       monitorURL,
-		MonitoringClient: monitoringClient,
-		InstanceID:       "",
+		MonitorURL:        monitorURL,
+		MonitoringClient:  monitoringClient,
+		InstanceID:        "",
+		FileTransferMap:   map[string]*monitor_types.ReportFileTransfer{},
+		NextFileOffsetMap: map[string]int64{},
 	}
 }
 
@@ -106,11 +109,13 @@ func (reporter *MonitoringReporter) ReportNewFileTransferStart(path string, size
 				LargestBlockSize:   0,
 				SmallestBlockSize:  0,
 				TransferBlockCount: 0,
+				SequentialAccess:   true,
 
 				FileOpenTime: time.Now().UTC(),
 			}
 
 			reporter.FileTransferMap[path] = transferReport
+			reporter.NextFileOffsetMap[path] = 0
 		}
 	}
 }
@@ -133,6 +138,7 @@ func (reporter *MonitoringReporter) ReportFileTransferDone(path string) error {
 			}
 
 			delete(reporter.FileTransferMap, path)
+			delete(reporter.NextFileOffsetMap, path)
 		}
 	}
 
@@ -162,6 +168,16 @@ func (reporter *MonitoringReporter) ReportFileTransfer(path string, offset int64
 			}
 
 			reporter.addFileTransfer(transfer, block)
+
+			if nextOffset, ok2 := reporter.NextFileOffsetMap[path]; ok2 {
+				if nextOffset == offset {
+					// move next
+					reporter.NextFileOffsetMap[path] = offset + length
+				} else {
+					// random access
+					transfer.SequentialAccess = false
+				}
+			}
 		}
 	}
 }
