@@ -198,6 +198,8 @@ func (fs *IRODSFS) Destroy() {
 		return
 	}
 
+	fs.Terminated = true
+
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"function": "Destroy",
@@ -230,8 +232,6 @@ func (fs *IRODSFS) Destroy() {
 		fs.FileBuffer.Destroy()
 		fs.FileBuffer = nil
 	}
-
-	fs.Terminated = true
 }
 
 // Root returns root directory node

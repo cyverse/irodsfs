@@ -711,7 +711,7 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 		}
 
 		if file.FS.MonitoringReporter != nil {
-			file.FS.MonitoringReporter.ReportNewFileTransferStart(file.Entry.IRODSEntry.Path, file.Entry.IRODSEntry.Size)
+			file.FS.MonitoringReporter.ReportNewFileTransferStart(file.Entry.IRODSEntry.Path, handle, file.Entry.IRODSEntry.Size)
 		}
 
 		handleMutex := &sync.Mutex{}

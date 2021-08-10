@@ -179,7 +179,7 @@ func (asyncWrite *AsyncWrite) backgroundWriteTask() {
 								}
 
 								// Report
-								asyncWrite.FS.MonitoringReporter.ReportFileTransfer(asyncWrite.FileHandle.IRODSHandle.Path, offset, int64(len(bufferData)))
+								asyncWrite.FS.MonitoringReporter.ReportFileTransfer(asyncWrite.FileHandle.IRODSHandle.Path, asyncWrite.FileHandle, offset, int64(len(bufferData)))
 							}
 
 							asyncWrite.FileHandleLock.Unlock()

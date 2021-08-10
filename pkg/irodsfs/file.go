@@ -222,7 +222,7 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		handleMutex := &sync.Mutex{}
 
 		if file.FS.MonitoringReporter != nil {
-			file.FS.MonitoringReporter.ReportNewFileTransferStart(file.Entry.IRODSEntry.Path, file.Entry.IRODSEntry.Size)
+			file.FS.MonitoringReporter.ReportNewFileTransferStart(file.Entry.IRODSEntry.Path, handle, file.Entry.IRODSEntry.Size)
 		}
 
 		var asyncWrite *AsyncWrite
@@ -314,7 +314,7 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 
 	// Report
 	if handle.FS.MonitoringReporter != nil {
-		handle.FS.MonitoringReporter.ReportFileTransfer(handle.IRODSFSEntry.Path, req.Offset, int64(copiedLen))
+		handle.FS.MonitoringReporter.ReportFileTransfer(handle.IRODSFSEntry.Path, handle.FileHandle, req.Offset, int64(copiedLen))
 	}
 
 	return nil
@@ -426,7 +426,7 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 		resp.Size = len(req.Data)
 
 		// Report
-		handle.FS.MonitoringReporter.ReportFileTransfer(handle.IRODSFSEntry.Path, req.Offset, int64(resp.Size))
+		handle.FS.MonitoringReporter.ReportFileTransfer(handle.IRODSFSEntry.Path, handle.FileHandle, req.Offset, int64(resp.Size))
 	}
 
 	return nil
@@ -509,7 +509,7 @@ func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest)
 	}
 
 	// Report
-	err = handle.FS.MonitoringReporter.ReportFileTransferDone(handle.IRODSFSEntry.Path)
+	err = handle.FS.MonitoringReporter.ReportFileTransferDone(handle.IRODSFSEntry.Path, handle.FileHandle)
 	if err != nil {
 		logger.WithError(err).Error("Could not report the file transfer to monitoring service")
 		return err

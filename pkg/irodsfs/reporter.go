@@ -1,8 +1,10 @@
 package irodsfs
 
 import (
+	"fmt"
 	"time"
 
+	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
 	monitor_client "github.com/cyverse/irodsfs-monitor/client"
 	monitor_types "github.com/cyverse/irodsfs-monitor/types"
 	log "github.com/sirupsen/logrus"
@@ -95,8 +97,12 @@ func (reporter *MonitoringReporter) ReportInstanceTermination() error {
 	return nil
 }
 
+func (reporter *MonitoringReporter) makeFileTransferKey(path string, fileHandle *irodsfs_client.FileHandle) string {
+	return fmt.Sprintf("%s:%p", path, fileHandle)
+}
+
 // ReportNewFileTransferStart reports a new file transfer start
-func (reporter *MonitoringReporter) ReportNewFileTransferStart(path string, size int64) {
+func (reporter *MonitoringReporter) ReportNewFileTransferStart(path string, fileHandle *irodsfs_client.FileHandle, size int64) {
 	if reporter.MonitoringClient != nil {
 		if len(reporter.InstanceID) > 0 {
 			transferReport := &monitor_types.ReportFileTransfer{
@@ -115,21 +121,23 @@ func (reporter *MonitoringReporter) ReportNewFileTransferStart(path string, size
 				FileOpenTime: time.Now().UTC(),
 			}
 
-			reporter.FileTransferMap[path] = transferReport
-			reporter.NextFileOffsetMap[path] = 0
+			key := reporter.makeFileTransferKey(path, fileHandle)
+			reporter.FileTransferMap[key] = transferReport
+			reporter.NextFileOffsetMap[key] = 0
 		}
 	}
 }
 
 // ReportFileTransferDone reports that the file transfer is done
-func (reporter *MonitoringReporter) ReportFileTransferDone(path string) error {
+func (reporter *MonitoringReporter) ReportFileTransferDone(path string, fileHandle *irodsfs_client.FileHandle) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"function": "MonitoringReporter.ReportFileTransferDone",
 	})
 
 	if reporter.MonitoringClient != nil {
-		if transfer, ok := reporter.FileTransferMap[path]; ok {
+		key := reporter.makeFileTransferKey(path, fileHandle)
+		if transfer, ok := reporter.FileTransferMap[key]; ok {
 			transfer.FileCloseTime = time.Now().UTC()
 
 			err := reporter.MonitoringClient.AddFileTransfer(transfer)
@@ -138,8 +146,8 @@ func (reporter *MonitoringReporter) ReportFileTransferDone(path string) error {
 				return err
 			}
 
-			delete(reporter.FileTransferMap, path)
-			delete(reporter.NextFileOffsetMap, path)
+			delete(reporter.FileTransferMap, key)
+			delete(reporter.NextFileOffsetMap, key)
 		}
 	}
 
@@ -147,9 +155,10 @@ func (reporter *MonitoringReporter) ReportFileTransferDone(path string) error {
 }
 
 // ReportFileTransfer reports a new file transfer
-func (reporter *MonitoringReporter) ReportFileTransfer(path string, offset int64, length int64) {
+func (reporter *MonitoringReporter) ReportFileTransfer(path string, fileHandle *irodsfs_client.FileHandle, offset int64, length int64) {
 	if reporter.MonitoringClient != nil {
-		if transfer, ok := reporter.FileTransferMap[path]; ok {
+		key := reporter.makeFileTransferKey(path, fileHandle)
+		if transfer, ok := reporter.FileTransferMap[key]; ok {
 			block := monitor_types.FileBlock{
 				Offset:     offset,
 				Length:     length,
@@ -170,10 +179,10 @@ func (reporter *MonitoringReporter) ReportFileTransfer(path string, offset int64
 
 			reporter.addFileTransfer(transfer, block)
 
-			if nextOffset, ok2 := reporter.NextFileOffsetMap[path]; ok2 {
+			if nextOffset, ok2 := reporter.NextFileOffsetMap[key]; ok2 {
 				if nextOffset == offset {
 					// move next
-					reporter.NextFileOffsetMap[path] = offset + length
+					reporter.NextFileOffsetMap[key] = offset + length
 				} else {
 					// random access
 					transfer.SequentialAccess = false
