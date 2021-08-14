@@ -1,8 +1,8 @@
 bazil.org/fuse v0.0.0-20200524192727-fb710f7dfd05 h1:UrYe9YkT4Wpm6D+zByEyCJQzDqTPXqTDUI7bZ41i9VE=
 bazil.org/fuse v0.0.0-20200524192727-fb710f7dfd05/go.mod h1:h0h5FBYpXThbvSfTqthw+0I4nmHnhTHkO5BoOHsBWqg=
 github.com/Julusian/godocdown v0.0.0-20170816220326-6d19f8ff2df8/go.mod h1:INZr5t32rG59/5xeltqoCJoNY7e5x/3xoY9WSWVWg74=
-github.com/cyverse/go-irodsclient v0.5.0 h1:zALGbbCBcWVRjhO5gnlpbws0cpghqMQkTD830YStXYM=
-github.com/cyverse/go-irodsclient v0.5.0/go.mod h1:Dv01ydAthODj/DDswb+JqH9z2oXOQ1WFtwoZeIEfQX8=
+github.com/cyverse/go-irodsclient v0.5.1 h1:6Fu06sNSw43ni7KS++IBOyO3wRRIl8cD+am0VTRTbog=
+github.com/cyverse/go-irodsclient v0.5.1/go.mod h1:Dv01ydAthODj/DDswb+JqH9z2oXOQ1WFtwoZeIEfQX8=
 github.com/cyverse/irodsfs-monitor v0.0.0-20210810213010-640d7c0b9317 h1:d85vyK6RgXAkkkjxPOIBbWiJCxwgRMfqGdTsjZJAuqU=
 github.com/cyverse/irodsfs-monitor v0.0.0-20210810213010-640d7c0b9317/go.mod h1:8UE1mT26+0vAsqS9UJ6Q/vlKq3da6FLdt5p6Tt1AIC4=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
