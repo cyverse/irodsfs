@@ -14,7 +14,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cyverse/go-irodsclient/client"
 	"github.com/cyverse/irodsfs/pkg/irodsfs"
 	"golang.org/x/term"
 	"gopkg.in/yaml.v2"
@@ -238,7 +237,7 @@ func processArguments() (*irodsfs.Config, error, bool) {
 	flag.Parse()
 
 	if version {
-		info, err := client.GetVersionJSON()
+		info, err := irodsfs.GetVersionJSON()
 		if err != nil {
 			logger.WithError(err).Error("failed to get client version info")
 			return nil, err, true
