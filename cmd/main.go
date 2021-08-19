@@ -78,13 +78,13 @@ func parentRun(irodsfsExec string, config *irodsfs.Config) error {
 		cmd := exec.Command(irodsfsExec, childProcessArgument)
 		subStdin, err := cmd.StdinPipe()
 		if err != nil {
-			logger.WithError(err).Error("Could not communicate to background process")
+			logger.WithError(err).Error("failed to communicate to background process")
 			return err
 		}
 
 		subStdout, err := cmd.StdoutPipe()
 		if err != nil {
-			logger.WithError(err).Error("Could not communicate to background process")
+			logger.WithError(err).Error("failed to communicate to background process")
 			return err
 		}
 
@@ -92,7 +92,7 @@ func parentRun(irodsfsExec string, config *irodsfs.Config) error {
 
 		err = cmd.Start()
 		if err != nil {
-			logger.WithError(err).Errorf("Could not start a child process")
+			logger.WithError(err).Errorf("failed to start a child process")
 			return err
 		}
 
@@ -101,14 +101,14 @@ func parentRun(irodsfsExec string, config *irodsfs.Config) error {
 		logger.Info("Sending configuration data")
 		configBytes, err := yaml.Marshal(config)
 		if err != nil {
-			logger.WithError(err).Error("Could not serialize configuration")
+			logger.WithError(err).Error("failed to serialize configuration")
 			return err
 		}
 
 		// send it to child
 		_, err = io.WriteString(subStdin, string(configBytes))
 		if err != nil {
-			logger.WithError(err).Error("Could not communicate to background process")
+			logger.WithError(err).Error("failed to communicate to background process")
 			return err
 		}
 		subStdin.Close()
@@ -150,7 +150,7 @@ func parentRun(irodsfsExec string, config *irodsfs.Config) error {
 		// foreground
 		err = run(config, false)
 		if err != nil {
-			logger.WithError(err).Error("Could not run irodsfs")
+			logger.WithError(err).Error("failed to run irodsfs")
 			return err
 		}
 	}
@@ -214,21 +214,21 @@ func childMain() {
 	// read from stdin
 	_, err := os.Stdin.Stat()
 	if err != nil {
-		logger.WithError(err).Error("Could not communicate to foreground process")
+		logger.WithError(err).Error("failed to communicate to foreground process")
 		fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
 		os.Exit(1)
 	}
 
 	configBytes, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
-		logger.WithError(err).Error("Could not read configuration")
+		logger.WithError(err).Error("failed to read configuration")
 		fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
 		os.Exit(1)
 	}
 
 	config, err := irodsfs.NewConfigFromYAML(configBytes)
 	if err != nil {
-		logger.WithError(err).Error("Could not read configuration")
+		logger.WithError(err).Error("failed to read configuration")
 		fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
 		os.Exit(1)
 	}
@@ -237,7 +237,7 @@ func childMain() {
 	if len(config.LogPath) > 0 {
 		logFile, err := os.OpenFile(config.LogPath, os.O_WRONLY|os.O_CREATE, 0755)
 		if err != nil {
-			logger.WithError(err).Error("Could not create log file")
+			logger.WithError(err).Error("failed to create log file")
 			fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
 			os.Exit(1)
 		} else {
@@ -247,7 +247,7 @@ func childMain() {
 
 	err = config.Validate()
 	if err != nil {
-		logger.WithError(err).Error("Argument validation error")
+		logger.WithError(err).Error("invalid configuration")
 		fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
 		os.Exit(1)
 	}
@@ -255,7 +255,7 @@ func childMain() {
 	// background
 	err = run(config, true)
 	if err != nil {
-		logger.WithError(err).Error("Could not run irodsfs")
+		logger.WithError(err).Error("failed to run irodsfs")
 		os.Exit(1)
 	}
 }
@@ -269,7 +269,7 @@ func run(config *irodsfs.Config, isChildProcess bool) error {
 
 	fs, err := irodsfs.NewFileSystem(config)
 	if err != nil {
-		logger.WithError(err).Error("Could not create filesystem")
+		logger.WithError(err).Error("failed to create filesystem")
 		if isChildProcess {
 			fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
 		}
@@ -311,7 +311,7 @@ func run(config *irodsfs.Config, isChildProcess bool) error {
 
 	err = fs.StartFuse()
 	if err != nil {
-		logger.WithError(err).Error("Could not start FUSE")
+		logger.WithError(err).Error("failed to start FUSE")
 		fs.Destroy()
 		return err
 	}

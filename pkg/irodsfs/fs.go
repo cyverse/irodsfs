@@ -61,39 +61,50 @@ func NewFileSystem(config *Config) (*IRODSFS, error) {
 		"function": "NewFileSystem",
 	})
 
-	// user
-	user, err := user.Current()
-	if err != nil {
-		logger.WithError(err).Error("User.Current error")
-		return nil, fmt.Errorf("Could not get current system user info - %v", err)
-	}
+	uid := uint32(0)
+	gid := uint32(0)
+	if config.UID >= 0 && config.GID >= 0 {
+		uid = uint32(config.UID)
+		gid = uint32(config.GID)
+	} else {
+		// user
+		user, err := user.Current()
+		if err != nil {
+			logger.WithError(err).Error("failed to get current system user info")
+			return nil, fmt.Errorf("failed to get current system user info - %v", err)
+		}
 
-	uid, err := strconv.ParseUint(user.Uid, 10, 32)
-	if err != nil {
-		logger.WithError(err).Errorf("Could not parse uid - %s", user.Uid)
-		return nil, fmt.Errorf("Could not parse uid - %s", user.Uid)
-	}
+		puid, err := strconv.ParseUint(user.Uid, 10, 32)
+		if err != nil {
+			logger.WithError(err).Errorf("failed to parse uid - %s", user.Uid)
+			return nil, fmt.Errorf("failed to parse uid - %s", user.Uid)
+		}
 
-	gid, err := strconv.ParseUint(user.Gid, 10, 32)
-	if err != nil {
-		logger.WithError(err).Errorf("Could not parse gid - %s", user.Gid)
-		return nil, fmt.Errorf("Could not parse gid - %s", user.Gid)
+		uid = uint32(puid)
+
+		pgid, err := strconv.ParseUint(user.Gid, 10, 32)
+		if err != nil {
+			logger.WithError(err).Errorf("failed to parse gid - %s", user.Gid)
+			return nil, fmt.Errorf("failed to parse gid - %s", user.Gid)
+		}
+
+		gid = uint32(pgid)
 	}
 
 	account, err := irodsfs_clienttype.CreateIRODSProxyAccount(config.Host, config.Port,
 		config.ClientUser, config.Zone, config.ProxyUser, config.Zone,
 		irodsfs_clienttype.AuthSchemeNative, config.Password)
 	if err != nil {
-		logger.WithError(err).Error("Could not create IRODS Account")
-		return nil, fmt.Errorf("Could not create IRODS Account - %v", err)
+		logger.WithError(err).Error("failed to create IRODS Account")
+		return nil, fmt.Errorf("failed to create IRODS Account - %v", err)
 	}
 
 	if config.AuthScheme == AuthSchemePAM {
 		sslConfig, err := irodsfs_clienttype.CreateIRODSSSLConfig(config.CACertificateFile, config.EncryptionKeySize,
 			config.EncryptionAlgorithm, config.SaltSize, config.HashRounds)
 		if err != nil {
-			logger.WithError(err).Error("Could not create IRODS SSL Config")
-			return nil, fmt.Errorf("Could not create IRODS SSL Config - %v", err)
+			logger.WithError(err).Error("failed to create IRODS SSL Config")
+			return nil, fmt.Errorf("failed to create IRODS SSL Config - %v", err)
 		}
 
 		account.SetSSLConfiguration(sslConfig)
@@ -109,22 +120,22 @@ func NewFileSystem(config *Config) (*IRODSFS, error) {
 
 	fsclient, err := irodsfs_client.NewFileSystem(account, fsconfig)
 	if err != nil {
-		logger.WithError(err).Error("Could not create IRODS FileSystem Client")
-		return nil, fmt.Errorf("Could not create IRODS FileSystem Client - %v", err)
+		logger.WithError(err).Error("failed to create IRODS FileSystem Client")
+		return nil, fmt.Errorf("failed to create IRODS FileSystem Client - %v", err)
 	}
 
 	vfs, err := NewVFS(fsclient, config.PathMappings)
 	if err != nil {
-		logger.WithError(err).Error("Could not create VFS")
-		return nil, fmt.Errorf("Could not create VFS - %v", err)
+		logger.WithError(err).Error("failed to create VFS")
+		return nil, fmt.Errorf("failed to create VFS - %v", err)
 	}
 
 	fileMetaUpdater := NewFileMetaUpdater()
 
 	fileBuffer, err := NewFileBuffer(config.FileBufferStoragePath, config.FileBufferSizeMax)
 	if err != nil {
-		logger.WithError(err).Error("Could not create FileBuffer")
-		return nil, fmt.Errorf("Could not create FileBuffer - %v", err)
+		logger.WithError(err).Error("failed to create FileBuffer")
+		return nil, fmt.Errorf("failed to create FileBuffer - %v", err)
 	}
 
 	return &IRODSFS{
@@ -135,8 +146,8 @@ func NewFileSystem(config *Config) (*IRODSFS, error) {
 		IRODSClient:     fsclient,
 		FileBuffer:      fileBuffer,
 
-		UID: uint32(uid),
-		GID: uint32(gid),
+		UID: uid,
+		GID: gid,
 
 		MonitoringReporter: NewMonitoringReporter(config.MonitorURL),
 		Terminated:         false,
@@ -152,7 +163,7 @@ func (fs *IRODSFS) ConnectToFuse() error {
 
 	fuseConn, err := fuse.Mount(fs.Config.MountPath, GetFuseMountOptions(fs.Config)...)
 	if err != nil {
-		logger.WithError(err).Error("Could not connect to FUSE")
+		logger.WithError(err).Error("failed to connect to FUSE")
 		return err
 	}
 
@@ -177,15 +188,15 @@ func (fs *IRODSFS) StartFuse() error {
 	})
 
 	if fs.FuseConnection == nil {
-		logger.Error("Could not start FUSE server without connection")
-		return fmt.Errorf("Could not start FUSE server without connection")
+		logger.Error("failed to start FUSE server without connection")
+		return fmt.Errorf("failed to start FUSE server without connection")
 	}
 
 	fuseServer := fusefs.New(fs.FuseConnection, nil)
 	fs.Fuse = fuseServer
 
 	if err := fuseServer.Serve(fs); err != nil {
-		logger.WithError(err).Error("Could not start FUSE server")
+		logger.WithError(err).Error("failed to start FUSE server")
 		return err
 	}
 	return nil
@@ -247,7 +258,7 @@ func (fs *IRODSFS) Root() (fusefs.Node, error) {
 
 	vfsEntry := fs.VFS.GetEntry("/")
 	if vfsEntry == nil {
-		logger.Errorf("Could not get Root VFS Entry")
+		logger.Errorf("failed to get Root VFS Entry")
 		return nil, syscall.EREMOTEIO
 	}
 
@@ -259,7 +270,7 @@ func (fs *IRODSFS) Root() (fusefs.Node, error) {
 		}, nil
 	} else if vfsEntry.Type == VFSIRODSEntryType {
 		if vfsEntry.IRODSEntry.Type != irodsfs_client.FSDirectoryEntry {
-			logger.Errorf("Could not mount a data object as a root")
+			logger.Errorf("failed to mount a data object as a root")
 			return nil, syscall.EREMOTEIO
 		}
 
@@ -269,7 +280,7 @@ func (fs *IRODSFS) Root() (fusefs.Node, error) {
 			Path:    "/",
 		}, nil
 	} else {
-		logger.Errorf("Unknown VFS Entry type : %s", vfsEntry.Type)
+		logger.Errorf("unknown VFS Entry type : %s", vfsEntry.Type)
 		return nil, syscall.EREMOTEIO
 	}
 }

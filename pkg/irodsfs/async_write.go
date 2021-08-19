@@ -70,25 +70,25 @@ func (asyncWrite *AsyncWrite) Write(offset int64, data []byte) error {
 
 	err := asyncWrite.FileBuffer.WaitForSpace(int64(len(data)))
 	if err != nil {
-		logger.WithError(err).Errorf("Cache write wait error - %s, %s", sectionName, bufferKey)
+		logger.WithError(err).Errorf("failed to wait space for cache write - %s, %s", sectionName, bufferKey)
 		return err
 	}
 
 	err = asyncWrite.FileBuffer.Put(sectionName, bufferKey, data)
 	if err != nil {
-		logger.WithError(err).Errorf("Cache write error - %s, %s", sectionName, bufferKey)
+		logger.WithError(err).Errorf("failed to put cache - %s, %s", sectionName, bufferKey)
 		return err
 	}
 
 	err = asyncWrite.queueBackgroundWrite(bufferKey)
 	if err != nil {
-		logger.WithError(err).Errorf("Queue background write error - %s, %s", sectionName, bufferKey)
+		logger.WithError(err).Errorf("failed to queue background write - %s, %s", sectionName, bufferKey)
 		return err
 	}
 
 	err = asyncWrite.GetAsyncError()
 	if err != nil {
-		logger.WithError(err).Errorf("Async write error found - %s, %v", sectionName, err)
+		logger.WithError(err).Errorf("got an async write failure - %s, %v", sectionName, err)
 		return err
 	}
 
@@ -144,7 +144,7 @@ func (asyncWrite *AsyncWrite) backgroundWriteTask() {
 				if bufferEntry.Status == FileBufferEntryStatusReady {
 					bufferData, err := asyncWrite.FileBuffer.Pop(sectionName, key)
 					if err != nil {
-						logger.WithError(err).Errorf("Reading disk buffer error - %s, %s", sectionName, key)
+						logger.WithError(err).Errorf("failed to get buffered data - %s, %s", sectionName, key)
 						asyncWrite.addAsyncError(err)
 						hasError = true
 					}
@@ -153,7 +153,7 @@ func (asyncWrite *AsyncWrite) backgroundWriteTask() {
 						// upload buffer data
 						offset, err := asyncWrite.getFileBufferOffsetFromKey(key)
 						if err != nil {
-							logger.WithError(err).Errorf("Reading cache offset error - %s, %s", sectionName, key)
+							logger.WithError(err).Errorf("failed to get buffer offset - %s, %s", sectionName, key)
 							asyncWrite.addAsyncError(err)
 							hasError = true
 						} else {
@@ -164,7 +164,7 @@ func (asyncWrite *AsyncWrite) backgroundWriteTask() {
 							if asyncWrite.FileHandle.GetOffset() != offset {
 								_, err := asyncWrite.FileHandle.Seek(offset, irodsfs_clienttype.SeekSet)
 								if err != nil {
-									logger.WithError(err).Errorf("Seek error - %s, %d", filePath, offset)
+									logger.WithError(err).Errorf("failed to seek - %s, %d", filePath, offset)
 									asyncWrite.addAsyncError(err)
 									hasError = true
 								}
@@ -173,7 +173,7 @@ func (asyncWrite *AsyncWrite) backgroundWriteTask() {
 							if !hasError {
 								err := asyncWrite.FileHandle.Write(bufferData)
 								if err != nil {
-									logger.WithError(err).Errorf("Write error - %s, %d", filePath, len(bufferData))
+									logger.WithError(err).Errorf("failed to write data - %s, %d", filePath, len(bufferData))
 									asyncWrite.addAsyncError(err)
 									hasError = true
 								}

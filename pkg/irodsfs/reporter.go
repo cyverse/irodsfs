@@ -71,7 +71,7 @@ func (reporter *MonitoringReporter) ReportNewInstance(fsConfig *Config) error {
 		if !reporter.Failed {
 			instanceID, err := reporter.MonitoringClient.AddInstance(&instance)
 			if err != nil {
-				logger.WithError(err).Error("Could not report the instance to monitoring service")
+				logger.WithError(err).Error("failed to report the instance to monitoring service")
 				reporter.Failed = true
 				return err
 			}
@@ -95,7 +95,7 @@ func (reporter *MonitoringReporter) ReportInstanceTermination() error {
 			if len(reporter.InstanceID) > 0 {
 				err := reporter.MonitoringClient.TerminateInstance(reporter.InstanceID)
 				if err != nil {
-					logger.WithError(err).Error("Could not report termination of the instance to monitoring service")
+					logger.WithError(err).Error("failed to report termination of the instance to monitoring service")
 					reporter.Failed = true
 					return err
 				}
@@ -154,7 +154,7 @@ func (reporter *MonitoringReporter) ReportFileTransferDone(path string, fileHand
 
 				err := reporter.MonitoringClient.AddFileTransfer(transfer)
 				if err != nil {
-					logger.WithError(err).Error("Could not report file transfer to monitoring service")
+					logger.WithError(err).Error("failed to report file transfer to monitoring service")
 					reporter.Failed = true
 					return err
 				}

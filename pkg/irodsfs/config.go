@@ -36,6 +36,8 @@ type Config struct {
 	Zone         string        `yaml:"zone"`
 	Password     string        `yaml:"password,omitempty"`
 	PathMappings []PathMapping `yaml:"path_mappings"`
+	UID          int           `yaml:"uid"`
+	GID          int           `yaml:"gid"`
 	MountPath    string        `yaml:"mount_path,omitempty"`
 
 	AuthScheme          string `yaml:"authscheme"`
@@ -70,6 +72,8 @@ type configAlias struct {
 	Zone         string        `yaml:"zone"`
 	Password     string        `yaml:"password,omitempty"`
 	PathMappings []PathMapping `yaml:"path_mappings"`
+	UID          int           `yaml:"uid"`
+	GID          int           `yaml:"gid"`
 	MountPath    string        `yaml:"mount_path,omitempty"`
 
 	AuthScheme          string `yaml:"authscheme"`
@@ -101,6 +105,8 @@ func NewDefaultConfig() *Config {
 	return &Config{
 		Port:         PortDefault,
 		PathMappings: []PathMapping{},
+		UID:          -1,
+		GID:          -1,
 
 		AuthScheme:          AuthSchemeDefault,
 		EncryptionKeySize:   EncryptionKeySizeDefault,
@@ -129,29 +135,40 @@ func NewDefaultConfig() *Config {
 // NewConfigFromYAML creates Config from YAML
 func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 	alias := configAlias{
-		Port:                  PortDefault,
-		PathMappings:          []PathMapping{},
+		Port:         PortDefault,
+		PathMappings: []PathMapping{},
+		UID:          -1,
+		GID:          -1,
+
+		AuthScheme:          AuthSchemeDefault,
+		EncryptionKeySize:   EncryptionKeySizeDefault,
+		EncryptionAlgorithm: EncryptionAlgorithmDefault,
+		SaltSize:            SaltSizeDefault,
+		HashRounds:          HashRoundsDefault,
+
 		ReadAheadMax:          ReadAheadMaxDefault,
 		ConnectionMax:         ConnectionMaxDefault,
 		FileBufferStoragePath: FileBufferStoragePathDefault,
 		FileBufferSizeMax:     FileBufferSizeMaxDefault,
-		AuthScheme:            AuthSchemeDefault,
-		EncryptionKeySize:     EncryptionKeySizeDefault,
-		EncryptionAlgorithm:   EncryptionAlgorithmDefault,
-		SaltSize:              SaltSizeDefault,
-		HashRounds:            HashRoundsDefault,
+
+		LogPath:    "",
+		MonitorURL: "",
+
+		Foreground:   false,
+		AllowOther:   false,
+		ChildProcess: false,
 	}
 
 	err := yaml.Unmarshal(yamlBytes, &alias)
 	if err != nil {
-		return nil, fmt.Errorf("YAML Unmarshal Error - %v", err)
+		return nil, fmt.Errorf("failed to unmarshal YAML - %v", err)
 	}
 
 	var operationTimeout time.Duration
 	if len(alias.OperationTimeout) > 0 {
 		operationTimeout, err = time.ParseDuration(alias.OperationTimeout)
 		if err != nil {
-			return nil, fmt.Errorf("YAML Unmarshal Error - %v", err)
+			return nil, fmt.Errorf("failed to unmarshal YAML - %v", err)
 		}
 	} else {
 		operationTimeout = OperationTimeoutDefault
@@ -161,7 +178,7 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 	if len(alias.ConnectionIdleTimeout) > 0 {
 		connectionIdleTimeout, err = time.ParseDuration(alias.ConnectionIdleTimeout)
 		if err != nil {
-			return nil, fmt.Errorf("YAML Unmarshal Error - %v", err)
+			return nil, fmt.Errorf("failed to unmarshal YAML - %v", err)
 		}
 	} else {
 		connectionIdleTimeout = ConnectionIdleTimeoutDefault
@@ -171,7 +188,7 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 	if len(alias.MetadataCacheTimeout) > 0 {
 		metadataCacheTimeout, err = time.ParseDuration(alias.MetadataCacheTimeout)
 		if err != nil {
-			return nil, fmt.Errorf("YAML Unmarshal Error - %v", err)
+			return nil, fmt.Errorf("failed to unmarshal YAML - %v", err)
 		}
 	} else {
 		metadataCacheTimeout = MetadataCacheTimeoutDefault
@@ -181,7 +198,7 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 	if len(alias.MetadataCacheCleanupTime) > 0 {
 		metadataCacheCleanupTime, err = time.ParseDuration(alias.MetadataCacheCleanupTime)
 		if err != nil {
-			return nil, fmt.Errorf("YAML Unmarshal Error - %v", err)
+			return nil, fmt.Errorf("failed to unmarshal YAML - %v", err)
 		}
 	} else {
 		metadataCacheCleanupTime = MetadataCacheCleanupTimeDefault
@@ -195,6 +212,8 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		Zone:         alias.Zone,
 		Password:     alias.Password,
 		PathMappings: alias.PathMappings,
+		UID:          alias.UID,
+		GID:          alias.GID,
 		MountPath:    alias.MountPath,
 
 		AuthScheme:          alias.AuthScheme,
@@ -225,40 +244,40 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 // Validate validates configuration
 func (config *Config) Validate() error {
 	if len(config.Host) == 0 {
-		return fmt.Errorf("Hostname must be given")
+		return fmt.Errorf("hostname must be given")
 	}
 
 	if config.Port <= 0 {
-		return fmt.Errorf("Port must be given")
+		return fmt.Errorf("port must be given")
 	}
 
 	if len(config.ProxyUser) == 0 {
-		return fmt.Errorf("ProxyUser must be given")
+		return fmt.Errorf("proxyUser must be given")
 	}
 
 	if len(config.ClientUser) == 0 {
-		return fmt.Errorf("ClientUser must be given")
+		return fmt.Errorf("clientUser must be given")
 	}
 
 	if len(config.Zone) == 0 {
-		return fmt.Errorf("Zone must be given")
+		return fmt.Errorf("zone must be given")
 	}
 
 	if len(config.Password) == 0 {
-		return fmt.Errorf("Password must be given")
+		return fmt.Errorf("password must be given")
 	}
 
 	if len(config.PathMappings) == 0 {
-		return fmt.Errorf("PathMappings must be given")
+		return fmt.Errorf("path mappings must be given")
 	}
 
 	err := ValidatePathMappings(config.PathMappings)
 	if err != nil {
-		return fmt.Errorf("PathMaiings error - %v", err)
+		return fmt.Errorf("invalid path mappings - %v", err)
 	}
 
 	if len(config.MountPath) == 0 {
-		return fmt.Errorf("MountPath must be given")
+		return fmt.Errorf("mount path must be given")
 	}
 
 	fileinfo, err := os.Stat(config.MountPath)
@@ -271,23 +290,23 @@ func (config *Config) Validate() error {
 	}
 
 	if config.ReadAheadMax < 0 {
-		return fmt.Errorf("ReadAheadMax must be equal or greater than 0")
+		return fmt.Errorf("readahead max must be equal or greater than 0")
 	}
 
 	if config.ConnectionMax < 1 {
-		return fmt.Errorf("ConnectionMax must be equal or greater than 1")
+		return fmt.Errorf("connection max must be equal or greater than 1")
 	}
 
 	if len(config.FileBufferStoragePath) == 0 {
-		return fmt.Errorf("FileBufferStoragePath must be given")
+		return fmt.Errorf("file buffer storage path must be given")
 	}
 
 	if config.FileBufferSizeMax < 10485760 {
-		return fmt.Errorf("FileBufferSizeMax must be equal or greater than 10485760")
+		return fmt.Errorf("file buffer size max must be equal or greater than 10485760")
 	}
 
 	if config.AuthScheme != AuthSchemePAM && config.AuthScheme != AuthSchemeNative {
-		return fmt.Errorf("Unknown auth scheme - %v", config.AuthScheme)
+		return fmt.Errorf("unknown auth scheme - %v", config.AuthScheme)
 	}
 
 	if config.AuthScheme == AuthSchemePAM {

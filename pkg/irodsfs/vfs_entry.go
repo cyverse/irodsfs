@@ -59,19 +59,19 @@ func (entry *VFSEntry) GetIRODSPath(vpath string) (string, error) {
 	})
 
 	if entry.Type != VFSIRODSEntryType {
-		err := fmt.Errorf("Cannot compute IRODS Path from non-irods entry")
+		err := fmt.Errorf("failed to compute IRODS Path from non-irods entry")
 		logger.Error(err)
 		return "", err
 	}
 
 	relPath, err := GetRelativePath(entry.Path, vpath)
 	if err != nil {
-		logger.WithError(err).Errorf("cannot compute relative path")
+		logger.WithError(err).Errorf("failed to compute relative path")
 		return "", err
 	}
 
 	if strings.HasPrefix(relPath, "../") {
-		err := fmt.Errorf("cannot compute relative path - %s to %s", entry.Path, vpath)
+		err := fmt.Errorf("failed to compute relative path - %s to %s", entry.Path, vpath)
 		return "", err
 	}
 

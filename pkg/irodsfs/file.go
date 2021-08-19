@@ -56,7 +56,7 @@ func mapFileACL(file *File, entry *irodsfs_client.FSEntry) os.FileMode {
 
 	accesses, err := file.FS.IRODSClient.ListFileACLsWithGroupUsers(entry.Path)
 	if err != nil {
-		logger.Errorf("Could not get ACL information of the Entry for %s", entry.Path)
+		logger.Errorf("failed to get ACL information of the Entry for %s", entry.Path)
 	}
 
 	for _, access := range accesses {
@@ -75,7 +75,7 @@ func mapFileACL(file *File, entry *irodsfs_client.FSEntry) os.FileMode {
 		}
 	}
 
-	logger.Errorf("Could not find ACL information of the Entry for %s and user %s", entry.Path, file.FS.Config.ClientUser)
+	logger.Errorf("failed to find ACL information of the Entry for %s and user %s", entry.Path, file.FS.Config.ClientUser)
 
 	// others - readonly
 	return 0o000
@@ -102,17 +102,17 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 
 	vfsEntry := file.FS.VFS.GetClosestEntry(file.Path)
 	if vfsEntry == nil {
-		logger.Errorf("Could not get VFS Entry for %s", file.Path)
+		logger.Errorf("failed to get VFS Entry for %s", file.Path)
 		return syscall.EREMOTEIO
 	}
 
 	if vfsEntry.Type == VFSVirtualDirEntryType {
-		logger.Errorf("Could not get file attribute from a virtual dir mapping")
+		logger.Errorf("failed to get file attribute from a virtual dir mapping")
 		return syscall.EREMOTEIO
 	} else if vfsEntry.Type == VFSIRODSEntryType {
 		irodsPath, err := vfsEntry.GetIRODSPath(file.Path)
 		if err != nil {
-			logger.WithError(err).Errorf("GetIRODSPath error")
+			logger.WithError(err).Errorf("failed to get IRODS path")
 			return syscall.EREMOTEIO
 		}
 
@@ -120,11 +120,11 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 		entry, err := file.FS.IRODSClient.Stat(irodsPath)
 		if err != nil {
 			if irodsfs_clienttype.IsFileNotFoundError(err) {
-				logger.WithError(err).Errorf("File not found - %s", irodsPath)
+				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
 				return syscall.ENOENT
 			}
 
-			logger.WithError(err).Errorf("Stat error - %s", irodsPath)
+			logger.WithError(err).Errorf("failed to stat - %s", irodsPath)
 			return syscall.EREMOTEIO
 		}
 
@@ -141,7 +141,7 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 		return nil
 	}
 
-	logger.Errorf("Unknown VFS Entry type : %s", vfsEntry.Type)
+	logger.Errorf("unknown VFS Entry type : %s", vfsEntry.Type)
 	return syscall.EREMOTEIO
 }
 
@@ -176,7 +176,7 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 	} else if req.Flags.IsReadWrite() {
 		openMode = string(irodsfs_clienttype.FileOpenModeReadWrite)
 	} else {
-		logger.Errorf("Unknown file open mode - %s", req.Flags.String())
+		logger.Errorf("unknown file open mode - %s", req.Flags.String())
 		return nil, syscall.EACCES
 	}
 
@@ -190,30 +190,30 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 
 	vfsEntry := file.FS.VFS.GetClosestEntry(file.Path)
 	if vfsEntry == nil {
-		logger.Errorf("Could not get VFS Entry for %s", file.Path)
+		logger.Errorf("failed to get VFS Entry for %s", file.Path)
 		return nil, syscall.EREMOTEIO
 	}
 
 	if vfsEntry.Type == VFSVirtualDirEntryType {
-		// cannot open directory
-		err := fmt.Errorf("Cannot open mapped directory entry - %s", vfsEntry.Path)
+		// failed to open directory
+		err := fmt.Errorf("failed to open mapped directory entry - %s", vfsEntry.Path)
 		logger.Error(err)
 		return nil, syscall.EACCES
 	} else if vfsEntry.Type == VFSIRODSEntryType {
 		irodsPath, err := vfsEntry.GetIRODSPath(file.Path)
 		if err != nil {
-			logger.WithError(err).Errorf("GetIRODSPath error")
+			logger.WithError(err).Errorf("failed to get IRODS path")
 			return nil, syscall.EREMOTEIO
 		}
 
 		handle, err := file.FS.IRODSClient.OpenFile(irodsPath, "", openMode)
 		if err != nil {
 			if irodsfs_clienttype.IsFileNotFoundError(err) {
-				logger.WithError(err).Errorf("File not found - %s", irodsPath)
+				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
 				return nil, syscall.ENOENT
 			}
 
-			logger.WithError(err).Errorf("OpenFile error - %s", irodsPath)
+			logger.WithError(err).Errorf("failed to open a file - %s", irodsPath)
 			return nil, syscall.EREMOTEIO
 		}
 
@@ -229,7 +229,7 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		if req.Flags.IsWriteOnly() {
 			asyncWrite, err = NewAsyncWrite(file.FS, handle, handleMutex)
 			if err != nil {
-				logger.WithError(err).Errorf("AsyncWrite creation error - %s", irodsPath)
+				logger.WithError(err).Errorf("failed to create a new async write - %s", irodsPath)
 				return nil, syscall.EREMOTEIO
 			}
 		}
@@ -250,7 +250,7 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		return fileHandle, nil
 	}
 
-	logger.Errorf("Unknown VFS Entry type : %s", vfsEntry.Type)
+	logger.Errorf("unknown VFS Entry type : %s", vfsEntry.Type)
 	return nil, syscall.EREMOTEIO
 }
 
@@ -277,12 +277,12 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 	logger.Infof("Calling Read - %s, %d Offset, %d Bytes", handle.Path, req.Offset, req.Size)
 
 	if handle.FileHandle == nil {
-		logger.Errorf("File handle error - %s", handle.Path)
+		logger.Errorf("failed to get a file handle - %s", handle.Path)
 		return syscall.EBADFD
 	}
 
 	if !irodsfs_clienttype.IsFileOpenFlagRead(handle.FileHandle.OpenMode) {
-		logger.Errorf("Could not read file opened with write mode - %s", handle.Path)
+		logger.Errorf("failed to read file opened with write mode - %s", handle.Path)
 		return syscall.EBADFD
 	}
 
@@ -298,14 +298,14 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 	if handle.FileHandle.GetOffset() != req.Offset {
 		_, err := handle.FileHandle.Seek(req.Offset, irodsfs_clienttype.SeekSet)
 		if err != nil {
-			logger.WithError(err).Errorf("Seek error - %s, %d", handle.Path, req.Offset)
+			logger.WithError(err).Errorf("failed to seek - %s, %d", handle.Path, req.Offset)
 			return syscall.EREMOTEIO
 		}
 	}
 
 	data, err := handle.FileHandle.Read(req.Size)
 	if err != nil {
-		logger.WithError(err).Errorf("Read error - %s, %d", handle.Path, req.Size)
+		logger.WithError(err).Errorf("failed to read - %s, %d", handle.Path, req.Size)
 		return syscall.EREMOTEIO
 	}
 
@@ -335,12 +335,12 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 	logger.Infof("Conn %p, File Descriptor %d", handle.FileHandle.Connection, handle.FileHandle.IRODSHandle.FileDescriptor)
 
 	if handle.FileHandle == nil {
-		logger.Errorf("File handle error - %s", handle.Path)
+		logger.Errorf("failed to get a file handle - %s", handle.Path)
 		return syscall.EBADFD
 	}
 
 	if !irodsfs_clienttype.IsFileOpenFlagWrite(handle.FileHandle.OpenMode) {
-		logger.Errorf("Could not write file opened with readonly mode - %s", handle.Path)
+		logger.Errorf("failed to write file opened with readonly mode - %s", handle.Path)
 		return syscall.EBADFD
 	}
 
@@ -361,7 +361,7 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 				// Spill to disk cache
 				err := handle.AsyncWrite.Write(handle.WriteBufferStartOffset, handle.WriteBuffer.Bytes())
 				if err != nil {
-					logger.WithError(err).Errorf("Spill error - %s, %d", handle.Path, handle.WriteBufferStartOffset)
+					logger.WithError(err).Errorf("failed to write - %s, %d", handle.Path, handle.WriteBufferStartOffset)
 					return err
 				}
 
@@ -371,7 +371,7 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 				// write to buffer
 				_, err = handle.WriteBuffer.Write(req.Data)
 				if err != nil {
-					logger.WithError(err).Errorf("Could not buffer data for file %s, offset %d, length %d", handle.Path, req.Offset, len(req.Data))
+					logger.WithError(err).Errorf("failed to buffer data for file %s, offset %d, length %d", handle.Path, req.Offset, len(req.Data))
 					return err
 				}
 				handle.WriteBufferStartOffset = req.Offset
@@ -380,7 +380,7 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 				// write to buffer
 				_, err := handle.WriteBuffer.Write(req.Data)
 				if err != nil {
-					logger.WithError(err).Errorf("Could not buffer data for file %s, offset %d, length %d", handle.Path, req.Offset, len(req.Data))
+					logger.WithError(err).Errorf("failed to buffer data for file %s, offset %d, length %d", handle.Path, req.Offset, len(req.Data))
 					return err
 				}
 			}
@@ -388,7 +388,7 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 			// write to buffer
 			_, err := handle.WriteBuffer.Write(req.Data)
 			if err != nil {
-				logger.WithError(err).Errorf("Could not buffer data for file %s, offset %d, length %d", handle.Path, req.Offset, len(req.Data))
+				logger.WithError(err).Errorf("failed to buffer data for file %s, offset %d, length %d", handle.Path, req.Offset, len(req.Data))
 				return err
 			}
 			handle.WriteBufferStartOffset = req.Offset
@@ -398,7 +398,7 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 			// Spill to disk cache
 			err := handle.AsyncWrite.Write(handle.WriteBufferStartOffset, handle.WriteBuffer.Bytes())
 			if err != nil {
-				logger.WithError(err).Errorf("Spill error - %s, %d", handle.Path, handle.WriteBufferStartOffset)
+				logger.WithError(err).Errorf("failed to write - %s, %d", handle.Path, handle.WriteBufferStartOffset)
 				return err
 			}
 
@@ -412,14 +412,14 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 		if handle.FileHandle.GetOffset() != req.Offset {
 			_, err := handle.FileHandle.Seek(req.Offset, irodsfs_clienttype.SeekSet)
 			if err != nil {
-				logger.WithError(err).Errorf("Seek error - %s, %d", handle.Path, req.Offset)
+				logger.WithError(err).Errorf("failed to seek - %s, %d", handle.Path, req.Offset)
 				return syscall.EREMOTEIO
 			}
 		}
 
 		err := handle.FileHandle.Write(req.Data)
 		if err != nil {
-			logger.WithError(err).Errorf("Write error - %s, %d", handle.Path, len(req.Data))
+			logger.WithError(err).Errorf("failed to write - %s, %d", handle.Path, len(req.Data))
 			return syscall.EREMOTEIO
 		}
 
@@ -446,7 +446,7 @@ func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) err
 	logger.Infof("Calling Flush - %s", handle.Path)
 
 	if handle.FileHandle == nil {
-		logger.Errorf("File handle error - %s", handle.Path)
+		logger.Errorf("failed to get a file handle - %s", handle.Path)
 		return syscall.EREMOTEIO
 	}
 
@@ -456,7 +456,7 @@ func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) err
 		if handle.WriteBuffer.Len() > 0 {
 			err := handle.AsyncWrite.Write(handle.WriteBufferStartOffset, handle.WriteBuffer.Bytes())
 			if err != nil {
-				logger.WithError(err).Errorf("Spill error - %s, %d", handle.Path, handle.WriteBufferStartOffset)
+				logger.WithError(err).Errorf("failed to write - %s, %d", handle.Path, handle.WriteBufferStartOffset)
 				return err
 			}
 
@@ -469,7 +469,7 @@ func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) err
 
 		err := handle.AsyncWrite.GetAsyncError()
 		if err != nil {
-			logger.WithError(err).Errorf("Async write error - %s, %v", handle.Path, err)
+			logger.WithError(err).Errorf("got an async write failure - %s, %v", handle.Path, err)
 			return err
 		}
 	}
@@ -492,7 +492,7 @@ func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest)
 	logger.Infof("Conn %p, File Descriptor %d", handle.FileHandle.Connection, handle.FileHandle.IRODSHandle.FileDescriptor)
 
 	if handle.FileHandle == nil {
-		logger.Errorf("File handle error - %s", handle.Path)
+		logger.Errorf("failed to get a file handle - %s", handle.Path)
 		return syscall.EREMOTEIO
 	}
 
@@ -504,14 +504,14 @@ func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest)
 
 	err := handle.FileHandle.Close()
 	if err != nil {
-		logger.Errorf("Close error - %s", handle.Path)
+		logger.Errorf("failed to close - %s", handle.Path)
 		return syscall.EREMOTEIO
 	}
 
 	// Report
 	err = handle.FS.MonitoringReporter.ReportFileTransferDone(handle.IRODSFSEntry.Path, handle.FileHandle)
 	if err != nil {
-		logger.WithError(err).Error("Could not report the file transfer to monitoring service")
+		logger.WithError(err).Error("failed to report the file transfer to monitoring service")
 		return err
 	}
 
