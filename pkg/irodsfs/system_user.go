@@ -47,11 +47,15 @@ func CorrectSystemUser(username string, uid int, gid int) (string, int, int, err
 		return username, int(newuid), int(newgid), nil
 	}
 
-	// if uid, gid is given
-	if uid >= 0 && gid >= 0 {
+	// if uid is given, gid may be empty
+	if uid >= 0 {
 		u, err := user.LookupId(fmt.Sprintf("%d", uid))
 		if err != nil {
 			// user not existing --> possible case
+			if gid < 0 {
+				gid = uid
+			}
+
 			return "unknown", uid, gid, nil
 		}
 
