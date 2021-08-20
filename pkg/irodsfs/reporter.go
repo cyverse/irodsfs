@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	MaxTransferBlockLen       int = 100
+	MaxTransferBlockLen       int = 50
 	ReporterRequestTimeoutSec int = 5
 )
 
@@ -118,8 +118,9 @@ func (reporter *MonitoringReporter) ReportNewFileTransferStart(path string, file
 				transferReport := &monitor_types.ReportFileTransfer{
 					InstanceID: reporter.InstanceID,
 
-					FilePath: path,
-					FileSize: size,
+					FilePath:     path,
+					FileSize:     size,
+					FileOpenMode: string(fileHandle.OpenMode),
 
 					TransferBlocks:     make([]monitor_types.FileBlock, 0, MaxTransferBlockLen),
 					TransferSize:       0,
@@ -192,16 +193,28 @@ func (reporter *MonitoringReporter) ReportFileTransfer(path string, fileHandle *
 					transfer.SmallestBlockSize = length
 				}
 
-				reporter.addFileTransfer(transfer, block)
-
+				isSequential := false
 				if nextOffset, ok2 := reporter.NextFileOffsetMap[key]; ok2 {
 					if nextOffset == offset {
-						// move next
-						reporter.NextFileOffsetMap[key] = offset + length
+						// current block is the next one of previous transfer
+						isSequential = true
 					} else {
 						// random access
-						transfer.SequentialAccess = false
+						isSequential = false
 					}
+				}
+
+				reporter.NextFileOffsetMap[key] = offset + length
+
+				if !isSequential {
+					transfer.SequentialAccess = false
+				}
+
+				if isSequential {
+					reporter.addFileTransferSequential(transfer, block)
+				} else {
+					transfer.SequentialAccess = false
+					reporter.addFileTransferRandom(transfer, block)
 				}
 			}
 		}
@@ -209,7 +222,24 @@ func (reporter *MonitoringReporter) ReportFileTransfer(path string, fileHandle *
 }
 
 // addFileTransfer adds the file transfer to the list
-func (reporter *MonitoringReporter) addFileTransfer(transfer *monitor_types.ReportFileTransfer, block monitor_types.FileBlock) {
+func (reporter *MonitoringReporter) addFileTransferSequential(transfer *monitor_types.ReportFileTransfer, block monitor_types.FileBlock) {
+	if len(transfer.TransferBlocks) < MaxTransferBlockLen {
+		if len(transfer.TransferBlocks) == 0 {
+			transfer.TransferBlocks = append(transfer.TransferBlocks, block)
+			return
+		} else {
+			// merge to last
+			lastBlock := transfer.TransferBlocks[len(transfer.TransferBlocks)-1]
+			lastBlock.Length += block.Length
+
+			transfer.TransferBlocks[len(transfer.TransferBlocks)-1] = lastBlock
+			return
+		}
+	}
+}
+
+// addFileTransfer adds the file transfer to the list
+func (reporter *MonitoringReporter) addFileTransferRandom(transfer *monitor_types.ReportFileTransfer, block monitor_types.FileBlock) {
 	if len(transfer.TransferBlocks) < MaxTransferBlockLen {
 		// add to last
 		transfer.TransferBlocks = append(transfer.TransferBlocks, block)
