@@ -117,7 +117,7 @@ func NewFileSystem(config *Config) (*IRODSFS, error) {
 		UID: uint32(config.UID),
 		GID: uint32(config.GID),
 
-		MonitoringReporter: NewMonitoringReporter(config.MonitorURL),
+		MonitoringReporter: NewMonitoringReporter(config.MonitorURL, true),
 		Terminated:         false,
 	}, nil
 }

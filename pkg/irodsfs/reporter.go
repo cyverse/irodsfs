@@ -23,10 +23,11 @@ type MonitoringReporter struct {
 	InstanceID        string
 	FileTransferMap   map[string]*monitor_types.ReportFileTransfer
 	NextFileOffsetMap map[string]int64
+	IgnoreError       bool
 }
 
 // NewMonitoringReporter creates a new monitoring reporter
-func NewMonitoringReporter(monitorURL string) *MonitoringReporter {
+func NewMonitoringReporter(monitorURL string, ignoreError bool) *MonitoringReporter {
 	var monitoringClient *monitor_client.APIClient
 	if len(monitorURL) > 0 {
 		monitoringClient = monitor_client.NewAPIClient(monitorURL, time.Second*time.Duration(ReporterRequestTimeoutSec))
@@ -39,6 +40,7 @@ func NewMonitoringReporter(monitorURL string) *MonitoringReporter {
 		InstanceID:        "",
 		FileTransferMap:   map[string]*monitor_types.ReportFileTransfer{},
 		NextFileOffsetMap: map[string]int64{},
+		IgnoreError:       ignoreError,
 	}
 }
 
@@ -73,7 +75,10 @@ func (reporter *MonitoringReporter) ReportNewInstance(fsConfig *Config) error {
 			if err != nil {
 				logger.WithError(err).Error("failed to report the instance to monitoring service")
 				reporter.Failed = true
-				return err
+
+				if !reporter.IgnoreError {
+					return err
+				}
 			}
 
 			reporter.InstanceID = instanceID
@@ -97,7 +102,10 @@ func (reporter *MonitoringReporter) ReportInstanceTermination() error {
 				if err != nil {
 					logger.WithError(err).Error("failed to report termination of the instance to monitoring service")
 					reporter.Failed = true
-					return err
+
+					if !reporter.IgnoreError {
+						return err
+					}
 				}
 			}
 		}
@@ -157,7 +165,10 @@ func (reporter *MonitoringReporter) ReportFileTransferDone(path string, fileHand
 				if err != nil {
 					logger.WithError(err).Error("failed to report file transfer to monitoring service")
 					reporter.Failed = true
-					return err
+
+					if !reporter.IgnoreError {
+						return err
+					}
 				}
 
 				delete(reporter.FileTransferMap, key)
