@@ -44,7 +44,7 @@ func checkDevFuse() CheckFUSEStatus {
 	// if /dev/fuse device exists, it's installed
 	fuseDevInfo, err := os.Stat("/dev/fuse")
 	if err != nil {
-		logger.WithError(err).Errorf("cannot find /dev/fuse, fuse is not installed or does not have enough privilege")
+		logger.WithError(err).Errorf("failed to find /dev/fuse, fuse is not installed or does not have enough privilege")
 		return CheckFUSEStatusNotFound
 	}
 

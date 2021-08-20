@@ -112,7 +112,7 @@ func buildVFS(fsclient *irodsfs_client.FileSystem, entries map[string]*VFSEntry,
 		if !fsclient.ExistsDir(mapping.IRODSPath) {
 			err := fsclient.MakeDir(mapping.IRODSPath, true)
 			if err != nil {
-				logger.WithError(err).Errorf("MakeDir error - %s", mapping.IRODSPath)
+				logger.WithError(err).Errorf("failed to make a dir - %s", mapping.IRODSPath)
 				// fall
 			}
 		}
@@ -126,7 +126,7 @@ func buildVFS(fsclient *irodsfs_client.FileSystem, entries map[string]*VFSEntry,
 			return nil
 		}
 
-		logger.WithError(err).Errorf("Stat error - %s", mapping.IRODSPath)
+		logger.WithError(err).Errorf("failed to stat - %s", mapping.IRODSPath)
 		return err
 	}
 

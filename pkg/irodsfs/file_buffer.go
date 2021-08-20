@@ -317,7 +317,7 @@ func (buffer *FileBuffer) GetReader(section string, key string) (io.ReadCloser, 
 	bufferEntry, ok := buffer.EntryMap[bufferKey]
 	if !ok {
 		// no buffer
-		return nil, 0, fmt.Errorf("no buffer found")
+		return nil, 0, fmt.Errorf("failed to find a buffer for key %s", bufferKey)
 	}
 
 	if bufferEntry.Status != FileBufferEntryStatusReady {
@@ -360,7 +360,7 @@ func (buffer *FileBuffer) PopReader(section string, key string) (io.ReadCloser, 
 	bufferEntry, ok := buffer.EntryMap[bufferKey]
 	if !ok {
 		// no buffer
-		return nil, 0, fmt.Errorf("no buffer found")
+		return nil, 0, fmt.Errorf("failed to find a buffer for key %s", bufferKey)
 	}
 
 	if bufferEntry.Status != FileBufferEntryStatusReady {
