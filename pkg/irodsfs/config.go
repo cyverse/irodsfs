@@ -38,6 +38,7 @@ type Config struct {
 	PathMappings []PathMapping `yaml:"path_mappings"`
 	UID          int           `yaml:"uid"`
 	GID          int           `yaml:"gid"`
+	SystemUser   string        `yaml:"system_user"`
 	MountPath    string        `yaml:"mount_path,omitempty"`
 
 	AuthScheme          string `yaml:"authscheme"`
@@ -74,6 +75,7 @@ type configAlias struct {
 	PathMappings []PathMapping `yaml:"path_mappings"`
 	UID          int           `yaml:"uid"`
 	GID          int           `yaml:"gid"`
+	SystemUser   string        `yaml:"system_user"`
 	MountPath    string        `yaml:"mount_path,omitempty"`
 
 	AuthScheme          string `yaml:"authscheme"`
@@ -102,11 +104,14 @@ type configAlias struct {
 
 // NewDefaultConfig creates DefaultConfig
 func NewDefaultConfig() *Config {
+	systemUser, uid, gid, _ := GetCurrentSystemUser()
+
 	return &Config{
 		Port:         PortDefault,
 		PathMappings: []PathMapping{},
-		UID:          -1,
-		GID:          -1,
+		UID:          uid,
+		GID:          gid,
+		SystemUser:   systemUser,
 
 		AuthScheme:          AuthSchemeDefault,
 		EncryptionKeySize:   EncryptionKeySizeDefault,
@@ -134,11 +139,14 @@ func NewDefaultConfig() *Config {
 
 // NewConfigFromYAML creates Config from YAML
 func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
+	systemUser, uid, gid, _ := GetCurrentSystemUser()
+
 	alias := configAlias{
 		Port:         PortDefault,
 		PathMappings: []PathMapping{},
-		UID:          -1,
-		GID:          -1,
+		UID:          uid,
+		GID:          gid,
+		SystemUser:   systemUser,
 
 		AuthScheme:          AuthSchemeDefault,
 		EncryptionKeySize:   EncryptionKeySizeDefault,
@@ -204,6 +212,8 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		metadataCacheCleanupTime = MetadataCacheCleanupTimeDefault
 	}
 
+	systemUser, uid, gid, _ = CorrectSystemUser(alias.SystemUser, alias.UID, alias.GID)
+
 	return &Config{
 		Host:         alias.Host,
 		Port:         alias.Port,
@@ -212,8 +222,9 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		Zone:         alias.Zone,
 		Password:     alias.Password,
 		PathMappings: alias.PathMappings,
-		UID:          alias.UID,
-		GID:          alias.GID,
+		UID:          uid,
+		GID:          gid,
+		SystemUser:   systemUser,
 		MountPath:    alias.MountPath,
 
 		AuthScheme:          alias.AuthScheme,
@@ -239,6 +250,19 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		AllowOther:   alias.AllowOther,
 		ChildProcess: alias.ChildProcess,
 	}, nil
+}
+
+// CorrectSystemUser corrects system user configuration
+func (config *Config) CorrectSystemUser() error {
+	systemUser, uid, gid, err := CorrectSystemUser(config.SystemUser, config.UID, config.GID)
+	if err != nil {
+		return err
+	}
+
+	config.SystemUser = systemUser
+	config.UID = uid
+	config.GID = gid
+	return nil
 }
 
 // Validate validates configuration
@@ -274,6 +298,18 @@ func (config *Config) Validate() error {
 	err := ValidatePathMappings(config.PathMappings)
 	if err != nil {
 		return fmt.Errorf("invalid path mappings - %v", err)
+	}
+
+	if config.UID < 0 {
+		return fmt.Errorf("invalid UID - %v", err)
+	}
+
+	if config.GID < 0 {
+		return fmt.Errorf("invalid GID - %v", err)
+	}
+
+	if len(config.SystemUser) == 0 {
+		return fmt.Errorf("invalid system user - %s", config.SystemUser)
 	}
 
 	if len(config.MountPath) == 0 {

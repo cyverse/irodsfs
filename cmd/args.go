@@ -233,6 +233,7 @@ func processArguments() (*irodsfs.Config, error, bool) {
 	flag.IntVar(&config.HashRounds, "ssl_hash_rounds", irodsfs.HashRoundsDefault, "Set SSL hash rounds when auth_scheme is pam")
 	flag.IntVar(&config.UID, "uid", -1, "Set UID of file/directory owner")
 	flag.IntVar(&config.GID, "gid", -1, "Set GID of file/directory owner")
+	flag.StringVar(&config.SystemUser, "sys_user", "", "Set System User of file/directory owner")
 
 	flag.Parse()
 
@@ -385,6 +386,12 @@ func processArguments() (*irodsfs.Config, error, bool) {
 		config.MetadataCacheCleanupTime = timeout
 	}
 
+	err := config.CorrectSystemUser()
+	if err != nil {
+		logger.WithError(err).Error("failed to correct system user configuration")
+		return nil, err, true
+	}
+
 	// positional arguments
 	mountPath := ""
 	if flag.NArg() == 0 {
@@ -439,7 +446,7 @@ func processArguments() (*irodsfs.Config, error, bool) {
 		}
 	}
 
-	err := inputMissingParams(config, stdinClosed)
+	err = inputMissingParams(config, stdinClosed)
 	if err != nil {
 		logger.WithError(err).Error("failed to input missing parameters")
 		return nil, err, true

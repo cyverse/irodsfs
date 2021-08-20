@@ -2,8 +2,6 @@ package irodsfs
 
 import (
 	"fmt"
-	"os/user"
-	"strconv"
 	"syscall"
 
 	"bazil.org/fuse"
@@ -61,36 +59,6 @@ func NewFileSystem(config *Config) (*IRODSFS, error) {
 		"function": "NewFileSystem",
 	})
 
-	uid := uint32(0)
-	gid := uint32(0)
-	if config.UID >= 0 && config.GID >= 0 {
-		uid = uint32(config.UID)
-		gid = uint32(config.GID)
-	} else {
-		// user
-		user, err := user.Current()
-		if err != nil {
-			logger.WithError(err).Error("failed to get current system user info")
-			return nil, fmt.Errorf("failed to get current system user info - %v", err)
-		}
-
-		puid, err := strconv.ParseUint(user.Uid, 10, 32)
-		if err != nil {
-			logger.WithError(err).Errorf("failed to parse uid - %s", user.Uid)
-			return nil, fmt.Errorf("failed to parse uid - %s", user.Uid)
-		}
-
-		uid = uint32(puid)
-
-		pgid, err := strconv.ParseUint(user.Gid, 10, 32)
-		if err != nil {
-			logger.WithError(err).Errorf("failed to parse gid - %s", user.Gid)
-			return nil, fmt.Errorf("failed to parse gid - %s", user.Gid)
-		}
-
-		gid = uint32(pgid)
-	}
-
 	account, err := irodsfs_clienttype.CreateIRODSProxyAccount(config.Host, config.Port,
 		config.ClientUser, config.Zone, config.ProxyUser, config.Zone,
 		irodsfs_clienttype.AuthSchemeNative, config.Password)
@@ -146,8 +114,8 @@ func NewFileSystem(config *Config) (*IRODSFS, error) {
 		IRODSClient:     fsclient,
 		FileBuffer:      fileBuffer,
 
-		UID: uid,
-		GID: gid,
+		UID: uint32(config.UID),
+		GID: uint32(config.GID),
 
 		MonitoringReporter: NewMonitoringReporter(config.MonitorURL),
 		Terminated:         false,
