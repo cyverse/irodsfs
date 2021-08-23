@@ -5,27 +5,52 @@ import (
 	"os"
 	"time"
 
+	"github.com/rs/xid"
 	yaml "gopkg.in/yaml.v2"
 )
 
 const (
-	PortDefault                     int           = 1247
-	ReadAheadMaxDefault             int           = 1024 * 64 // 64KB
-	ConnectionMaxDefault            int           = 10
-	OperationTimeoutDefault         time.Duration = 5 * time.Minute
-	ConnectionIdleTimeoutDefault    time.Duration = 5 * time.Minute
-	MetadataCacheTimeoutDefault     time.Duration = 5 * time.Minute
-	MetadataCacheCleanupTimeDefault time.Duration = 5 * time.Minute
-	FileBufferStoragePathDefault    string        = "/tmp/irodsfs"
-	FileBufferSizeMaxDefault        int64         = 1024 * 1024 * 1024 // 1GB
-	AuthSchemePAM                   string        = "pam"
-	AuthSchemeNative                string        = "native"
-	AuthSchemeDefault               string        = AuthSchemeNative
-	EncryptionKeySizeDefault        int           = 32
-	EncryptionAlgorithmDefault      string        = "AES-256-CBC"
-	SaltSizeDefault                 int           = 8
-	HashRoundsDefault               int           = 16
+	PortDefault                        int           = 1247
+	ReadAheadMaxDefault                int           = 1024 * 64 // 64KB
+	ConnectionMaxDefault               int           = 10
+	OperationTimeoutDefault            time.Duration = 5 * time.Minute
+	ConnectionIdleTimeoutDefault       time.Duration = 5 * time.Minute
+	MetadataCacheTimeoutDefault        time.Duration = 5 * time.Minute
+	MetadataCacheCleanupTimeDefault    time.Duration = 5 * time.Minute
+	FileBufferStoragePathPrefixDefault string        = "/tmp/irodsfs"
+	LogFilePathPrefixDefault           string        = "/tmp/irodsfs"
+	FileBufferSizeMaxDefault           int64         = 1024 * 1024 * 1024 // 1GB
+	AuthSchemePAM                      string        = "pam"
+	AuthSchemeNative                   string        = "native"
+	AuthSchemeDefault                  string        = AuthSchemeNative
+	EncryptionKeySizeDefault           int           = 32
+	EncryptionAlgorithmDefault         string        = "AES-256-CBC"
+	SaltSizeDefault                    int           = 8
+	HashRoundsDefault                  int           = 16
 )
+
+var (
+	instanceID string
+)
+
+// getInstanceID returns instance ID
+func getInstanceID() string {
+	if len(instanceID) == 0 {
+		instanceID = xid.New().String()
+	}
+
+	return instanceID
+}
+
+// GetDefaultFileBufferStoragePath returns default file buffer storage path
+func GetDefaultFileBufferStoragePath() string {
+	return fmt.Sprintf("%s_%s", FileBufferStoragePathPrefixDefault, getInstanceID())
+}
+
+// GetDefaultLogFilePath returns default log file path
+func GetDefaultLogFilePath() string {
+	return fmt.Sprintf("%s_%s.log", LogFilePathPrefixDefault, getInstanceID())
+}
 
 // Config holds the parameters list which can be configured
 type Config struct {
@@ -63,6 +88,8 @@ type Config struct {
 	Foreground   bool `yaml:"foreground,omitempty"`
 	AllowOther   bool `yaml:"allow_other,omitempty"`
 	ChildProcess bool `yaml:"childprocess,omitempty"`
+
+	InstanceID string `yaml:"instanceid,omitempty"`
 }
 
 type configAlias struct {
@@ -100,6 +127,8 @@ type configAlias struct {
 	Foreground   bool `yaml:"foreground,omitempty"`
 	AllowOther   bool `yaml:"allow_other,omitempty"`
 	ChildProcess bool `yaml:"childprocess,omitempty"`
+
+	InstanceID string `yaml:"instanceid,omitempty"`
 }
 
 // NewDefaultConfig creates DefaultConfig
@@ -125,15 +154,17 @@ func NewDefaultConfig() *Config {
 		ConnectionMax:            ConnectionMaxDefault,
 		MetadataCacheTimeout:     MetadataCacheTimeoutDefault,
 		MetadataCacheCleanupTime: MetadataCacheCleanupTimeDefault,
-		FileBufferStoragePath:    FileBufferStoragePathDefault,
+		FileBufferStoragePath:    GetDefaultFileBufferStoragePath(),
 		FileBufferSizeMax:        FileBufferSizeMaxDefault,
 
-		LogPath:    "",
+		LogPath:    GetDefaultLogFilePath(),
 		MonitorURL: "",
 
 		Foreground:   false,
 		AllowOther:   false,
 		ChildProcess: false,
+
+		InstanceID: getInstanceID(),
 	}
 }
 
@@ -156,15 +187,17 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 
 		ReadAheadMax:          ReadAheadMaxDefault,
 		ConnectionMax:         ConnectionMaxDefault,
-		FileBufferStoragePath: FileBufferStoragePathDefault,
+		FileBufferStoragePath: GetDefaultFileBufferStoragePath(),
 		FileBufferSizeMax:     FileBufferSizeMaxDefault,
 
-		LogPath:    "",
+		LogPath:    GetDefaultLogFilePath(),
 		MonitorURL: "",
 
 		Foreground:   false,
 		AllowOther:   false,
 		ChildProcess: false,
+
+		InstanceID: getInstanceID(),
 	}
 
 	err := yaml.Unmarshal(yamlBytes, &alias)
@@ -249,6 +282,8 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		Foreground:   alias.Foreground,
 		AllowOther:   alias.AllowOther,
 		ChildProcess: alias.ChildProcess,
+
+		InstanceID: alias.InstanceID,
 	}, nil
 }
 

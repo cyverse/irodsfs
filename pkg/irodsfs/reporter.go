@@ -53,6 +53,7 @@ func (reporter *MonitoringReporter) ReportNewInstance(fsConfig *Config) error {
 
 	if reporter.MonitoringClient != nil {
 		instance := monitor_types.ReportInstance{
+			InstanceID:               fsConfig.InstanceID,
 			Host:                     fsConfig.Host,
 			Port:                     fsConfig.Port,
 			Zone:                     fsConfig.Zone,

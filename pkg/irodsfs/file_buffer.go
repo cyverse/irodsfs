@@ -92,6 +92,7 @@ func NewFileBuffer(storagePath string, sizeCap int64) (*FileBuffer, error) {
 
 func (buffer *FileBuffer) Destroy() {
 	buffer.Clear()
+	os.RemoveAll(buffer.StoragePath)
 }
 
 func (buffer *FileBuffer) Lock() {

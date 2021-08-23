@@ -166,7 +166,7 @@ func parentMain() {
 	})
 
 	// parse argument
-	config, err, exit := processArguments()
+	config, logFile, err, exit := processArguments()
 	if err != nil {
 		logger.WithError(err).Error("Error occurred while processing arguments")
 		if exit {
@@ -197,6 +197,12 @@ func parentMain() {
 	if err != nil {
 		logger.WithError(err).Error("Error occurred while running parent process")
 		logger.Fatal(err)
+	}
+
+	// clean up
+	if logFile != nil {
+		logFile.Close()
+		os.Remove(config.LogPath)
 	}
 
 	os.Exit(0)
@@ -233,15 +239,18 @@ func childMain() {
 		os.Exit(1)
 	}
 
-	// output to default log
-	if len(config.LogPath) > 0 {
-		logFile, err := os.OpenFile(config.LogPath, os.O_WRONLY|os.O_CREATE, 0755)
+	// output to log file
+	var logFile *os.File
+	logFile = nil
+	if len(config.LogPath) > 0 && config.LogPath != "-" {
+		logFileHandle, err := os.OpenFile(config.LogPath, os.O_WRONLY|os.O_CREATE, 0755)
 		if err != nil {
 			logger.WithError(err).Error("failed to create log file")
 			fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
 			os.Exit(1)
 		} else {
-			log.SetOutput(logFile)
+			log.SetOutput(logFileHandle)
+			logFile = logFileHandle
 		}
 	}
 
@@ -257,6 +266,11 @@ func childMain() {
 	if err != nil {
 		logger.WithError(err).Error("failed to run irodsfs")
 		os.Exit(1)
+	}
+
+	if logFile != nil {
+		logFile.Close()
+		os.Remove(config.LogPath)
 	}
 }
 
@@ -302,7 +316,7 @@ func run(config *irodsfs.Config, isChildProcess bool) error {
 
 	if isChildProcess {
 		fmt.Fprintln(os.Stdout, InterProcessCommunicationFinishSuccess)
-		if len(config.LogPath) == 0 {
+		if config.LogPath == "-" || len(config.LogPath) == 0 {
 			// stderr is not a local file, so is closed by parent
 			var nilWriter NilWriter
 			log.SetOutput(&nilWriter)
