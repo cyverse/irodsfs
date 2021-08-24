@@ -53,6 +53,7 @@ func (reporter *MonitoringReporter) ReportNewInstance(fsConfig *Config) error {
 
 	if reporter.MonitoringClient != nil {
 		instance := monitor_types.ReportInstance{
+			InstanceID:               fsConfig.InstanceID,
 			Host:                     fsConfig.Host,
 			Port:                     fsConfig.Port,
 			Zone:                     fsConfig.Zone,
@@ -204,55 +205,57 @@ func (reporter *MonitoringReporter) ReportFileTransfer(path string, fileHandle *
 					transfer.SmallestBlockSize = length
 				}
 
-				isSequential := false
+				strictSequential := false
+				mostlySequential := false
 				if nextOffset, ok2 := reporter.NextFileOffsetMap[key]; ok2 {
-					if nextOffset == offset {
-						// current block is the next one of previous transfer
-						isSequential = true
-					} else {
-						// random access
-						isSequential = false
-					}
+					strictSequential, mostlySequential = reporter.checkSequentialTransfer(nextOffset, offset, length)
 				}
 
 				reporter.NextFileOffsetMap[key] = offset + length
 
-				if !isSequential {
+				if !mostlySequential {
 					transfer.SequentialAccess = false
 				}
 
-				if isSequential {
-					reporter.addFileTransferSequential(transfer, block)
-				} else {
-					transfer.SequentialAccess = false
-					reporter.addFileTransferRandom(transfer, block)
+				if len(transfer.TransferBlocks) < MaxTransferBlockLen {
+					if len(transfer.TransferBlocks) == 0 {
+						transfer.TransferBlocks = append(transfer.TransferBlocks, block)
+					} else {
+						if strictSequential {
+							// merge to last
+							lastBlock := transfer.TransferBlocks[len(transfer.TransferBlocks)-1]
+							lastBlock.Length += block.Length
+
+							transfer.TransferBlocks[len(transfer.TransferBlocks)-1] = lastBlock
+						} else {
+							transfer.TransferBlocks = append(transfer.TransferBlocks, block)
+						}
+					}
 				}
 			}
 		}
 	}
 }
 
-// addFileTransfer adds the file transfer to the list
-func (reporter *MonitoringReporter) addFileTransferSequential(transfer *monitor_types.ReportFileTransfer, block monitor_types.FileBlock) {
-	if len(transfer.TransferBlocks) < MaxTransferBlockLen {
-		if len(transfer.TransferBlocks) == 0 {
-			transfer.TransferBlocks = append(transfer.TransferBlocks, block)
-			return
-		} else {
-			// merge to last
-			lastBlock := transfer.TransferBlocks[len(transfer.TransferBlocks)-1]
-			lastBlock.Length += block.Length
-
-			transfer.TransferBlocks[len(transfer.TransferBlocks)-1] = lastBlock
-			return
-		}
+// checkSequentialTransfer determines if the given file transfer is sequential transfer or not
+// first return val: true if this is strictly sequential
+// second return val: true if this is generally sequential
+func (reporter *MonitoringReporter) checkSequentialTransfer(expectedOffset int64, transferOffset int64, transferLength int64) (bool, bool) {
+	// 1 => 2 => 3 block order
+	if expectedOffset == transferOffset {
+		return true, true
 	}
-}
 
-// addFileTransfer adds the file transfer to the list
-func (reporter *MonitoringReporter) addFileTransferRandom(transfer *monitor_types.ReportFileTransfer, block monitor_types.FileBlock) {
-	if len(transfer.TransferBlocks) < MaxTransferBlockLen {
-		// add to last
-		transfer.TransferBlocks = append(transfer.TransferBlocks, block)
+	// concurrent file transfer may make serial file access slightly unordered.
+	// allow 3 => 1 => 2 block transfer order
+	offsetDelta := expectedOffset - transferOffset
+	if offsetDelta < 0 {
+		offsetDelta *= -1
 	}
+
+	if offsetDelta <= transferLength*2 {
+		return false, true
+	}
+
+	return false, false
 }
