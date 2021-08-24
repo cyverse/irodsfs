@@ -10,6 +10,8 @@ import (
 	"path"
 	"sync"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 type FileBufferEntryStatus string
@@ -398,7 +400,19 @@ func (buffer *FileBuffer) GetAvailableSpace() int64 {
 	buffer.RLock()
 	defer buffer.RUnlock()
 
-	return buffer.SizeCap - buffer.SizeUsed
+	var fsstat unix.Statfs_t
+	err := unix.Statfs(buffer.StoragePath, &fsstat)
+	if err != nil {
+		return 0
+	}
+
+	freespace := fsstat.Bavail * uint64(fsstat.Bsize)
+	freebuffer := buffer.SizeCap - buffer.SizeUsed
+
+	if int64(freespace) < freebuffer {
+		return int64(freespace)
+	}
+	return freebuffer
 }
 
 func (buffer *FileBuffer) GetSpaceUsedPercent() float64 {
