@@ -1,4 +1,4 @@
-package irodsfs
+package commons
 
 import (
 	"encoding/json"

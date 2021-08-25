@@ -8,6 +8,9 @@ import (
 	fusefs "bazil.org/fuse/fs"
 	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
 	irodsfs_clienttype "github.com/cyverse/go-irodsclient/irods/types"
+	"github.com/cyverse/irodsfs/pkg/commons"
+	"github.com/cyverse/irodsfs/pkg/report"
+	"github.com/cyverse/irodsfs/pkg/vfs"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -17,7 +20,7 @@ const (
 )
 
 // GetFuseMountOptions returns fuse mount options
-func GetFuseMountOptions(config *Config) []fuse.MountOption {
+func GetFuseMountOptions(config *commons.Config) []fuse.MountOption {
 	options := []fuse.MountOption{
 		fuse.FSName(FSName),
 		fuse.Subtype(Subtype),
@@ -36,10 +39,10 @@ func GetFuseMountOptions(config *Config) []fuse.MountOption {
 
 // IRODSFS is a file system object
 type IRODSFS struct {
-	Config          *Config
+	Config          *commons.Config
 	FuseConnection  *fuse.Conn
 	Fuse            *fusefs.Server
-	VFS             *VFS
+	VFS             *vfs.VFS
 	FileMetaUpdater *FileMetaUpdater
 	IRODSClient     *irodsfs_client.FileSystem
 	FileBuffer      *FileBuffer
@@ -47,13 +50,13 @@ type IRODSFS struct {
 	UID uint32
 	GID uint32
 
-	MonitoringReporter *MonitoringReporter
+	MonitoringReporter *report.MonitoringReporter
 
 	Terminated bool
 }
 
 // NewFileSystem creates a new file system
-func NewFileSystem(config *Config) (*IRODSFS, error) {
+func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"function": "NewFileSystem",
@@ -67,7 +70,7 @@ func NewFileSystem(config *Config) (*IRODSFS, error) {
 		return nil, fmt.Errorf("failed to create IRODS Account - %v", err)
 	}
 
-	if config.AuthScheme == AuthSchemePAM {
+	if config.AuthScheme == commons.AuthSchemePAM {
 		sslConfig, err := irodsfs_clienttype.CreateIRODSSSLConfig(config.CACertificateFile, config.EncryptionKeySize,
 			config.EncryptionAlgorithm, config.SaltSize, config.HashRounds)
 		if err != nil {
@@ -92,7 +95,7 @@ func NewFileSystem(config *Config) (*IRODSFS, error) {
 		return nil, fmt.Errorf("failed to create IRODS FileSystem Client - %v", err)
 	}
 
-	vfs, err := NewVFS(fsclient, config.PathMappings)
+	vfs, err := vfs.NewVFS(fsclient, config.PathMappings)
 	if err != nil {
 		logger.WithError(err).Error("failed to create VFS")
 		return nil, fmt.Errorf("failed to create VFS - %v", err)
@@ -117,7 +120,7 @@ func NewFileSystem(config *Config) (*IRODSFS, error) {
 		UID: uint32(config.UID),
 		GID: uint32(config.GID),
 
-		MonitoringReporter: NewMonitoringReporter(config.MonitorURL, true),
+		MonitoringReporter: report.NewMonitoringReporter(config.MonitorURL, true),
 		Terminated:         false,
 	}, nil
 }
@@ -230,13 +233,13 @@ func (fs *IRODSFS) Root() (fusefs.Node, error) {
 		return nil, syscall.EREMOTEIO
 	}
 
-	if vfsEntry.Type == VFSVirtualDirEntryType {
+	if vfsEntry.Type == vfs.VFSVirtualDirEntryType {
 		return &Dir{
 			FS:      fs,
 			InodeID: vfsEntry.VirtualDirEntry.ID,
 			Path:    "/",
 		}, nil
-	} else if vfsEntry.Type == VFSIRODSEntryType {
+	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
 		if vfsEntry.IRODSEntry.Type != irodsfs_client.FSDirectoryEntry {
 			logger.Errorf("failed to mount a data object as a root")
 			return nil, syscall.EREMOTEIO

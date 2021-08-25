@@ -1,22 +1,26 @@
-package irodsfs
+package vfs
 
 import (
 	"time"
 
 	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
+	"github.com/cyverse/irodsfs/pkg/utils"
 	log "github.com/sirupsen/logrus"
 )
 
-// VFS is used to provide custom path mapping.
-// physical resources in iRODS are mapped to VFS entries.
+// VFS is a virtual file system.
+// iRODS FUSE Lite uses VFS to map iRODS data objects and collections to VFS entries.
+// Custom path mapping can change the mapping.
 type VFS struct {
+	// Entries is a map holding VFS Entries.
+	// Key is absolute path in VFS, value is entry object
 	Entries map[string]*VFSEntry
 }
 
 // NewVFS creates a new VFS
 func NewVFS(fsclient *irodsfs_client.FileSystem, mappings []PathMapping) (*VFS, error) {
 	logger := log.WithFields(log.Fields{
-		"package":  "irodsfs",
+		"package":  "vfs",
 		"function": "NewVFS",
 	})
 
@@ -58,7 +62,7 @@ func (vfs *VFS) GetClosestEntry(vpath string) *VFSEntry {
 		return entry
 	}
 
-	parentDirs := GetParentDirs(vpath)
+	parentDirs := utils.GetParentDirs(vpath)
 	var closestEntry *VFSEntry
 	for _, parentDir := range parentDirs {
 		if entry, ok := vfs.Entries[parentDir]; ok {
@@ -69,15 +73,16 @@ func (vfs *VFS) GetClosestEntry(vpath string) *VFSEntry {
 	return closestEntry
 }
 
+// buildVFS builds VFS
 func buildVFS(fsclient *irodsfs_client.FileSystem, entries map[string]*VFSEntry, mapping *PathMapping) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "irodsfs",
+		"package":  "vfs",
 		"function": "buildVFS",
 	})
 
 	now := time.Now()
 
-	parentDirs := GetParentDirs(mapping.MappingPath)
+	parentDirs := utils.GetParentDirs(mapping.MappingPath)
 	for idx, parentDir := range parentDirs {
 		_, ok := entries[parentDir]
 		if !ok {
@@ -87,7 +92,7 @@ func buildVFS(fsclient *irodsfs_client.FileSystem, entries map[string]*VFSEntry,
 				Path: parentDir,
 				VirtualDirEntry: &VFSVirtualDirEntry{
 					ID:         0,
-					Name:       GetFileName(parentDir),
+					Name:       utils.GetFileName(parentDir),
 					Path:       parentDir,
 					Owner:      fsclient.Account.ClientUser,
 					Size:       0,

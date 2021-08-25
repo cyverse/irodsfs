@@ -12,6 +12,8 @@ import (
 	fusefs "bazil.org/fuse/fs"
 	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
 	irodsfs_clienttype "github.com/cyverse/go-irodsclient/irods/types"
+	"github.com/cyverse/irodsfs/pkg/utils"
+	"github.com/cyverse/irodsfs/pkg/vfs"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -87,7 +89,7 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 		return syscall.EREMOTEIO
 	}
 
-	if vfsEntry.Type == VFSVirtualDirEntryType {
+	if vfsEntry.Type == vfs.VFSVirtualDirEntryType {
 		if vfsEntry.Path == dir.Path {
 			attr.Inode = uint64(vfsEntry.VirtualDirEntry.ID)
 			attr.Uid = dir.FS.UID
@@ -107,7 +109,7 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 			return nil
 		}
 		return syscall.ENOENT
-	} else if vfsEntry.Type == VFSIRODSEntryType {
+	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
 		if vfsEntry.IRODSEntry.Type != irodsfs_client.FSDirectoryEntry {
 			logger.Errorf("failed to get dir attribute from a data object")
 			return syscall.EREMOTEIO
@@ -156,7 +158,7 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 		"function": "Dir.Lookup",
 	})
 
-	targetPath := JoinPath(dir.Path, name)
+	targetPath := utils.JoinPath(dir.Path, name)
 
 	logger.Infof("Calling Lookup - %s", targetPath)
 
@@ -164,7 +166,7 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 		// update found
 		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
 		dir.Path = update.Path
-		targetPath = JoinPath(dir.Path, name)
+		targetPath = utils.JoinPath(dir.Path, name)
 	}
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(targetPath)
@@ -173,7 +175,7 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 		return nil, syscall.EREMOTEIO
 	}
 
-	if vfsEntry.Type == VFSVirtualDirEntryType {
+	if vfsEntry.Type == vfs.VFSVirtualDirEntryType {
 		if vfsEntry.Path == targetPath {
 			return &Dir{
 				FS:      dir.FS,
@@ -182,7 +184,7 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 			}, nil
 		}
 		return nil, syscall.ENOENT
-	} else if vfsEntry.Type == VFSIRODSEntryType {
+	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
 		irodsPath, err := vfsEntry.GetIRODSPath(targetPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to get IRODS path")
@@ -206,7 +208,7 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 				FS:      dir.FS,
 				InodeID: entry.ID,
 				Path:    targetPath,
-				Entry:   NewVFSEntryFromIRODSFSEntry(targetPath, entry),
+				Entry:   vfs.NewVFSEntryFromIRODSFSEntry(targetPath, entry),
 			}, nil
 		case irodsfs_client.FSDirectoryEntry:
 			return &Dir{
@@ -249,12 +251,12 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 		return nil, syscall.EREMOTEIO
 	}
 
-	if vfsEntry.Type == VFSVirtualDirEntryType {
+	if vfsEntry.Type == vfs.VFSVirtualDirEntryType {
 		if vfsEntry.Path == dir.Path {
 			dirEntries := []fuse.Dirent{}
 
 			for _, entry := range vfsEntry.VirtualDirEntry.DirEntries {
-				if entry.Type == VFSVirtualDirEntryType {
+				if entry.Type == vfs.VFSVirtualDirEntryType {
 					dirEntry := fuse.Dirent{
 						Inode: uint64(entry.VirtualDirEntry.ID),
 						Type:  fuse.DT_Dir,
@@ -262,7 +264,7 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 					}
 
 					dirEntries = append(dirEntries, dirEntry)
-				} else if entry.Type == VFSIRODSEntryType {
+				} else if entry.Type == vfs.VFSIRODSEntryType {
 					entryType := fuse.DT_File
 
 					switch entry.IRODSEntry.Type {
@@ -278,7 +280,7 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 					dirEntry := fuse.Dirent{
 						Inode: uint64(entry.IRODSEntry.ID),
 						Type:  entryType,
-						Name:  GetFileName(entry.Path),
+						Name:  utils.GetFileName(entry.Path),
 					}
 
 					dirEntries = append(dirEntries, dirEntry)
@@ -291,7 +293,7 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 			return dirEntries, nil
 		}
 		return nil, syscall.ENOENT
-	} else if vfsEntry.Type == VFSIRODSEntryType {
+	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
 		irodsPath, err := vfsEntry.GetIRODSPath(dir.Path)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to get IRODS path")
@@ -347,7 +349,7 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 		"function": "Dir.Remove",
 	})
 
-	targetPath := JoinPath(dir.Path, req.Name)
+	targetPath := utils.JoinPath(dir.Path, req.Name)
 
 	logger.Infof("Calling Remove - %s", targetPath)
 
@@ -355,7 +357,7 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 		// update found
 		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
 		dir.Path = update.Path
-		targetPath = JoinPath(dir.Path, req.Name)
+		targetPath = utils.JoinPath(dir.Path, req.Name)
 	}
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(targetPath)
@@ -371,12 +373,12 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 		return syscall.EACCES
 	}
 
-	if vfsEntry.Type == VFSVirtualDirEntryType {
+	if vfsEntry.Type == vfs.VFSVirtualDirEntryType {
 		// failed to remove. read only
 		err := fmt.Errorf("failed to remove mapped entry - %s", vfsEntry.Path)
 		logger.Error(err)
 		return syscall.EACCES
-	} else if vfsEntry.Type == VFSIRODSEntryType {
+	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
 		irodsPath, err := vfsEntry.GetIRODSPath(targetPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to get IRODS path")
@@ -430,7 +432,7 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 		"function": "Dir.Mkdir",
 	})
 
-	targetPath := JoinPath(dir.Path, req.Name)
+	targetPath := utils.JoinPath(dir.Path, req.Name)
 
 	logger.Infof("Calling Mkdir - %s", targetPath)
 
@@ -438,7 +440,7 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 		// update found
 		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
 		dir.Path = update.Path
-		targetPath = JoinPath(dir.Path, req.Name)
+		targetPath = utils.JoinPath(dir.Path, req.Name)
 	}
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(targetPath)
@@ -454,12 +456,12 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 		return nil, syscall.EACCES
 	}
 
-	if vfsEntry.Type == VFSVirtualDirEntryType {
+	if vfsEntry.Type == vfs.VFSVirtualDirEntryType {
 		// failed to create. read only
 		err := fmt.Errorf("failed to make a new mapped entry - %s", vfsEntry.Path)
 		logger.Error(err)
 		return nil, syscall.EACCES
-	} else if vfsEntry.Type == VFSIRODSEntryType {
+	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
 		irodsPath, err := vfsEntry.GetIRODSPath(targetPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to get IRODS path")
@@ -500,10 +502,10 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 		"function": "Dir.Rename",
 	})
 
-	targetSrcPath := JoinPath(dir.Path, req.OldName)
+	targetSrcPath := utils.JoinPath(dir.Path, req.OldName)
 
 	newdir := newDir.(*Dir)
-	targetDestPath := JoinPath(newdir.Path, req.NewName)
+	targetDestPath := utils.JoinPath(newdir.Path, req.NewName)
 
 	logger.Infof("Calling Rename - %s to %s", targetSrcPath, targetDestPath)
 
@@ -511,8 +513,8 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 		// update found
 		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
 		dir.Path = update.Path
-		targetSrcPath = JoinPath(dir.Path, req.OldName)
-		targetDestPath = JoinPath(newdir.Path, req.NewName)
+		targetSrcPath = utils.JoinPath(dir.Path, req.OldName)
+		targetDestPath = utils.JoinPath(newdir.Path, req.NewName)
 	}
 
 	vfsSrcEntry := dir.FS.VFS.GetClosestEntry(targetSrcPath)
@@ -541,17 +543,17 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 		return syscall.EACCES
 	}
 
-	if vfsSrcEntry.Type == VFSVirtualDirEntryType {
+	if vfsSrcEntry.Type == vfs.VFSVirtualDirEntryType {
 		// failed to remove. read only
 		err := fmt.Errorf("failed to rename mapped entry - %s", vfsSrcEntry.Path)
 		logger.Error(err)
 		return syscall.EACCES
-	} else if vfsDestEntry.Type == VFSVirtualDirEntryType {
+	} else if vfsDestEntry.Type == vfs.VFSVirtualDirEntryType {
 		// failed to remove. read only
 		err := fmt.Errorf("failed to rename mapped entry - %s", vfsDestEntry.Path)
 		logger.Error(err)
 		return syscall.EACCES
-	} else if vfsSrcEntry.Type == VFSIRODSEntryType && vfsDestEntry.Type == VFSIRODSEntryType {
+	} else if vfsSrcEntry.Type == vfs.VFSIRODSEntryType && vfsDestEntry.Type == vfs.VFSIRODSEntryType {
 		irodsSrcPath, err := vfsSrcEntry.GetIRODSPath(targetSrcPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to get IRODS path")
@@ -621,7 +623,7 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 		"function": "Dir.Create",
 	})
 
-	targetPath := JoinPath(dir.Path, req.Name)
+	targetPath := utils.JoinPath(dir.Path, req.Name)
 
 	logger.Infof("Calling Create - %s", targetPath)
 
@@ -629,7 +631,7 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 		// update found
 		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
 		dir.Path = update.Path
-		targetPath = JoinPath(dir.Path, req.Name)
+		targetPath = utils.JoinPath(dir.Path, req.Name)
 	}
 
 	openMode := string(irodsfs_clienttype.FileOpenModeReadOnly)
@@ -665,12 +667,12 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 		return nil, nil, syscall.EACCES
 	}
 
-	if vfsEntry.Type == VFSVirtualDirEntryType {
+	if vfsEntry.Type == vfs.VFSVirtualDirEntryType {
 		// failed to create. read only
 		err := fmt.Errorf("failed to make a new mapped entry - %s", vfsEntry.Path)
 		logger.Error(err)
 		return nil, nil, syscall.EACCES
-	} else if vfsEntry.Type == VFSIRODSEntryType {
+	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
 		irodsPath, err := vfsEntry.GetIRODSPath(targetPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to get IRODS path")

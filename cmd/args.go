@@ -15,7 +15,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cyverse/irodsfs/pkg/irodsfs"
+	"github.com/cyverse/irodsfs/pkg/commons"
+	"github.com/cyverse/irodsfs/pkg/vfs"
 	"golang.org/x/term"
 	"gopkg.in/yaml.v2"
 
@@ -63,7 +64,7 @@ func parseIRODSURL(inputURL string) (*IRODSAccessURL, error) {
 
 	u, err := url.Parse(inputURL)
 	if err != nil {
-		logger.WithError(err).Error("Error occurred while parsing source URL")
+		logger.WithError(err).Errorf("failed to parse source URL %s", inputURL)
 		return nil, err
 	}
 
@@ -88,7 +89,7 @@ func parseIRODSURL(inputURL string) (*IRODSAccessURL, error) {
 	if len(u.Port()) > 0 {
 		port64, err := strconv.ParseInt(u.Port(), 10, 32)
 		if err != nil {
-			logger.WithError(err).Error("Error occurred while parsing source URL's port number")
+			logger.WithError(err).Errorf("failed to parse source URL's port number %s", u.Port())
 			return nil, err
 		}
 		port = int(port64)
@@ -130,7 +131,7 @@ func parseIRODSURL(inputURL string) (*IRODSAccessURL, error) {
 }
 
 // inputMissingParams gets user inputs for parameters missing, such as username and password
-func inputMissingParams(config *irodsfs.Config, stdinClosed bool) error {
+func inputMissingParams(config *commons.Config, stdinClosed bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "inputMissingParams",
@@ -168,7 +169,7 @@ func inputMissingParams(config *irodsfs.Config, stdinClosed bool) error {
 		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
 		fmt.Print("\n")
 		if err != nil {
-			logger.WithError(err).Error("Error occurred while reading password")
+			logger.WithError(err).Error("failed to read password")
 			return err
 		}
 
@@ -179,7 +180,7 @@ func inputMissingParams(config *irodsfs.Config, stdinClosed bool) error {
 }
 
 // processArguments processes command-line parameters
-func processArguments() (*irodsfs.Config, *os.File, error, bool) {
+func processArguments() (*commons.Config, *os.File, error, bool) {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "processArguments",
@@ -195,7 +196,7 @@ func processArguments() (*irodsfs.Config, *os.File, error, bool) {
 	var metadataCacheTimeout string
 	var metadataCacheCleanupTime string
 
-	config := irodsfs.NewDefaultConfig()
+	config := commons.NewDefaultConfig()
 
 	// Parse parameters
 	flag.BoolVar(&version, "version", false, "Print client version information")
@@ -215,23 +216,23 @@ func processArguments() (*irodsfs.Config, *os.File, error, bool) {
 	flag.StringVar(&config.ProxyUser, "u", "", "Set iRODS user (shorthand form)")
 	flag.StringVar(&config.Password, "password", "", "Set iRODS client password")
 	flag.StringVar(&config.Password, "p", "", "Set iRODS client password (shorthand form)")
-	flag.IntVar(&config.ReadAheadMax, "readahead", irodsfs.ReadAheadMaxDefault, "Set read-ahead size")
-	flag.IntVar(&config.ConnectionMax, "connection_max", irodsfs.ConnectionMaxDefault, "Set max data transfer connections")
+	flag.IntVar(&config.ReadAheadMax, "readahead", commons.ReadAheadMaxDefault, "Set read-ahead size")
+	flag.IntVar(&config.ConnectionMax, "connection_max", commons.ConnectionMaxDefault, "Set max data transfer connections")
 	flag.StringVar(&operationTimeout, "operation_timeout", "", "Set filesystem operation timeout")
 	flag.StringVar(&connectionIdleTimeout, "connection_idle_timeout", "", "Set idle data transfer timeout")
 	flag.StringVar(&metadataCacheTimeout, "metadata_cache_timeout", "", "Set filesystem metadata cache timeout")
 	flag.StringVar(&metadataCacheCleanupTime, "metadata_cache_cleanup_time", "", "Set filesystem metadata cache cleanup time")
-	flag.StringVar(&config.FileBufferStoragePath, "file_cache_storage_path", irodsfs.GetDefaultFileBufferStoragePath(), "Set file cache storage path")
-	flag.Int64Var(&config.FileBufferSizeMax, "file_cache_size_max", irodsfs.FileBufferSizeMaxDefault, "Set file cache max size")
+	flag.StringVar(&config.FileBufferStoragePath, "file_cache_storage_path", commons.GetDefaultFileBufferStoragePath(), "Set file cache storage path")
+	flag.Int64Var(&config.FileBufferSizeMax, "file_cache_size_max", commons.FileBufferSizeMaxDefault, "Set file cache max size")
 	flag.Var(&fuseOptions, "o", "Other fuse options")
-	flag.StringVar(&config.LogPath, "log", irodsfs.GetDefaultLogFilePath(), "Set log file path")
+	flag.StringVar(&config.LogPath, "log", commons.GetDefaultLogFilePath(), "Set log file path")
 	flag.StringVar(&config.MonitorURL, "monitor", "", "Set monitoring service URL")
-	flag.StringVar(&config.AuthScheme, "auth_scheme", irodsfs.AuthSchemeDefault, "Set authentication scheme (eg. native or pam)")
+	flag.StringVar(&config.AuthScheme, "auth_scheme", commons.AuthSchemeDefault, "Set authentication scheme (eg. native or pam)")
 	flag.StringVar(&config.CACertificateFile, "ssl_ca_cert", "", "Set SSL CA cert file when auth_scheme is pam")
-	flag.IntVar(&config.EncryptionKeySize, "ssl_key_size", irodsfs.EncryptionKeySizeDefault, "Set SSL encryption key size when auth_scheme is pam")
-	flag.StringVar(&config.EncryptionAlgorithm, "ssl_algorithm", irodsfs.EncryptionAlgorithmDefault, "Set SSL encryption algorithm when auth_scheme is pam")
-	flag.IntVar(&config.SaltSize, "ssl_salt_size", irodsfs.SaltSizeDefault, "Set SSL encryption salt size when auth_scheme is pam")
-	flag.IntVar(&config.HashRounds, "ssl_hash_rounds", irodsfs.HashRoundsDefault, "Set SSL hash rounds when auth_scheme is pam")
+	flag.IntVar(&config.EncryptionKeySize, "ssl_key_size", commons.EncryptionKeySizeDefault, "Set SSL encryption key size when auth_scheme is pam")
+	flag.StringVar(&config.EncryptionAlgorithm, "ssl_algorithm", commons.EncryptionAlgorithmDefault, "Set SSL encryption algorithm when auth_scheme is pam")
+	flag.IntVar(&config.SaltSize, "ssl_salt_size", commons.SaltSizeDefault, "Set SSL encryption salt size when auth_scheme is pam")
+	flag.IntVar(&config.HashRounds, "ssl_hash_rounds", commons.HashRoundsDefault, "Set SSL hash rounds when auth_scheme is pam")
 	flag.IntVar(&config.UID, "uid", -1, "Set UID of file/directory owner")
 	flag.IntVar(&config.GID, "gid", -1, "Set GID of file/directory owner")
 	flag.StringVar(&config.SystemUser, "sys_user", "", "Set System User of file/directory owner")
@@ -239,7 +240,7 @@ func processArguments() (*irodsfs.Config, *os.File, error, bool) {
 	flag.Parse()
 
 	if version {
-		info, err := irodsfs.GetVersionJSON()
+		info, err := commons.GetVersionJSON()
 		if err != nil {
 			logger.WithError(err).Error("failed to get client version info")
 			return nil, nil, err, true
@@ -297,13 +298,13 @@ func processArguments() (*irodsfs.Config, *os.File, error, bool) {
 
 			fileinfo, err := os.Stat(configFileAbsPath)
 			if err != nil {
-				logger.WithError(err).Errorf("local yaml file (%s) error", configFileAbsPath)
+				logger.WithError(err).Errorf("failed to access the local yaml file %s", configFileAbsPath)
 				return nil, logFile, err, true
 			}
 
 			if fileinfo.IsDir() {
-				logger.WithError(err).Errorf("local yaml file (%s) is not a file", configFileAbsPath)
-				return nil, logFile, fmt.Errorf("local yaml file (%s) is not a file", configFileAbsPath), true
+				logger.WithError(err).Errorf("local yaml file %s is not a file", configFileAbsPath)
+				return nil, logFile, fmt.Errorf("local yaml file %s is not a file", configFileAbsPath), true
 			}
 
 			yamlBytes, err := ioutil.ReadFile(configFileAbsPath)
@@ -314,7 +315,7 @@ func processArguments() (*irodsfs.Config, *os.File, error, bool) {
 
 			err = yaml.Unmarshal(yamlBytes, &config)
 			if err != nil {
-				return nil, logFile, fmt.Errorf("YAML Unmarshal Error - %v", err), true
+				return nil, logFile, fmt.Errorf("failed to unmarshal YAML - %v", err), true
 			}
 		}
 	}
@@ -329,13 +330,13 @@ func processArguments() (*irodsfs.Config, *os.File, error, bool) {
 
 		fileinfo, err := os.Stat(mappingFileAbsPath)
 		if err != nil {
-			logger.WithError(err).Errorf("local yaml file (%s) error", mappingFileAbsPath)
+			logger.WithError(err).Errorf("failed to access the local yaml file %s", mappingFileAbsPath)
 			return nil, logFile, err, true
 		}
 
 		if fileinfo.IsDir() {
-			logger.WithError(err).Errorf("local yaml file (%s) is not a file", mappingFileAbsPath)
-			return nil, logFile, fmt.Errorf("local yaml file (%s) is not a file", mappingFileAbsPath), true
+			logger.WithError(err).Errorf("local yaml file %s is not a file", mappingFileAbsPath)
+			return nil, logFile, fmt.Errorf("local yaml file %s is not a file", mappingFileAbsPath), true
 		}
 
 		yamlBytes, err := ioutil.ReadFile(mappingFileAbsPath)
@@ -344,7 +345,7 @@ func processArguments() (*irodsfs.Config, *os.File, error, bool) {
 			return nil, logFile, err, true
 		}
 
-		pathMappings := []irodsfs.PathMapping{}
+		pathMappings := []vfs.PathMapping{}
 		err = yaml.Unmarshal(yamlBytes, &pathMappings)
 		if err != nil {
 			return nil, logFile, fmt.Errorf("failed to unmarshal YAML - %v", err), true
@@ -443,8 +444,14 @@ func processArguments() (*irodsfs.Config, *os.File, error, bool) {
 			}
 
 			if len(access.Path) > 0 {
-				config.PathMappings = []irodsfs.PathMapping{
-					irodsfs.NewPathMappingForDir(access.Path, "/", false),
+				config.PathMappings = []vfs.PathMapping{
+					vfs.PathMapping{
+						IRODSPath:      access.Path,
+						MappingPath:    "/",
+						ResourceType:   vfs.PathMappingDirectory,
+						CreateDir:      false,
+						IgnoreNotExist: false,
+					},
 				}
 			}
 
