@@ -35,11 +35,6 @@ func (mapping *PathMapping) Validate() error {
 		return fmt.Errorf("MappingPath given (%s) is not absolute path", mapping.MappingPath)
 	}
 
-	depth := utils.GetPathDepth(mapping.MappingPath)
-	if depth < 0 || depth > 1 {
-		return fmt.Errorf("MappingPath given (%s) is too deep", mapping.MappingPath)
-	}
-
 	return nil
 }
 

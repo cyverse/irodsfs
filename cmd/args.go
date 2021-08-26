@@ -445,7 +445,7 @@ func processArguments() (*commons.Config, *os.File, error, bool) {
 
 			if len(access.Path) > 0 {
 				config.PathMappings = []vfs.PathMapping{
-					vfs.PathMapping{
+					{
 						IRODSPath:      access.Path,
 						MappingPath:    "/",
 						ResourceType:   vfs.PathMappingDirectory,
