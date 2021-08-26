@@ -1,4 +1,4 @@
-package irodsfs
+package utils
 
 import (
 	"fmt"
@@ -31,7 +31,7 @@ func GetFileName(p string) string {
 	return filepath.Base(p)
 }
 
-// GetIRODSZone returns the zone of the path
+// GetIRODSZone returns the zone of the iRODS path
 func GetIRODSZone(p string) (string, error) {
 	if len(p) < 1 {
 		return "", fmt.Errorf("failed to extract Zone from path - %s", p)

@@ -12,6 +12,7 @@ import (
 	fusefs "bazil.org/fuse/fs"
 	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
 	irodsfs_clienttype "github.com/cyverse/go-irodsclient/irods/types"
+	"github.com/cyverse/irodsfs/pkg/vfs"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -24,14 +25,14 @@ type File struct {
 	FS      *IRODSFS
 	InodeID int64
 	Path    string
-	Entry   *VFSEntry
+	Entry   *vfs.VFSEntry
 }
 
 // FileHandle is a file handle
 type FileHandle struct {
 	FS             *IRODSFS
 	Path           string
-	Entry          *VFSEntry
+	Entry          *vfs.VFSEntry
 	IRODSFSEntry   *irodsfs_client.FSEntry
 	FileHandle     *irodsfs_client.FileHandle
 	FileHandleLock *sync.Mutex
@@ -106,10 +107,10 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 		return syscall.EREMOTEIO
 	}
 
-	if vfsEntry.Type == VFSVirtualDirEntryType {
+	if vfsEntry.Type == vfs.VFSVirtualDirEntryType {
 		logger.Errorf("failed to get file attribute from a virtual dir mapping")
 		return syscall.EREMOTEIO
-	} else if vfsEntry.Type == VFSIRODSEntryType {
+	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
 		irodsPath, err := vfsEntry.GetIRODSPath(file.Path)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to get IRODS path")
@@ -128,7 +129,7 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 			return syscall.EREMOTEIO
 		}
 
-		file.Entry = NewVFSEntryFromIRODSFSEntry(file.Path, entry)
+		file.Entry = vfs.NewVFSEntryFromIRODSFSEntry(file.Path, entry)
 
 		attr.Inode = uint64(entry.ID)
 		attr.Uid = file.FS.UID
@@ -194,12 +195,12 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		return nil, syscall.EREMOTEIO
 	}
 
-	if vfsEntry.Type == VFSVirtualDirEntryType {
+	if vfsEntry.Type == vfs.VFSVirtualDirEntryType {
 		// failed to open directory
 		err := fmt.Errorf("failed to open mapped directory entry - %s", vfsEntry.Path)
 		logger.Error(err)
 		return nil, syscall.EACCES
-	} else if vfsEntry.Type == VFSIRODSEntryType {
+	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
 		irodsPath, err := vfsEntry.GetIRODSPath(file.Path)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to get IRODS path")

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/cyverse/irodsfs/pkg/commons"
 	"github.com/cyverse/irodsfs/pkg/irodsfs"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -53,12 +54,12 @@ func main() {
 }
 
 // RunFSDaemon runs irodsfs as a daemon
-func RunFSDaemon(irodsfsExec string, config *irodsfs.Config) error {
+func RunFSDaemon(irodsfsExec string, config *commons.Config) error {
 	return parentRun(irodsfsExec, config)
 }
 
 // parentRun executes irodsfs with the config given
-func parentRun(irodsfsExec string, config *irodsfs.Config) error {
+func parentRun(irodsfsExec string, config *commons.Config) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "parentRun",
@@ -66,7 +67,7 @@ func parentRun(irodsfsExec string, config *irodsfs.Config) error {
 
 	err := config.Validate()
 	if err != nil {
-		logger.WithError(err).Error("Argument validation error")
+		logger.WithError(err).Error("invalid argument")
 		return err
 	}
 
@@ -125,7 +126,7 @@ func parentRun(irodsfsExec string, config *irodsfs.Config) error {
 					logger.Info("Successfully started background process")
 					break
 				} else if errMsg == InterProcessCommunicationFinishError {
-					logger.Error("Failed to start background process")
+					logger.Error("failed to start background process")
 					childProcessFailed = true
 					break
 				} else {
@@ -144,7 +145,7 @@ func parentRun(irodsfsExec string, config *irodsfs.Config) error {
 		subStdout.Close()
 
 		if childProcessFailed {
-			return fmt.Errorf("Failed to start background process")
+			return fmt.Errorf("failed to start background process")
 		}
 	} else {
 		// foreground
@@ -168,7 +169,7 @@ func parentMain() {
 	// parse argument
 	config, logFile, err, exit := processArguments()
 	if err != nil {
-		logger.WithError(err).Error("Error occurred while processing arguments")
+		logger.WithError(err).Error("failed to process argumebnts")
 		if exit {
 			logger.Fatal(err)
 		}
@@ -195,7 +196,7 @@ func parentMain() {
 	// run
 	err = parentRun(os.Args[0], config)
 	if err != nil {
-		logger.WithError(err).Error("Error occurred while running parent process")
+		logger.WithError(err).Error("failed to run the parent process")
 		logger.Fatal(err)
 	}
 
@@ -232,7 +233,7 @@ func childMain() {
 		os.Exit(1)
 	}
 
-	config, err := irodsfs.NewConfigFromYAML(configBytes)
+	config, err := commons.NewConfigFromYAML(configBytes)
 	if err != nil {
 		logger.WithError(err).Error("failed to read configuration")
 		fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
@@ -275,7 +276,7 @@ func childMain() {
 }
 
 // run runs irodsfs
-func run(config *irodsfs.Config, isChildProcess bool) error {
+func run(config *commons.Config, isChildProcess bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "run",

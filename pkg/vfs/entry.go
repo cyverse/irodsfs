@@ -1,4 +1,4 @@
-package irodsfs
+package vfs
 
 import (
 	"fmt"
@@ -6,17 +6,22 @@ import (
 	"time"
 
 	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
+	"github.com/cyverse/irodsfs/pkg/utils"
 	log "github.com/sirupsen/logrus"
 )
 
+// VFSEntryType determins if the VFS entry is actual iRODS entry (irods) or virtual/temporary entry (virtual) (irods).
+// Virtual entries are read-only, and a directory containing irods or virtual entries in it.
 type VFSEntryType string
 
 const (
+	// VFSVirtualDirEntryType is an entry type for virtual vfs entry
 	VFSVirtualDirEntryType VFSEntryType = "virtual"
-	VFSIRODSEntryType      VFSEntryType = "irods"
+	// VFSIRODSEntryType is an entry type for irods vfs entry
+	VFSIRODSEntryType VFSEntryType = "irods"
 )
 
-// VFSVirtualDirEntry ...
+// VFSVirtualDirEntry is a virtual VFS entry struct
 type VFSVirtualDirEntry struct {
 	ID         int64
 	Name       string
@@ -30,8 +35,10 @@ type VFSVirtualDirEntry struct {
 
 // VFSEntry is a VFS entry struct
 type VFSEntry struct {
-	Type            VFSEntryType
-	Path            string
+	Type VFSEntryType
+	Path string
+
+	// Only one of fields below is filled according to the Type
 	VirtualDirEntry *VFSVirtualDirEntry
 	IRODSEntry      *irodsfs_client.FSEntry
 }
@@ -54,7 +61,7 @@ func (entry *VFSEntry) ToString() string {
 // GetIRODSPath returns relative path
 func (entry *VFSEntry) GetIRODSPath(vpath string) (string, error) {
 	logger := log.WithFields(log.Fields{
-		"package":  "irodsfs",
+		"package":  "vfs",
 		"function": "VFSEntry.GetIRODSPath",
 	})
 
@@ -64,7 +71,7 @@ func (entry *VFSEntry) GetIRODSPath(vpath string) (string, error) {
 		return "", err
 	}
 
-	relPath, err := GetRelativePath(entry.Path, vpath)
+	relPath, err := utils.GetRelativePath(entry.Path, vpath)
 	if err != nil {
 		logger.WithError(err).Errorf("failed to compute relative path")
 		return "", err
@@ -79,5 +86,5 @@ func (entry *VFSEntry) GetIRODSPath(vpath string) (string, error) {
 		return entry.IRODSEntry.Path, nil
 	}
 
-	return JoinPath(entry.IRODSEntry.Path, relPath), nil
+	return utils.JoinPath(entry.IRODSEntry.Path, relPath), nil
 }

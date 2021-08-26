@@ -1,4 +1,4 @@
-package irodsfs
+package report
 
 import (
 	"fmt"
@@ -7,11 +7,14 @@ import (
 	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
 	monitor_client "github.com/cyverse/irodsfs-monitor/client"
 	monitor_types "github.com/cyverse/irodsfs-monitor/types"
+	"github.com/cyverse/irodsfs/pkg/commons"
 	log "github.com/sirupsen/logrus"
 )
 
 const (
-	MaxTransferBlockLen       int = 50
+	// MaxTransferBlockLen defines how many transfer blocks we will log
+	MaxTransferBlockLen int = 50
+	// ReporterRequestTimeoutSec sets request timeout
 	ReporterRequestTimeoutSec int = 5
 )
 
@@ -45,9 +48,9 @@ func NewMonitoringReporter(monitorURL string, ignoreError bool) *MonitoringRepor
 }
 
 // ReportNewInstance reports creation of a new iRODS FUSE Lite instance
-func (reporter *MonitoringReporter) ReportNewInstance(fsConfig *Config) error {
+func (reporter *MonitoringReporter) ReportNewInstance(fsConfig *commons.Config) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "irodsfs",
+		"package":  "report",
 		"function": "MonitoringReporter.ReportNewInstance",
 	})
 
@@ -92,7 +95,7 @@ func (reporter *MonitoringReporter) ReportNewInstance(fsConfig *Config) error {
 // ReportInstanceTermination reports termination of the iRODS FUSE Lite instance
 func (reporter *MonitoringReporter) ReportInstanceTermination() error {
 	logger := log.WithFields(log.Fields{
-		"package":  "irodsfs",
+		"package":  "report",
 		"function": "MonitoringReporter.ReportInstanceTermination",
 	})
 
@@ -152,7 +155,7 @@ func (reporter *MonitoringReporter) ReportNewFileTransferStart(path string, file
 // ReportFileTransferDone reports that the file transfer is done
 func (reporter *MonitoringReporter) ReportFileTransferDone(path string, fileHandle *irodsfs_client.FileHandle) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "irodsfs",
+		"package":  "report",
 		"function": "MonitoringReporter.ReportFileTransferDone",
 	})
 

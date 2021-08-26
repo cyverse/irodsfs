@@ -1,4 +1,4 @@
-package irodsfs
+package utils
 
 type BlockID int64
 

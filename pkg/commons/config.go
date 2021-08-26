@@ -1,10 +1,12 @@
-package irodsfs
+package commons
 
 import (
 	"fmt"
 	"os"
 	"time"
 
+	"github.com/cyverse/irodsfs/pkg/utils"
+	"github.com/cyverse/irodsfs/pkg/vfs"
 	"github.com/rs/xid"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -54,17 +56,17 @@ func GetDefaultLogFilePath() string {
 
 // Config holds the parameters list which can be configured
 type Config struct {
-	Host         string        `yaml:"host"`
-	Port         int           `yaml:"port"`
-	ProxyUser    string        `yaml:"proxy_user,omitempty"`
-	ClientUser   string        `yaml:"client_user"`
-	Zone         string        `yaml:"zone"`
-	Password     string        `yaml:"password,omitempty"`
-	PathMappings []PathMapping `yaml:"path_mappings"`
-	UID          int           `yaml:"uid"`
-	GID          int           `yaml:"gid"`
-	SystemUser   string        `yaml:"system_user"`
-	MountPath    string        `yaml:"mount_path,omitempty"`
+	Host         string            `yaml:"host"`
+	Port         int               `yaml:"port"`
+	ProxyUser    string            `yaml:"proxy_user,omitempty"`
+	ClientUser   string            `yaml:"client_user"`
+	Zone         string            `yaml:"zone"`
+	Password     string            `yaml:"password,omitempty"`
+	PathMappings []vfs.PathMapping `yaml:"path_mappings"`
+	UID          int               `yaml:"uid"`
+	GID          int               `yaml:"gid"`
+	SystemUser   string            `yaml:"system_user"`
+	MountPath    string            `yaml:"mount_path,omitempty"`
 
 	AuthScheme          string `yaml:"authscheme"`
 	CACertificateFile   string `yaml:"ssl_ca_cert_file"`
@@ -93,17 +95,17 @@ type Config struct {
 }
 
 type configAlias struct {
-	Host         string        `yaml:"host"`
-	Port         int           `yaml:"port"`
-	ProxyUser    string        `yaml:"proxy_user,omitempty"`
-	ClientUser   string        `yaml:"client_user"`
-	Zone         string        `yaml:"zone"`
-	Password     string        `yaml:"password,omitempty"`
-	PathMappings []PathMapping `yaml:"path_mappings"`
-	UID          int           `yaml:"uid"`
-	GID          int           `yaml:"gid"`
-	SystemUser   string        `yaml:"system_user"`
-	MountPath    string        `yaml:"mount_path,omitempty"`
+	Host         string            `yaml:"host"`
+	Port         int               `yaml:"port"`
+	ProxyUser    string            `yaml:"proxy_user,omitempty"`
+	ClientUser   string            `yaml:"client_user"`
+	Zone         string            `yaml:"zone"`
+	Password     string            `yaml:"password,omitempty"`
+	PathMappings []vfs.PathMapping `yaml:"path_mappings"`
+	UID          int               `yaml:"uid"`
+	GID          int               `yaml:"gid"`
+	SystemUser   string            `yaml:"system_user"`
+	MountPath    string            `yaml:"mount_path,omitempty"`
 
 	AuthScheme          string `yaml:"authscheme"`
 	CACertificateFile   string `yaml:"ssl_ca_cert_file"`
@@ -133,11 +135,11 @@ type configAlias struct {
 
 // NewDefaultConfig creates DefaultConfig
 func NewDefaultConfig() *Config {
-	systemUser, uid, gid, _ := GetCurrentSystemUser()
+	systemUser, uid, gid, _ := utils.GetCurrentSystemUser()
 
 	return &Config{
 		Port:         PortDefault,
-		PathMappings: []PathMapping{},
+		PathMappings: []vfs.PathMapping{},
 		UID:          uid,
 		GID:          gid,
 		SystemUser:   systemUser,
@@ -170,11 +172,11 @@ func NewDefaultConfig() *Config {
 
 // NewConfigFromYAML creates Config from YAML
 func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
-	systemUser, uid, gid, _ := GetCurrentSystemUser()
+	systemUser, uid, gid, _ := utils.GetCurrentSystemUser()
 
 	alias := configAlias{
 		Port:         PortDefault,
-		PathMappings: []PathMapping{},
+		PathMappings: []vfs.PathMapping{},
 		UID:          uid,
 		GID:          gid,
 		SystemUser:   systemUser,
@@ -245,7 +247,7 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		metadataCacheCleanupTime = MetadataCacheCleanupTimeDefault
 	}
 
-	systemUser, uid, gid, _ = CorrectSystemUser(alias.SystemUser, alias.UID, alias.GID)
+	systemUser, uid, gid, _ = utils.CorrectSystemUser(alias.SystemUser, alias.UID, alias.GID)
 
 	return &Config{
 		Host:         alias.Host,
@@ -289,7 +291,7 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 
 // CorrectSystemUser corrects system user configuration
 func (config *Config) CorrectSystemUser() error {
-	systemUser, uid, gid, err := CorrectSystemUser(config.SystemUser, config.UID, config.GID)
+	systemUser, uid, gid, err := utils.CorrectSystemUser(config.SystemUser, config.UID, config.GID)
 	if err != nil {
 		return err
 	}
@@ -330,7 +332,7 @@ func (config *Config) Validate() error {
 		return fmt.Errorf("path mappings must be given")
 	}
 
-	err := ValidatePathMappings(config.PathMappings)
+	err := vfs.ValidatePathMappings(config.PathMappings)
 	if err != nil {
 		return fmt.Errorf("invalid path mappings - %v", err)
 	}
