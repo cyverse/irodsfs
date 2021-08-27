@@ -116,8 +116,9 @@ func (vfs *VFS) buildOne(mapping *PathMapping) error {
 			}
 		} else {
 			dirEntry := &VFSEntry{
-				Type: VFSVirtualDirEntryType,
-				Path: parentDir,
+				Type:     VFSVirtualDirEntryType,
+				Path:     parentDir,
+				ReadOnly: true,
 				VirtualDirEntry: &VFSVirtualDirEntry{
 					ID:         0,
 					Name:       utils.GetFileName(parentDir),
@@ -164,7 +165,7 @@ func (vfs *VFS) buildOne(mapping *PathMapping) error {
 		return err
 	}
 
-	entry := NewVFSEntryFromIRODSFSEntry(mapping.MappingPath, fsEntry)
+	entry := NewVFSEntryFromIRODSFSEntry(mapping.MappingPath, fsEntry, mapping.ReadOnly)
 	vfs.Entries[mapping.MappingPath] = entry
 
 	// add to parent

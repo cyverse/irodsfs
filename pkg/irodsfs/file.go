@@ -42,22 +42,26 @@ type FileHandle struct {
 	AsyncWrite             *AsyncWrite
 }
 
-func mapFileACL(file *File, entry *irodsfs_client.FSEntry) os.FileMode {
+func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, fsEntry *irodsfs_client.FSEntry) os.FileMode {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"function": "mapFileACL",
 	})
 
-	if entry.Owner == file.FS.Config.ClientUser {
+	if fsEntry.Owner == file.FS.Config.ClientUser {
 		// mine
+		if vfsEntry.ReadOnly {
+			return 0o400
+		}
+
 		return 0o700
 	}
 
-	logger.Infof("Checking ACL information of the Entry for %s and user %s", entry.Path, file.FS.Config.ClientUser)
+	logger.Infof("Checking ACL information of the Entry for %s and user %s", fsEntry.Path, file.FS.Config.ClientUser)
 
-	accesses, err := file.FS.IRODSClient.ListFileACLsWithGroupUsers(entry.Path)
+	accesses, err := file.FS.IRODSClient.ListFileACLsWithGroupUsers(fsEntry.Path)
 	if err != nil {
-		logger.Errorf("failed to get ACL information of the Entry for %s", entry.Path)
+		logger.Errorf("failed to get ACL information of the Entry for %s", fsEntry.Path)
 	}
 
 	for _, access := range accesses {
@@ -65,8 +69,14 @@ func mapFileACL(file *File, entry *irodsfs_client.FSEntry) os.FileMode {
 			// found
 			switch access.AccessLevel {
 			case irodsfs_clienttype.IRODSAccessLevelOwner:
+				if vfsEntry.ReadOnly {
+					return 0o400
+				}
 				return 0o700
 			case irodsfs_clienttype.IRODSAccessLevelWrite:
+				if vfsEntry.ReadOnly {
+					return 0o400
+				}
 				return 0o600
 			case irodsfs_clienttype.IRODSAccessLevelRead:
 				return 0o400
@@ -76,9 +86,9 @@ func mapFileACL(file *File, entry *irodsfs_client.FSEntry) os.FileMode {
 		}
 	}
 
-	logger.Errorf("failed to find ACL information of the Entry for %s and user %s", entry.Path, file.FS.Config.ClientUser)
+	logger.Errorf("failed to find ACL information of the Entry for %s and user %s", fsEntry.Path, file.FS.Config.ClientUser)
 
-	// others - readonly
+	// others - no permission
 	return 0o000
 }
 
@@ -129,7 +139,7 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 			return syscall.EREMOTEIO
 		}
 
-		file.Entry = vfs.NewVFSEntryFromIRODSFSEntry(file.Path, entry)
+		file.Entry = vfs.NewVFSEntryFromIRODSFSEntry(file.Path, entry, vfsEntry.ReadOnly)
 
 		attr.Inode = uint64(entry.ID)
 		attr.Uid = file.FS.UID
@@ -138,7 +148,7 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 		attr.Mtime = entry.ModifyTime
 		attr.Atime = entry.ModifyTime
 		attr.Size = uint64(entry.Size)
-		attr.Mode = mapFileACL(file, entry)
+		attr.Mode = mapFileACL(vfsEntry, file, entry)
 		return nil
 	}
 
@@ -201,6 +211,11 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		logger.Error(err)
 		return nil, syscall.EACCES
 	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
+		if vfsEntry.ReadOnly && openMode != string(irodsfs_clienttype.FileOpenModeReadOnly) {
+			logger.Errorf("failed to open a read-only file with non-read-only mode")
+			return nil, syscall.EREMOTEIO
+		}
+
 		irodsPath, err := vfsEntry.GetIRODSPath(file.Path)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to get IRODS path")

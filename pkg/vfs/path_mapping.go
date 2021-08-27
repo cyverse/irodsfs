@@ -21,6 +21,7 @@ type PathMapping struct {
 	IRODSPath      string                  `yaml:"irods_path"`
 	MappingPath    string                  `yaml:"mapping_path"`
 	ResourceType   PathMappingResourceType `yaml:"resource_type"`
+	ReadOnly       bool                    `yaml:"read_only"`
 	CreateDir      bool                    `yaml:"create_dir"`
 	IgnoreNotExist bool                    `yaml:"ignore_not_exist"`
 }

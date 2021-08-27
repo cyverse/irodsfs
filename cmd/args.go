@@ -449,6 +449,7 @@ func processArguments() (*commons.Config, *os.File, error, bool) {
 						IRODSPath:      access.Path,
 						MappingPath:    "/",
 						ResourceType:   vfs.PathMappingDirectory,
+						ReadOnly:       false,
 						CreateDir:      false,
 						IgnoreNotExist: false,
 					},

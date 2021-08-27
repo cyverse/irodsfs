@@ -24,22 +24,26 @@ type Dir struct {
 	Path    string
 }
 
-func mapDirACL(dir *Dir, entry *irodsfs_client.FSEntry) os.FileMode {
+func mapDirACL(vfsEntry *vfs.VFSEntry, dir *Dir, fsEntry *irodsfs_client.FSEntry) os.FileMode {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"function": "mapDirACL",
 	})
 
-	if entry.Owner == dir.FS.Config.ClientUser {
+	if fsEntry.Owner == dir.FS.Config.ClientUser {
 		// mine
+		if vfsEntry.ReadOnly {
+			return 0o400
+		}
+
 		return 0o700
 	}
 
-	logger.Infof("Checking ACL information of the Entry for %s and user %s", entry.Path, dir.FS.Config.ClientUser)
+	logger.Infof("Checking ACL information of the Entry for %s and user %s", fsEntry.Path, dir.FS.Config.ClientUser)
 
-	accesses, err := dir.FS.IRODSClient.ListDirACLsWithGroupUsers(entry.Path)
+	accesses, err := dir.FS.IRODSClient.ListDirACLsWithGroupUsers(fsEntry.Path)
 	if err != nil {
-		logger.Errorf("failed to get ACL information of the Entry for %s", entry.Path)
+		logger.Errorf("failed to get ACL information of the Entry for %s", fsEntry.Path)
 	}
 
 	for _, access := range accesses {
@@ -47,8 +51,14 @@ func mapDirACL(dir *Dir, entry *irodsfs_client.FSEntry) os.FileMode {
 			// found
 			switch access.AccessLevel {
 			case irodsfs_clienttype.IRODSAccessLevelOwner:
+				if vfsEntry.ReadOnly {
+					return 0o400
+				}
 				return 0o700
 			case irodsfs_clienttype.IRODSAccessLevelWrite:
+				if vfsEntry.ReadOnly {
+					return 0o400
+				}
 				return 0o600
 			case irodsfs_clienttype.IRODSAccessLevelRead:
 				return 0o400
@@ -58,9 +68,9 @@ func mapDirACL(dir *Dir, entry *irodsfs_client.FSEntry) os.FileMode {
 		}
 	}
 
-	logger.Errorf("failed to find ACL information of the Entry for %s and user %s", entry.Path, dir.FS.Config.ClientUser)
+	logger.Errorf("failed to find ACL information of the Entry for %s and user %s", fsEntry.Path, dir.FS.Config.ClientUser)
 
-	// others - readonly
+	// others - no permission
 	return 0o000
 }
 
@@ -99,13 +109,7 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 			attr.Atime = vfsEntry.VirtualDirEntry.ModifyTime
 			attr.Size = uint64(vfsEntry.VirtualDirEntry.Size)
 
-			if vfsEntry.VirtualDirEntry.Owner == dir.FS.Config.ClientUser {
-				// mine
-				attr.Mode = os.ModeDir | 0o600
-			} else {
-				// others - readonly
-				attr.Mode = os.ModeDir | 0o400
-			}
+			attr.Mode = os.ModeDir | 0o400
 			return nil
 		}
 		return syscall.ENOENT
@@ -139,7 +143,7 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 		attr.Mtime = entry.ModifyTime
 		attr.Atime = entry.ModifyTime
 		attr.Size = 0
-		attr.Mode = os.ModeDir | mapDirACL(dir, entry)
+		attr.Mode = os.ModeDir | mapDirACL(vfsEntry, dir, entry)
 		return nil
 	} else {
 		logger.Errorf("unknown VFS Entry type : %s", vfsEntry.Type)
@@ -208,7 +212,7 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 				FS:      dir.FS,
 				InodeID: entry.ID,
 				Path:    targetPath,
-				Entry:   vfs.NewVFSEntryFromIRODSFSEntry(targetPath, entry),
+				Entry:   vfs.NewVFSEntryFromIRODSFSEntry(targetPath, entry, vfsEntry.ReadOnly),
 			}, nil
 		case irodsfs_client.FSDirectoryEntry:
 			return &Dir{
@@ -375,10 +379,17 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 
 	if vfsEntry.Type == vfs.VFSVirtualDirEntryType {
 		// failed to remove. read only
-		err := fmt.Errorf("failed to remove mapped entry - %s", vfsEntry.Path)
+		err := fmt.Errorf("failed to remove an entry on a read-only directory - %s", vfsEntry.Path)
 		logger.Error(err)
 		return syscall.EACCES
 	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
+		if vfsEntry.ReadOnly {
+			// failed to remove. read only
+			err := fmt.Errorf("failed to remove an entry on a read-only directory - %s", vfsEntry.Path)
+			logger.Error(err)
+			return syscall.EACCES
+		}
+
 		irodsPath, err := vfsEntry.GetIRODSPath(targetPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to get IRODS path")
@@ -458,10 +469,16 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 
 	if vfsEntry.Type == vfs.VFSVirtualDirEntryType {
 		// failed to create. read only
-		err := fmt.Errorf("failed to make a new mapped entry - %s", vfsEntry.Path)
+		err := fmt.Errorf("failed to make a new entry on a read-only directory  - %s", vfsEntry.Path)
 		logger.Error(err)
 		return nil, syscall.EACCES
 	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
+		if vfsEntry.ReadOnly {
+			err := fmt.Errorf("failed to make a new entry on a read-only directory - %s", vfsEntry.Path)
+			logger.Error(err)
+			return nil, syscall.EACCES
+		}
+
 		irodsPath, err := vfsEntry.GetIRODSPath(targetPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to get IRODS path")
@@ -531,29 +548,43 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 
 	if vfsSrcEntry.Path == targetSrcPath {
 		// failed to remove. read only
-		err := fmt.Errorf("failed to rename mapped entry - %s", vfsSrcEntry.Path)
+		err := fmt.Errorf("failed to rename a read-only entry - %s", vfsSrcEntry.Path)
 		logger.Error(err)
 		return syscall.EACCES
 	}
 
 	if vfsDestEntry.Path == targetDestPath {
 		// failed to remove. read only
-		err := fmt.Errorf("failed to remove mapped entry - %s", vfsDestEntry.Path)
+		err := fmt.Errorf("failed to remove a read-only entry - %s", vfsDestEntry.Path)
 		logger.Error(err)
 		return syscall.EACCES
 	}
 
 	if vfsSrcEntry.Type == vfs.VFSVirtualDirEntryType {
 		// failed to remove. read only
-		err := fmt.Errorf("failed to rename mapped entry - %s", vfsSrcEntry.Path)
+		err := fmt.Errorf("failed to rename a read-only entry - %s", vfsSrcEntry.Path)
 		logger.Error(err)
 		return syscall.EACCES
 	} else if vfsDestEntry.Type == vfs.VFSVirtualDirEntryType {
 		// failed to remove. read only
-		err := fmt.Errorf("failed to rename mapped entry - %s", vfsDestEntry.Path)
+		err := fmt.Errorf("failed to rename a read-only entry - %s", vfsDestEntry.Path)
 		logger.Error(err)
 		return syscall.EACCES
 	} else if vfsSrcEntry.Type == vfs.VFSIRODSEntryType && vfsDestEntry.Type == vfs.VFSIRODSEntryType {
+		if vfsSrcEntry.ReadOnly {
+			// failed to remove. read only
+			err := fmt.Errorf("failed to remove a read-only entry - %s", vfsSrcEntry.Path)
+			logger.Error(err)
+			return syscall.EACCES
+		}
+
+		if vfsDestEntry.ReadOnly {
+			// failed to remove. read only
+			err := fmt.Errorf("failed to remove a read-only entry - %s", vfsDestEntry.Path)
+			logger.Error(err)
+			return syscall.EACCES
+		}
+
 		irodsSrcPath, err := vfsSrcEntry.GetIRODSPath(targetSrcPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to get IRODS path")
@@ -669,10 +700,17 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 
 	if vfsEntry.Type == vfs.VFSVirtualDirEntryType {
 		// failed to create. read only
-		err := fmt.Errorf("failed to make a new mapped entry - %s", vfsEntry.Path)
+		err := fmt.Errorf("failed to make a new entry on a read-only directory - %s", vfsEntry.Path)
 		logger.Error(err)
 		return nil, nil, syscall.EACCES
 	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
+		if vfsEntry.ReadOnly {
+			// failed to create. read only
+			err := fmt.Errorf("failed to make a new entry on a read-only directory - %s", vfsEntry.Path)
+			logger.Error(err)
+			return nil, nil, syscall.EACCES
+		}
+
 		irodsPath, err := vfsEntry.GetIRODSPath(targetPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to get IRODS path")

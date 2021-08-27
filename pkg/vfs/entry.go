@@ -35,8 +35,9 @@ type VFSVirtualDirEntry struct {
 
 // VFSEntry is a VFS entry struct
 type VFSEntry struct {
-	Type VFSEntryType
-	Path string
+	Type     VFSEntryType
+	Path     string
+	ReadOnly bool
 
 	// Only one of fields below is filled according to the Type
 	VirtualDirEntry *VFSVirtualDirEntry
@@ -44,10 +45,11 @@ type VFSEntry struct {
 }
 
 // NewVFSEntryFromIRODSFSEntry creates a new VFSEntry from IRODSFSEntry
-func NewVFSEntryFromIRODSFSEntry(path string, fsEntry *irodsfs_client.FSEntry) *VFSEntry {
+func NewVFSEntryFromIRODSFSEntry(path string, fsEntry *irodsfs_client.FSEntry, readonly bool) *VFSEntry {
 	return &VFSEntry{
 		Type:            VFSIRODSEntryType,
 		Path:            path,
+		ReadOnly:        readonly,
 		VirtualDirEntry: nil,
 		IRODSEntry:      fsEntry,
 	}
@@ -55,7 +57,7 @@ func NewVFSEntryFromIRODSFSEntry(path string, fsEntry *irodsfs_client.FSEntry) *
 
 // ToString stringifies the object
 func (entry *VFSEntry) ToString() string {
-	return fmt.Sprintf("<VFSEntry %s %s %p %p>", entry.Type, entry.Path, entry.VirtualDirEntry, entry.IRODSEntry)
+	return fmt.Sprintf("<VFSEntry %s %s %t %p %p>", entry.Type, entry.Path, &entry.ReadOnly, entry.VirtualDirEntry, entry.IRODSEntry)
 }
 
 // GetIRODSPath returns relative path
