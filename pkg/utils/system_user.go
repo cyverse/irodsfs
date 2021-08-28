@@ -56,7 +56,7 @@ func CorrectSystemUser(username string, uid int, gid int) (string, int, int, err
 				gid = uid
 			}
 
-			return "unknown", uid, gid, nil
+			return "", uid, gid, nil
 		}
 
 		newuid, err := strconv.ParseInt(u.Uid, 10, 32)

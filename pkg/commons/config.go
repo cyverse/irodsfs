@@ -345,10 +345,6 @@ func (config *Config) Validate() error {
 		return fmt.Errorf("invalid GID - %v", err)
 	}
 
-	if len(config.SystemUser) == 0 {
-		return fmt.Errorf("invalid system user - %s", config.SystemUser)
-	}
-
 	if len(config.MountPath) == 0 {
 		return fmt.Errorf("mount path must be given")
 	}
