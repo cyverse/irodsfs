@@ -41,11 +41,11 @@ type VFSEntry struct {
 
 	// Only one of fields below is filled according to the Type
 	VirtualDirEntry *VFSVirtualDirEntry
-	IRODSEntry      *irodsfs_client.FSEntry
+	IRODSEntry      *irodsfs_client.Entry
 }
 
 // NewVFSEntryFromIRODSFSEntry creates a new VFSEntry from IRODSFSEntry
-func NewVFSEntryFromIRODSFSEntry(path string, fsEntry *irodsfs_client.FSEntry, readonly bool) *VFSEntry {
+func NewVFSEntryFromIRODSFSEntry(path string, fsEntry *irodsfs_client.Entry, readonly bool) *VFSEntry {
 	return &VFSEntry{
 		Type:            VFSIRODSEntryType,
 		Path:            path,

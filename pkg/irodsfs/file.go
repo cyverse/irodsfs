@@ -33,7 +33,7 @@ type FileHandle struct {
 	FS             *IRODSFS
 	Path           string
 	Entry          *vfs.VFSEntry
-	IRODSFSEntry   *irodsfs_client.FSEntry
+	IRODSFSEntry   *irodsfs_client.Entry
 	FileHandle     *irodsfs_client.FileHandle
 	FileHandleLock *sync.Mutex
 
@@ -42,7 +42,7 @@ type FileHandle struct {
 	AsyncWrite             *AsyncWrite
 }
 
-func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, fsEntry *irodsfs_client.FSEntry) os.FileMode {
+func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, fsEntry *irodsfs_client.Entry) os.FileMode {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"function": "mapFileACL",
@@ -92,7 +92,7 @@ func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, fsEntry *irodsfs_client.FSEn
 	return 0o000
 }
 
-// Attr returns stat of directory entry
+// Attr returns stat of file entry
 func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 	if file.FS.Terminated {
 		return syscall.ECONNABORTED
@@ -149,6 +149,98 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 		attr.Atime = entry.ModifyTime
 		attr.Size = uint64(entry.Size)
 		attr.Mode = mapFileACL(vfsEntry, file, entry)
+		return nil
+	}
+
+	logger.Errorf("unknown VFS Entry type : %s", vfsEntry.Type)
+	return syscall.EREMOTEIO
+}
+
+// Setattr sets file attributes
+func (file *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
+	if file.FS.Terminated {
+		return syscall.ECONNABORTED
+	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"function": "File.Setattr",
+	})
+
+	logger.Infof("Calling Setattr - %s", file.Path)
+
+	if update, ok := file.FS.FileMetaUpdater.Pop(file.InodeID); ok {
+		// update found
+		logger.Infof("Update found - replace path from %s to %s", file.Path, update.Path)
+		file.Path = update.Path
+	}
+
+	if req.Valid.Size() {
+		// size changed
+		// call Truncate()
+		return file.Truncate(ctx, req, resp)
+	}
+	return nil
+}
+
+// Truncate truncates file entry
+func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
+	if file.FS.Terminated {
+		return syscall.ECONNABORTED
+	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"function": "File.Truncate",
+	})
+
+	logger.Infof("Calling Truncate - %s, %d", file.Path, req.Size)
+
+	if update, ok := file.FS.FileMetaUpdater.Pop(file.InodeID); ok {
+		// update found
+		logger.Infof("Update found - replace path from %s to %s", file.Path, update.Path)
+		file.Path = update.Path
+	}
+
+	vfsEntry := file.FS.VFS.GetClosestEntry(file.Path)
+	if vfsEntry == nil {
+		logger.Errorf("failed to get VFS Entry for %s", file.Path)
+		return syscall.EREMOTEIO
+	}
+
+	if vfsEntry.Type == vfs.VFSVirtualDirEntryType {
+		logger.Errorf("failed to truncate a virtual dir")
+		return syscall.EREMOTEIO
+	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
+		irodsPath, err := vfsEntry.GetIRODSPath(file.Path)
+		if err != nil {
+			logger.WithError(err).Errorf("failed to get IRODS path")
+			return syscall.EREMOTEIO
+		}
+
+		// redo to get fresh info
+		_, err = file.FS.IRODSClient.Stat(irodsPath)
+		if err != nil {
+			if irodsfs_clienttype.IsFileNotFoundError(err) {
+				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
+				return syscall.ENOENT
+			}
+
+			logger.WithError(err).Errorf("failed to stat - %s", irodsPath)
+			return syscall.EREMOTEIO
+		}
+
+		err = file.FS.IRODSClient.TruncateFile(irodsPath, int64(req.Size))
+		if err != nil {
+			if irodsfs_clienttype.IsFileNotFoundError(err) {
+				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
+				return syscall.ENOENT
+			}
+
+			logger.WithError(err).Errorf("failed to truncate a file - %s, %d", irodsPath, req.Size)
+			return syscall.EREMOTEIO
+		}
+
 		return nil
 	}
 

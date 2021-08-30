@@ -240,7 +240,7 @@ func (fs *IRODSFS) Root() (fusefs.Node, error) {
 			Path:    "/",
 		}, nil
 	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
-		if vfsEntry.IRODSEntry.Type != irodsfs_client.FSDirectoryEntry {
+		if vfsEntry.IRODSEntry.Type != irodsfs_client.DirectoryEntry {
 			logger.Errorf("failed to mount a data object as a root")
 			return nil, syscall.EREMOTEIO
 		}

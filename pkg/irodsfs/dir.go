@@ -24,7 +24,7 @@ type Dir struct {
 	Path    string
 }
 
-func mapDirACL(vfsEntry *vfs.VFSEntry, dir *Dir, fsEntry *irodsfs_client.FSEntry) os.FileMode {
+func mapDirACL(vfsEntry *vfs.VFSEntry, dir *Dir, fsEntry *irodsfs_client.Entry) os.FileMode {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"function": "mapDirACL",
@@ -114,7 +114,7 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 		}
 		return syscall.ENOENT
 	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
-		if vfsEntry.IRODSEntry.Type != irodsfs_client.FSDirectoryEntry {
+		if vfsEntry.IRODSEntry.Type != irodsfs_client.DirectoryEntry {
 			logger.Errorf("failed to get dir attribute from a data object")
 			return syscall.EREMOTEIO
 		}
@@ -207,14 +207,14 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 		}
 
 		switch entry.Type {
-		case irodsfs_client.FSFileEntry:
+		case irodsfs_client.FileEntry:
 			return &File{
 				FS:      dir.FS,
 				InodeID: entry.ID,
 				Path:    targetPath,
 				Entry:   vfs.NewVFSEntryFromIRODSFSEntry(targetPath, entry, vfsEntry.ReadOnly),
 			}, nil
-		case irodsfs_client.FSDirectoryEntry:
+		case irodsfs_client.DirectoryEntry:
 			return &Dir{
 				FS:      dir.FS,
 				InodeID: entry.ID,
@@ -272,9 +272,9 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 					entryType := fuse.DT_File
 
 					switch entry.IRODSEntry.Type {
-					case irodsfs_client.FSFileEntry:
+					case irodsfs_client.FileEntry:
 						entryType = fuse.DT_File
-					case irodsfs_client.FSDirectoryEntry:
+					case irodsfs_client.DirectoryEntry:
 						entryType = fuse.DT_Dir
 					default:
 						logger.Errorf("unknown entry type - %s", entry.Type)
@@ -316,9 +316,9 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 			entryType := fuse.DT_File
 
 			switch entry.Type {
-			case irodsfs_client.FSFileEntry:
+			case irodsfs_client.FileEntry:
 				entryType = fuse.DT_File
-			case irodsfs_client.FSDirectoryEntry:
+			case irodsfs_client.DirectoryEntry:
 				entryType = fuse.DT_Dir
 			default:
 				logger.Errorf("unknown entry type - %s", entry.Type)
@@ -408,14 +408,14 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 		}
 
 		switch entry.Type {
-		case irodsfs_client.FSFileEntry:
+		case irodsfs_client.FileEntry:
 			err = dir.FS.IRODSClient.RemoveFile(irodsPath, true)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to remove file - %s", irodsPath)
 				return syscall.EREMOTEIO
 			}
 			return nil
-		case irodsfs_client.FSDirectoryEntry:
+		case irodsfs_client.DirectoryEntry:
 			err = dir.FS.IRODSClient.RemoveDir(irodsPath, false, true)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to remove dir - %s", irodsPath)
@@ -609,7 +609,7 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 		}
 
 		switch entry.Type {
-		case irodsfs_client.FSDirectoryEntry:
+		case irodsfs_client.DirectoryEntry:
 			err = dir.FS.IRODSClient.RenameDirToDir(irodsSrcPath, irodsDestPath)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to rename dir - %s to %s", irodsSrcPath, irodsDestPath)
@@ -621,7 +621,7 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 				dir.FS.FileMetaUpdater.Add(entry.ID, targetDestPath)
 			}
 			return nil
-		case irodsfs_client.FSFileEntry:
+		case irodsfs_client.FileEntry:
 			err = dir.FS.IRODSClient.RenameFileToFile(irodsSrcPath, irodsDestPath)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to rename file - %s to %s", irodsSrcPath, irodsDestPath)
