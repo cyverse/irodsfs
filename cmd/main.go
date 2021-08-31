@@ -271,7 +271,8 @@ func childMain() {
 
 	if logFile != nil {
 		logFile.Close()
-		os.Remove(config.LogPath)
+		// do not remove the log file
+		//os.Remove(config.LogPath)
 	}
 }
 
