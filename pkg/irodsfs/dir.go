@@ -622,6 +622,23 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 			}
 			return nil
 		case irodsfs_client.FileEntry:
+			destEntry, err := dir.FS.IRODSClient.Stat(irodsDestPath)
+			if err != nil {
+				if !irodsfs_clienttype.IsFileNotFoundError(err) {
+					logger.WithError(err).Errorf("failed to stat - %s", irodsDestPath)
+					return syscall.EREMOTEIO
+				}
+			}
+
+			if destEntry.ID > 0 {
+				// delete first
+				err = dir.FS.IRODSClient.RemoveFile(irodsDestPath, true)
+				if err != nil {
+					logger.WithError(err).Errorf("failed to delete file - %s", irodsDestPath)
+					return syscall.EREMOTEIO
+				}
+			}
+
 			err = dir.FS.IRODSClient.RenameFileToFile(irodsSrcPath, irodsDestPath)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to rename file - %s to %s", irodsSrcPath, irodsDestPath)
