@@ -262,7 +262,7 @@ func processArguments() (*commons.Config, *os.File, error, bool) {
 	} else {
 		logFileHandle, err := os.OpenFile(config.LogPath, os.O_WRONLY|os.O_CREATE, 0755)
 		if err != nil {
-			logger.WithError(err).Error("failed to create log file - %s", config.LogPath)
+			logger.WithError(err).Errorf("failed to create log file - %s", config.LogPath)
 		} else {
 			// use multi output - to output to file and stdout
 			mw := io.MultiWriter(os.Stderr, logFileHandle)
