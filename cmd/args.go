@@ -271,6 +271,8 @@ func processArguments() (*commons.Config, *os.File, error, bool) {
 		}
 	}
 
+	logger.Infof("Logging to %s", config.LogPath)
+
 	stdinClosed := false
 	if len(configFilePath) > 0 {
 		if configFilePath == "-" {

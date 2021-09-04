@@ -203,7 +203,8 @@ func parentMain() {
 	// clean up
 	if logFile != nil {
 		logFile.Close()
-		os.Remove(config.LogPath)
+		// do not remove the log file
+		//os.Remove(config.LogPath)
 	}
 
 	os.Exit(0)
