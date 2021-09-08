@@ -29,6 +29,7 @@ def reorderArgs(argv):
     options = []
     positionalArgs = []
     skipCount = 0
+    mountTimeout = 60
     for idx, arg in enumerate(argv):
         if idx == 0:
             command = arg
@@ -49,8 +50,13 @@ def reorderArgs(argv):
                     options.append(fokv[0])
                 elif len(fokv) == 2:
                     # -o kk=vv
-                    options.append("-%s" % fokv[0])
-                    options.append(fokv[1])
+                    if fokv[0] == "mounttimeout":
+                        mountTimeout = int(fokv[1])
+                        if mountTimeout <= 0:
+                            mountTimeout = 300
+                    else:
+                        options.append("-%s" % fokv[0])
+                        options.append(fokv[1])
 
             skipCount = 1
         else:
@@ -67,13 +73,13 @@ def reorderArgs(argv):
 
     reorderedArgs.extend(positionalArgs)
 
-    return reorderedArgs
+    return reorderedArgs, mountTimeout
 
-def check_mount(mountPoint):
+def check_mount(mountPoint, mountTimeout):
     fuse_mounted = False
 
     retry = 0
-    while retry < 10:
+    while retry < mountTimeout:
         try:
             time.sleep(1)
 
@@ -101,7 +107,7 @@ def check_mount(mountPoint):
             retry += 1
 
     if not fuse_mounted:
-        print("fuse mount not found for %s" % mountPoint, file=sys.stderr)
+        print("fuse mount not found for %s, after %d seconds" % (mountPoint, mountTimeout), file=sys.stderr)
         return False
 
     accessible = os.access(mountPoint, os.R_OK)
@@ -132,7 +138,7 @@ def main(argv):
 
     print("found irodsfs > %s" % irodsBin)
 
-    reorderedArgv = reorderArgs(argv)
+    reorderedArgv, mountTimeout = reorderArgs(argv)
 
     if len(reorderedArgv) <= 2:
         print("not enough number of arguments given", file=sys.stderr)
@@ -143,7 +149,7 @@ def main(argv):
     run_command(command.split())
 
     mountPoint = reorderedArgv[-1]
-    if not check_mount(mountPoint):
+    if not check_mount(mountPoint, mountTimeout):
         print("failed to mount", file=sys.stderr)
         sys.exit(1)
 
