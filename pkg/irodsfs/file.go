@@ -10,8 +10,7 @@ import (
 
 	"bazil.org/fuse"
 	fusefs "bazil.org/fuse/fs"
-	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
-	irodsfs_clienttype "github.com/cyverse/go-irodsclient/irods/types"
+	"github.com/cyverse/irodsfs/pkg/irodsapi"
 	"github.com/cyverse/irodsfs/pkg/vfs"
 	log "github.com/sirupsen/logrus"
 )
@@ -33,8 +32,8 @@ type FileHandle struct {
 	FS             *IRODSFS
 	Path           string
 	Entry          *vfs.VFSEntry
-	IRODSFSEntry   *irodsfs_client.Entry
-	FileHandle     *irodsfs_client.FileHandle
+	IRODSFSEntry   *irodsapi.IRODSEntry
+	FileHandle     irodsapi.IRODSFileHandle
 	FileHandleLock *sync.Mutex
 
 	WriteBuffer            bytes.Buffer
@@ -42,13 +41,13 @@ type FileHandle struct {
 	AsyncWrite             *AsyncWrite
 }
 
-func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, fsEntry *irodsfs_client.Entry) os.FileMode {
+func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, irodsEntry *irodsapi.IRODSEntry) os.FileMode {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"function": "mapFileACL",
 	})
 
-	if fsEntry.Owner == file.FS.Config.ClientUser {
+	if irodsEntry.Owner == file.FS.Config.ClientUser {
 		// mine
 		if vfsEntry.ReadOnly {
 			return 0o400
@@ -57,36 +56,36 @@ func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, fsEntry *irodsfs_client.Entr
 		return 0o700
 	}
 
-	logger.Infof("Checking ACL information of the Entry for %s and user %s", fsEntry.Path, file.FS.Config.ClientUser)
+	logger.Infof("Checking ACL information of the Entry for %s and user %s", irodsEntry.Path, file.FS.Config.ClientUser)
 
-	accesses, err := file.FS.IRODSClient.ListFileACLsWithGroupUsers(fsEntry.Path)
+	accesses, err := file.FS.IRODSClientSession.ListFileACLsWithGroupUsers(irodsEntry.Path)
 	if err != nil {
-		logger.Errorf("failed to get ACL information of the Entry for %s", fsEntry.Path)
+		logger.Errorf("failed to get ACL information of the Entry for %s", irodsEntry.Path)
 	}
 
 	for _, access := range accesses {
 		if access.UserName == file.FS.Config.ClientUser {
 			// found
 			switch access.AccessLevel {
-			case irodsfs_clienttype.IRODSAccessLevelOwner:
+			case irodsapi.IRODSAccessLevelOwner:
 				if vfsEntry.ReadOnly {
 					return 0o400
 				}
 				return 0o700
-			case irodsfs_clienttype.IRODSAccessLevelWrite:
+			case irodsapi.IRODSAccessLevelWrite:
 				if vfsEntry.ReadOnly {
 					return 0o400
 				}
 				return 0o600
-			case irodsfs_clienttype.IRODSAccessLevelRead:
+			case irodsapi.IRODSAccessLevelRead:
 				return 0o400
-			case irodsfs_clienttype.IRODSAccessLevelNone:
+			case irodsapi.IRODSAccessLevelNone:
 				return 0o000
 			}
 		}
 	}
 
-	logger.Errorf("failed to find ACL information of the Entry for %s and user %s", fsEntry.Path, file.FS.Config.ClientUser)
+	logger.Errorf("failed to find ACL information of the Entry for %s and user %s", irodsEntry.Path, file.FS.Config.ClientUser)
 
 	// others - no permission
 	return 0o000
@@ -100,7 +99,8 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
-		"function": "File.Attr",
+		"struct":   "File",
+		"function": "Attr",
 	})
 
 	logger.Infof("Calling Attr - %s", file.Path)
@@ -128,9 +128,9 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 		}
 
 		// redo to get fresh info
-		entry, err := file.FS.IRODSClient.Stat(irodsPath)
+		irodsEntry, err := file.FS.IRODSClientSession.Stat(irodsPath)
 		if err != nil {
-			if irodsfs_clienttype.IsFileNotFoundError(err) {
+			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
 				return syscall.ENOENT
 			}
@@ -139,16 +139,16 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 			return syscall.EREMOTEIO
 		}
 
-		file.Entry = vfs.NewVFSEntryFromIRODSFSEntry(file.Path, entry, vfsEntry.ReadOnly)
+		file.Entry = vfs.NewVFSEntryFromIRODSFSEntry(file.Path, irodsEntry, vfsEntry.ReadOnly)
 
-		attr.Inode = uint64(entry.ID)
+		attr.Inode = uint64(irodsEntry.ID)
 		attr.Uid = file.FS.UID
 		attr.Gid = file.FS.GID
-		attr.Ctime = entry.CreateTime
-		attr.Mtime = entry.ModifyTime
-		attr.Atime = entry.ModifyTime
-		attr.Size = uint64(entry.Size)
-		attr.Mode = mapFileACL(vfsEntry, file, entry)
+		attr.Ctime = irodsEntry.CreateTime
+		attr.Mtime = irodsEntry.ModifyTime
+		attr.Atime = irodsEntry.ModifyTime
+		attr.Size = uint64(irodsEntry.Size)
+		attr.Mode = mapFileACL(vfsEntry, file, irodsEntry)
 		return nil
 	}
 
@@ -164,7 +164,8 @@ func (file *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *f
 
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
-		"function": "File.Setattr",
+		"struct":   "File",
+		"function": "Setattr",
 	})
 
 	logger.Infof("Calling Setattr - %s", file.Path)
@@ -191,7 +192,8 @@ func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *
 
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
-		"function": "File.Truncate",
+		"struct":   "File",
+		"function": "Truncate",
 	})
 
 	logger.Infof("Calling Truncate - %s, %d", file.Path, req.Size)
@@ -219,9 +221,9 @@ func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *
 		}
 
 		// redo to get fresh info
-		_, err = file.FS.IRODSClient.Stat(irodsPath)
+		_, err = file.FS.IRODSClientSession.Stat(irodsPath)
 		if err != nil {
-			if irodsfs_clienttype.IsFileNotFoundError(err) {
+			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
 				return syscall.ENOENT
 			}
@@ -230,9 +232,9 @@ func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *
 			return syscall.EREMOTEIO
 		}
 
-		err = file.FS.IRODSClient.TruncateFile(irodsPath, int64(req.Size))
+		err = file.FS.IRODSClientSession.TruncateFile(irodsPath, int64(req.Size))
 		if err != nil {
-			if irodsfs_clienttype.IsFileNotFoundError(err) {
+			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
 				return syscall.ENOENT
 			}
@@ -256,28 +258,29 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
-		"function": "File.Open",
+		"struct":   "File",
+		"function": "Open",
 	})
 
-	openMode := string(irodsfs_clienttype.FileOpenModeReadOnly)
+	openMode := string(irodsapi.FileOpenModeReadOnly)
 
 	if req.Flags.IsReadOnly() {
-		openMode = string(irodsfs_clienttype.FileOpenModeReadOnly)
+		openMode = string(irodsapi.FileOpenModeReadOnly)
 		resp.Flags |= fuse.OpenKeepCache
 		resp.Flags &^= fuse.OpenDirectIO // disable
 	} else if req.Flags.IsWriteOnly() {
-		openMode = string(irodsfs_clienttype.FileOpenModeWriteOnly)
+		openMode = string(irodsapi.FileOpenModeWriteOnly)
 
 		if req.Flags&fuse.OpenAppend == fuse.OpenAppend {
 			// append
-			openMode = string(irodsfs_clienttype.FileOpenModeAppend)
+			openMode = string(irodsapi.FileOpenModeAppend)
 		} else if req.Flags&fuse.OpenTruncate == fuse.OpenTruncate {
 			// truncate
-			openMode = string(irodsfs_clienttype.FileOpenModeWriteTruncate)
+			openMode = string(irodsapi.FileOpenModeWriteTruncate)
 		}
 		resp.Flags |= fuse.OpenDirectIO
 	} else if req.Flags.IsReadWrite() {
-		openMode = string(irodsfs_clienttype.FileOpenModeReadWrite)
+		openMode = string(irodsapi.FileOpenModeReadWrite)
 	} else {
 		logger.Errorf("unknown file open mode - %s", req.Flags.String())
 		return nil, syscall.EACCES
@@ -303,7 +306,7 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		logger.Error(err)
 		return nil, syscall.EACCES
 	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
-		if vfsEntry.ReadOnly && openMode != string(irodsfs_clienttype.FileOpenModeReadOnly) {
+		if vfsEntry.ReadOnly && openMode != string(irodsapi.FileOpenModeReadOnly) {
 			logger.Errorf("failed to open a read-only file with non-read-only mode")
 			return nil, syscall.EREMOTEIO
 		}
@@ -314,9 +317,9 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 			return nil, syscall.EREMOTEIO
 		}
 
-		handle, err := file.FS.IRODSClient.OpenFile(irodsPath, "", openMode)
+		handle, err := file.FS.IRODSClientSession.OpenFile(irodsPath, "", openMode)
 		if err != nil {
-			if irodsfs_clienttype.IsFileNotFoundError(err) {
+			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
 				return nil, syscall.ENOENT
 			}
@@ -324,8 +327,6 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 			logger.WithError(err).Errorf("failed to open a file - %s", irodsPath)
 			return nil, syscall.EREMOTEIO
 		}
-
-		logger.Infof("Conn %p, File Descriptor %d", handle.Connection, handle.IRODSHandle.FileDescriptor)
 
 		handleMutex := &sync.Mutex{}
 
@@ -379,7 +380,8 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
-		"function": "FileHandle.Read",
+		"struct":   "FileHandle",
+		"function": "Read",
 	})
 
 	logger.Infof("Calling Read - %s, %d Offset, %d Bytes", handle.Path, req.Offset, req.Size)
@@ -389,12 +391,12 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 		return syscall.EBADFD
 	}
 
-	if !irodsfs_clienttype.IsFileOpenFlagRead(handle.FileHandle.OpenMode) {
+	if !handle.FileHandle.IsReadMode() {
 		logger.Errorf("failed to read file opened with write mode - %s", handle.Path)
 		return syscall.EBADFD
 	}
 
-	if req.Offset > handle.FileHandle.Entry.Size {
+	if req.Offset > handle.FileHandle.GetEntry().Size {
 		resp.Data = resp.Data[:0]
 		return nil
 	}
@@ -404,7 +406,7 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 	defer handle.FileHandleLock.Unlock()
 
 	if handle.FileHandle.GetOffset() != req.Offset {
-		_, err := handle.FileHandle.Seek(req.Offset, irodsfs_clienttype.SeekSet)
+		_, err := handle.FileHandle.Seek(req.Offset, irodsapi.SeekSet)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to seek - %s, %d", handle.Path, req.Offset)
 			return syscall.EREMOTEIO
@@ -436,18 +438,18 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
-		"function": "FileHandle.Write",
+		"struct":   "FileHandle",
+		"function": "Write",
 	})
 
 	logger.Infof("Calling Write - %s, %d Bytes", handle.Path, len(req.Data))
-	logger.Infof("Conn %p, File Descriptor %d", handle.FileHandle.Connection, handle.FileHandle.IRODSHandle.FileDescriptor)
 
 	if handle.FileHandle == nil {
 		logger.Errorf("failed to get a file handle - %s", handle.Path)
 		return syscall.EBADFD
 	}
 
-	if !irodsfs_clienttype.IsFileOpenFlagWrite(handle.FileHandle.OpenMode) {
+	if !handle.FileHandle.IsWriteMode() {
 		logger.Errorf("failed to write file opened with readonly mode - %s", handle.Path)
 		return syscall.EBADFD
 	}
@@ -518,7 +520,7 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 	} else {
 		// write immediately
 		if handle.FileHandle.GetOffset() != req.Offset {
-			_, err := handle.FileHandle.Seek(req.Offset, irodsfs_clienttype.SeekSet)
+			_, err := handle.FileHandle.Seek(req.Offset, irodsapi.SeekSet)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to seek - %s, %d", handle.Path, req.Offset)
 				return syscall.EREMOTEIO
@@ -548,7 +550,8 @@ func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) err
 
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
-		"function": "FileHandle.Flush",
+		"struct":   "FileHandle",
+		"function": "Flush",
 	})
 
 	logger.Infof("Calling Flush - %s", handle.Path)
@@ -593,11 +596,11 @@ func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest)
 
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
-		"function": "FileHandle.Release",
+		"struct":   "FileHandle",
+		"function": "Release",
 	})
 
 	logger.Infof("Calling Release - %s", handle.Path)
-	logger.Infof("Conn %p, File Descriptor %d", handle.FileHandle.Connection, handle.FileHandle.IRODSHandle.FileDescriptor)
 
 	if handle.FileHandle == nil {
 		logger.Errorf("failed to get a file handle - %s", handle.Path)

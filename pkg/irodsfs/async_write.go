@@ -5,17 +5,16 @@ import (
 	"strconv"
 	"sync"
 
-	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
-	irodsfs_clienttype "github.com/cyverse/go-irodsclient/irods/types"
+	"github.com/cyverse/irodsfs/pkg/irodsapi"
 	channels "github.com/eapache/channels"
 	log "github.com/sirupsen/logrus"
 )
 
 // AsyncWrite helps async write
 type AsyncWrite struct {
-	FS             *IRODSFS
-	FileHandle     *irodsfs_client.FileHandle
-	FileHandleLock *sync.Mutex
+	FS              *IRODSFS
+	IRODSFileHandle irodsapi.IRODSFileHandle
+	FileHandleLock  *sync.Mutex
 
 	FileBuffer     *FileBuffer
 	WriteWaitTasks sync.WaitGroup
@@ -24,11 +23,11 @@ type AsyncWrite struct {
 }
 
 // NewAsyncWrite create a new AsyncWrite
-func NewAsyncWrite(fs *IRODSFS, fileHandle *irodsfs_client.FileHandle, fileHandleLock *sync.Mutex) (*AsyncWrite, error) {
+func NewAsyncWrite(fs *IRODSFS, fileHandle irodsapi.IRODSFileHandle, fileHandleLock *sync.Mutex) (*AsyncWrite, error) {
 	asyncWrite := &AsyncWrite{
-		FS:             fs,
-		FileHandle:     fileHandle,
-		FileHandleLock: fileHandleLock,
+		FS:              fs,
+		IRODSFileHandle: fileHandle,
+		FileHandleLock:  fileHandleLock,
 
 		FileBuffer:     fs.FileBuffer,
 		WriteWaitTasks: sync.WaitGroup{},
@@ -58,6 +57,7 @@ func (asyncWrite *AsyncWrite) Release() {
 func (asyncWrite *AsyncWrite) Write(offset int64, data []byte) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
+		"struct":   "AsyncWrite",
 		"function": "Write",
 	})
 
@@ -120,11 +120,12 @@ func (asyncWrite *AsyncWrite) WaitBackgroundWrites() {
 func (asyncWrite *AsyncWrite) backgroundWriteTask() {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
+		"struct":   "AsyncWrite",
 		"function": "backgroundWriteTask",
 	})
 
 	sectionName := asyncWrite.getFileBufferSectionName()
-	filePath := asyncWrite.FileHandle.Entry.Path
+	filePath := asyncWrite.IRODSFileHandle.GetEntry().Path
 
 	for {
 		outData, channelOpened := <-asyncWrite.WriteQueue.Out()
@@ -161,8 +162,8 @@ func (asyncWrite *AsyncWrite) backgroundWriteTask() {
 
 							asyncWrite.FileHandleLock.Lock()
 
-							if asyncWrite.FileHandle.GetOffset() != offset {
-								_, err := asyncWrite.FileHandle.Seek(offset, irodsfs_clienttype.SeekSet)
+							if asyncWrite.IRODSFileHandle.GetOffset() != offset {
+								_, err := asyncWrite.IRODSFileHandle.Seek(offset, irodsapi.SeekSet)
 								if err != nil {
 									logger.WithError(err).Errorf("failed to seek - %s, %d", filePath, offset)
 									asyncWrite.addAsyncError(err)
@@ -171,7 +172,7 @@ func (asyncWrite *AsyncWrite) backgroundWriteTask() {
 							}
 
 							if !hasError {
-								err := asyncWrite.FileHandle.Write(bufferData)
+								err := asyncWrite.IRODSFileHandle.Write(bufferData)
 								if err != nil {
 									logger.WithError(err).Errorf("failed to write data - %s, %d", filePath, len(bufferData))
 									asyncWrite.addAsyncError(err)
@@ -179,7 +180,7 @@ func (asyncWrite *AsyncWrite) backgroundWriteTask() {
 								}
 
 								// Report
-								asyncWrite.FS.MonitoringReporter.ReportFileTransfer(asyncWrite.FileHandle.IRODSHandle.Path, asyncWrite.FileHandle, offset, int64(len(bufferData)))
+								asyncWrite.FS.MonitoringReporter.ReportFileTransfer(asyncWrite.IRODSFileHandle.GetEntry().Path, asyncWrite.IRODSFileHandle, offset, int64(len(bufferData)))
 							}
 
 							asyncWrite.FileHandleLock.Unlock()
@@ -194,7 +195,7 @@ func (asyncWrite *AsyncWrite) backgroundWriteTask() {
 }
 
 func (asyncWrite *AsyncWrite) getFileBufferSectionName() string {
-	return fmt.Sprintf("write:%s", asyncWrite.FileHandle.Entry.Path)
+	return fmt.Sprintf("write:%s", asyncWrite.IRODSFileHandle.GetEntry().Path)
 }
 
 func (asyncWrite *AsyncWrite) getFileBufferKey(startOffset int64) string {

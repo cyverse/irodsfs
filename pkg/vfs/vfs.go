@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
+	"github.com/cyverse/irodsfs/pkg/irodsapi"
 	"github.com/cyverse/irodsfs/pkg/utils"
 	log "github.com/sirupsen/logrus"
 )
@@ -16,21 +16,21 @@ type VFS struct {
 	PathMappings []PathMapping
 	// Entries is a map holding VFS Entries.
 	// Key is absolute path in VFS, value is entry object
-	Entries     map[string]*VFSEntry
-	IRODSClient *irodsfs_client.FileSystem
+	Entries            map[string]*VFSEntry
+	IRODSClientSession irodsapi.IRODSClientSession
 }
 
 // NewVFS creates a new VFS
-func NewVFS(irodsClient *irodsfs_client.FileSystem, mappings []PathMapping) (*VFS, error) {
+func NewVFS(session irodsapi.IRODSClientSession, mappings []PathMapping) (*VFS, error) {
 	logger := log.WithFields(log.Fields{
 		"package":  "vfs",
 		"function": "NewVFS",
 	})
 
 	vfs := &VFS{
-		PathMappings: mappings,
-		Entries:      map[string]*VFSEntry{},
-		IRODSClient:  irodsClient,
+		PathMappings:       mappings,
+		Entries:            map[string]*VFSEntry{},
+		IRODSClientSession: session,
 	}
 
 	err := vfs.Build()
@@ -46,7 +46,8 @@ func NewVFS(irodsClient *irodsfs_client.FileSystem, mappings []PathMapping) (*VF
 func (vfs *VFS) Build() error {
 	logger := log.WithFields(log.Fields{
 		"package":  "vfs",
-		"function": "VFS.Build",
+		"struct":   "VFS",
+		"function": "Build",
 	})
 
 	vfs.Entries = map[string]*VFSEntry{}
@@ -99,6 +100,7 @@ func (vfs *VFS) GetClosestEntry(vpath string) *VFSEntry {
 func (vfs *VFS) buildOne(mapping *PathMapping) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "vfs",
+		"struct":   "VFS",
 		"function": "buildOne",
 	})
 
@@ -123,7 +125,7 @@ func (vfs *VFS) buildOne(mapping *PathMapping) error {
 					ID:         0,
 					Name:       utils.GetFileName(parentDir),
 					Path:       parentDir,
-					Owner:      vfs.IRODSClient.Account.ClientUser,
+					Owner:      vfs.IRODSClientSession.GetAccount().ClientUser,
 					Size:       0,
 					CreateTime: now,
 					ModifyTime: now,
@@ -144,8 +146,8 @@ func (vfs *VFS) buildOne(mapping *PathMapping) error {
 	}
 
 	if mapping.ResourceType == PathMappingDirectory && mapping.CreateDir {
-		if !vfs.IRODSClient.ExistsDir(mapping.IRODSPath) {
-			err := vfs.IRODSClient.MakeDir(mapping.IRODSPath, true)
+		if !vfs.IRODSClientSession.ExistsDir(mapping.IRODSPath) {
+			err := vfs.IRODSClientSession.MakeDir(mapping.IRODSPath, true)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to make a dir - %s", mapping.IRODSPath)
 				// fall below
@@ -154,7 +156,7 @@ func (vfs *VFS) buildOne(mapping *PathMapping) error {
 	}
 
 	// add leaf
-	fsEntry, err := vfs.IRODSClient.Stat(mapping.IRODSPath)
+	irodsEntry, err := vfs.IRODSClientSession.Stat(mapping.IRODSPath)
 	if err != nil {
 		if mapping.IgnoreNotExist {
 			// ignore
@@ -165,7 +167,7 @@ func (vfs *VFS) buildOne(mapping *PathMapping) error {
 		return err
 	}
 
-	entry := NewVFSEntryFromIRODSFSEntry(mapping.MappingPath, fsEntry, mapping.ReadOnly)
+	entry := NewVFSEntryFromIRODSFSEntry(mapping.MappingPath, irodsEntry, mapping.ReadOnly)
 	vfs.Entries[mapping.MappingPath] = entry
 
 	// add to parent

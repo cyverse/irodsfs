@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
+	"github.com/cyverse/irodsfs/pkg/irodsapi"
 	"github.com/cyverse/irodsfs/pkg/utils"
 	log "github.com/sirupsen/logrus"
 )
@@ -41,30 +41,31 @@ type VFSEntry struct {
 
 	// Only one of fields below is filled according to the Type
 	VirtualDirEntry *VFSVirtualDirEntry
-	IRODSEntry      *irodsfs_client.Entry
+	IRODSEntry      *irodsapi.IRODSEntry
 }
 
-// NewVFSEntryFromIRODSFSEntry creates a new VFSEntry from IRODSFSEntry
-func NewVFSEntryFromIRODSFSEntry(path string, fsEntry *irodsfs_client.Entry, readonly bool) *VFSEntry {
+// NewVFSEntryFromIRODSFSEntry creates a new VFSEntry from IRODSEntry
+func NewVFSEntryFromIRODSFSEntry(path string, irodsEntry *irodsapi.IRODSEntry, readonly bool) *VFSEntry {
 	return &VFSEntry{
 		Type:            VFSIRODSEntryType,
 		Path:            path,
 		ReadOnly:        readonly,
 		VirtualDirEntry: nil,
-		IRODSEntry:      fsEntry,
+		IRODSEntry:      irodsEntry,
 	}
 }
 
 // ToString stringifies the object
 func (entry *VFSEntry) ToString() string {
-	return fmt.Sprintf("<VFSEntry %s %s %t %p %p>", entry.Type, entry.Path, &entry.ReadOnly, entry.VirtualDirEntry, entry.IRODSEntry)
+	return fmt.Sprintf("<VFSEntry %s %s %t %p %p>", entry.Type, entry.Path, entry.ReadOnly, entry.VirtualDirEntry, entry.IRODSEntry)
 }
 
 // GetIRODSPath returns relative path
 func (entry *VFSEntry) GetIRODSPath(vpath string) (string, error) {
 	logger := log.WithFields(log.Fields{
 		"package":  "vfs",
-		"function": "VFSEntry.GetIRODSPath",
+		"struct":   "VFSEntry",
+		"function": "GetIRODSPath",
 	})
 
 	if entry.Type != VFSIRODSEntryType {

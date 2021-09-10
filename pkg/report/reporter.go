@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
 	monitor_client "github.com/cyverse/irodsfs-monitor/client"
 	monitor_types "github.com/cyverse/irodsfs-monitor/types"
 	"github.com/cyverse/irodsfs/pkg/commons"
+	"github.com/cyverse/irodsfs/pkg/irodsapi"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -51,12 +51,14 @@ func NewMonitoringReporter(monitorURL string, ignoreError bool) *MonitoringRepor
 func (reporter *MonitoringReporter) ReportNewInstance(fsConfig *commons.Config) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "report",
-		"function": "MonitoringReporter.ReportNewInstance",
+		"struct":   "MonitoringReporter",
+		"function": "ReportNewInstance",
 	})
 
 	if reporter.MonitoringClient != nil {
 		instance := monitor_types.ReportInstance{
-			InstanceID:               fsConfig.InstanceID,
+			InstanceID: fsConfig.InstanceID,
+
 			Host:                     fsConfig.Host,
 			Port:                     fsConfig.Port,
 			Zone:                     fsConfig.Zone,
@@ -70,6 +72,9 @@ func (reporter *MonitoringReporter) ReportNewInstance(fsConfig *commons.Config) 
 			MetadataCacheTimeout:     fsConfig.MetadataCacheTimeout.String(),
 			MetadataCacheCleanupTime: fsConfig.MetadataCacheCleanupTime.String(),
 			FileBufferSizeMax:        fsConfig.FileBufferSizeMax,
+
+			ProxyHost: fsConfig.ProxyHost,
+			ProxyPort: fsConfig.ProxyPort,
 
 			CreationTime: time.Now().UTC(),
 		}
@@ -96,7 +101,8 @@ func (reporter *MonitoringReporter) ReportNewInstance(fsConfig *commons.Config) 
 func (reporter *MonitoringReporter) ReportInstanceTermination() error {
 	logger := log.WithFields(log.Fields{
 		"package":  "report",
-		"function": "MonitoringReporter.ReportInstanceTermination",
+		"struct":   "MonitoringReporter",
+		"function": "ReportInstanceTermination",
 	})
 
 	if !reporter.Failed {
@@ -118,12 +124,12 @@ func (reporter *MonitoringReporter) ReportInstanceTermination() error {
 	return nil
 }
 
-func (reporter *MonitoringReporter) makeFileTransferKey(path string, fileHandle *irodsfs_client.FileHandle) string {
-	return fmt.Sprintf("%s:%p", path, fileHandle)
+func (reporter *MonitoringReporter) makeFileTransferKey(path string, fileHandle irodsapi.IRODSFileHandle) string {
+	return fmt.Sprintf("%s:%s", path, fileHandle.GetID())
 }
 
 // ReportNewFileTransferStart reports a new file transfer start
-func (reporter *MonitoringReporter) ReportNewFileTransferStart(path string, fileHandle *irodsfs_client.FileHandle, size int64) {
+func (reporter *MonitoringReporter) ReportNewFileTransferStart(path string, fileHandle irodsapi.IRODSFileHandle, size int64) {
 	if !reporter.Failed {
 		if reporter.MonitoringClient != nil {
 			if len(reporter.InstanceID) > 0 {
@@ -132,7 +138,7 @@ func (reporter *MonitoringReporter) ReportNewFileTransferStart(path string, file
 
 					FilePath:     path,
 					FileSize:     size,
-					FileOpenMode: string(fileHandle.OpenMode),
+					FileOpenMode: string(fileHandle.GetOpenMode()),
 
 					TransferBlocks:     make([]monitor_types.FileBlock, 0, MaxTransferBlockLen),
 					TransferSize:       0,
@@ -153,10 +159,11 @@ func (reporter *MonitoringReporter) ReportNewFileTransferStart(path string, file
 }
 
 // ReportFileTransferDone reports that the file transfer is done
-func (reporter *MonitoringReporter) ReportFileTransferDone(path string, fileHandle *irodsfs_client.FileHandle) error {
+func (reporter *MonitoringReporter) ReportFileTransferDone(path string, fileHandle irodsapi.IRODSFileHandle) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "report",
-		"function": "MonitoringReporter.ReportFileTransferDone",
+		"struct":   "MonitoringReporter",
+		"function": "ReportFileTransferDone",
 	})
 
 	if !reporter.Failed {
@@ -185,7 +192,7 @@ func (reporter *MonitoringReporter) ReportFileTransferDone(path string, fileHand
 }
 
 // ReportFileTransfer reports a new file transfer
-func (reporter *MonitoringReporter) ReportFileTransfer(path string, fileHandle *irodsfs_client.FileHandle, offset int64, length int64) {
+func (reporter *MonitoringReporter) ReportFileTransfer(path string, fileHandle irodsapi.IRODSFileHandle, offset int64, length int64) {
 	if !reporter.Failed {
 		if reporter.MonitoringClient != nil {
 			key := reporter.makeFileTransferKey(path, fileHandle)

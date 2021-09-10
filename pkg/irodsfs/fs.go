@@ -9,6 +9,7 @@ import (
 	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
 	irodsfs_clienttype "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/irodsfs/pkg/commons"
+	"github.com/cyverse/irodsfs/pkg/irodsapi"
 	"github.com/cyverse/irodsfs/pkg/report"
 	"github.com/cyverse/irodsfs/pkg/vfs"
 	log "github.com/sirupsen/logrus"
@@ -39,13 +40,14 @@ func GetFuseMountOptions(config *commons.Config) []fuse.MountOption {
 
 // IRODSFS is a file system object
 type IRODSFS struct {
-	Config          *commons.Config
-	FuseConnection  *fuse.Conn
-	Fuse            *fusefs.Server
-	VFS             *vfs.VFS
-	FileMetaUpdater *FileMetaUpdater
-	IRODSClient     *irodsfs_client.FileSystem
-	FileBuffer      *FileBuffer
+	Config             *commons.Config
+	FuseConnection     *fuse.Conn
+	Fuse               *fusefs.Server
+	VFS                *vfs.VFS
+	FileMetaUpdater    *FileMetaUpdater
+	IRODSClient        irodsapi.IRODSClient
+	IRODSClientSession irodsapi.IRODSClientSession
+	FileBuffer         *FileBuffer
 
 	UID uint32
 	GID uint32
@@ -89,13 +91,22 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		true,
 	)
 
-	fsclient, err := irodsfs_client.NewFileSystem(account, fsconfig)
-	if err != nil {
-		logger.WithError(err).Error("failed to create IRODS FileSystem Client")
-		return nil, fmt.Errorf("failed to create IRODS FileSystem Client - %v", err)
+	var irodsClient irodsapi.IRODSClient = nil
+	var irodsClientSession irodsapi.IRODSClientSession = nil
+	if len(config.ProxyHost) > 0 {
+		// use proxy driver
+		return nil, fmt.Errorf("Not implemented yet")
+	} else {
+		// use go-irodsclient driver
+		irodsClient = irodsapi.NewGoIRODSClientDriver(fsconfig)
+		irodsClientSession, err = irodsClient.NewClientSession(account)
+		if err != nil {
+			logger.WithError(err).Error("failed to create a new iRODS Client Session")
+			return nil, fmt.Errorf("failed to create a new iRODS Client Session - %v", err)
+		}
 	}
 
-	vfs, err := vfs.NewVFS(fsclient, config.PathMappings)
+	vfs, err := vfs.NewVFS(irodsClientSession, config.PathMappings)
 	if err != nil {
 		logger.WithError(err).Error("failed to create VFS")
 		return nil, fmt.Errorf("failed to create VFS - %v", err)
@@ -110,12 +121,13 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	}
 
 	return &IRODSFS{
-		Config:          config,
-		Fuse:            nil,
-		VFS:             vfs,
-		FileMetaUpdater: fileMetaUpdater,
-		IRODSClient:     fsclient,
-		FileBuffer:      fileBuffer,
+		Config:             config,
+		Fuse:               nil,
+		VFS:                vfs,
+		FileMetaUpdater:    fileMetaUpdater,
+		IRODSClient:        irodsClient,
+		IRODSClientSession: irodsClientSession,
+		FileBuffer:         fileBuffer,
 
 		UID: uint32(config.UID),
 		GID: uint32(config.GID),
@@ -129,6 +141,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 func (fs *IRODSFS) ConnectToFuse() error {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
+		"struct":   "IRODSFS",
 		"function": "ConnectToFuse",
 	})
 
@@ -155,6 +168,7 @@ func (fs *IRODSFS) ConnectToFuse() error {
 func (fs *IRODSFS) StartFuse() error {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
+		"struct":   "IRODSFS",
 		"function": "StartFuse",
 	})
 
@@ -184,6 +198,7 @@ func (fs *IRODSFS) Destroy() {
 
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
+		"struct":   "IRODSFS",
 		"function": "Destroy",
 	})
 
@@ -205,6 +220,11 @@ func (fs *IRODSFS) Destroy() {
 	fuse.Unmount(fs.Config.MountPath)
 
 	logger.Info("Releasing resources")
+	if fs.IRODSClientSession != nil {
+		fs.IRODSClientSession.Release()
+		fs.IRODSClientSession = nil
+	}
+
 	if fs.IRODSClient != nil {
 		fs.IRODSClient.Release()
 		fs.IRODSClient = nil
@@ -224,6 +244,7 @@ func (fs *IRODSFS) Root() (fusefs.Node, error) {
 
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
+		"struct":   "IRODSFS",
 		"function": "Root",
 	})
 
@@ -240,7 +261,7 @@ func (fs *IRODSFS) Root() (fusefs.Node, error) {
 			Path:    "/",
 		}, nil
 	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
-		if vfsEntry.IRODSEntry.Type != irodsfs_client.DirectoryEntry {
+		if vfsEntry.IRODSEntry.Type != irodsapi.DirectoryEntry {
 			logger.Errorf("failed to mount a data object as a root")
 			return nil, syscall.EREMOTEIO
 		}

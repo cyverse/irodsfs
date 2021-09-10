@@ -10,8 +10,7 @@ import (
 
 	fuse "bazil.org/fuse"
 	fusefs "bazil.org/fuse/fs"
-	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
-	irodsfs_clienttype "github.com/cyverse/go-irodsclient/irods/types"
+	"github.com/cyverse/irodsfs/pkg/irodsapi"
 	"github.com/cyverse/irodsfs/pkg/utils"
 	"github.com/cyverse/irodsfs/pkg/vfs"
 	log "github.com/sirupsen/logrus"
@@ -24,13 +23,13 @@ type Dir struct {
 	Path    string
 }
 
-func mapDirACL(vfsEntry *vfs.VFSEntry, dir *Dir, fsEntry *irodsfs_client.Entry) os.FileMode {
+func mapDirACL(vfsEntry *vfs.VFSEntry, dir *Dir, irodsEntry *irodsapi.IRODSEntry) os.FileMode {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"function": "mapDirACL",
 	})
 
-	if fsEntry.Owner == dir.FS.Config.ClientUser {
+	if irodsEntry.Owner == dir.FS.Config.ClientUser {
 		// mine
 		if vfsEntry.ReadOnly {
 			return 0o400
@@ -39,36 +38,36 @@ func mapDirACL(vfsEntry *vfs.VFSEntry, dir *Dir, fsEntry *irodsfs_client.Entry) 
 		return 0o700
 	}
 
-	logger.Infof("Checking ACL information of the Entry for %s and user %s", fsEntry.Path, dir.FS.Config.ClientUser)
+	logger.Infof("Checking ACL information of the Entry for %s and user %s", irodsEntry.Path, dir.FS.Config.ClientUser)
 
-	accesses, err := dir.FS.IRODSClient.ListDirACLsWithGroupUsers(fsEntry.Path)
+	accesses, err := dir.FS.IRODSClientSession.ListDirACLsWithGroupUsers(irodsEntry.Path)
 	if err != nil {
-		logger.Errorf("failed to get ACL information of the Entry for %s", fsEntry.Path)
+		logger.Errorf("failed to get ACL information of the Entry for %s", irodsEntry.Path)
 	}
 
 	for _, access := range accesses {
 		if access.UserName == dir.FS.Config.ClientUser {
 			// found
 			switch access.AccessLevel {
-			case irodsfs_clienttype.IRODSAccessLevelOwner:
+			case irodsapi.IRODSAccessLevelOwner:
 				if vfsEntry.ReadOnly {
 					return 0o400
 				}
 				return 0o700
-			case irodsfs_clienttype.IRODSAccessLevelWrite:
+			case irodsapi.IRODSAccessLevelWrite:
 				if vfsEntry.ReadOnly {
 					return 0o400
 				}
 				return 0o600
-			case irodsfs_clienttype.IRODSAccessLevelRead:
+			case irodsapi.IRODSAccessLevelRead:
 				return 0o400
-			case irodsfs_clienttype.IRODSAccessLevelNone:
+			case irodsapi.IRODSAccessLevelNone:
 				return 0o000
 			}
 		}
 	}
 
-	logger.Errorf("failed to find ACL information of the Entry for %s and user %s", fsEntry.Path, dir.FS.Config.ClientUser)
+	logger.Errorf("failed to find ACL information of the Entry for %s and user %s", irodsEntry.Path, dir.FS.Config.ClientUser)
 
 	// others - no permission
 	return 0o000
@@ -82,7 +81,8 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
-		"function": "Dir.Attr",
+		"struct":   "Dir",
+		"function": "Attr",
 	})
 
 	logger.Infof("Calling Attr - %s", dir.Path)
@@ -114,7 +114,7 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 		}
 		return syscall.ENOENT
 	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
-		if vfsEntry.IRODSEntry.Type != irodsfs_client.DirectoryEntry {
+		if vfsEntry.IRODSEntry.Type != irodsapi.DirectoryEntry {
 			logger.Errorf("failed to get dir attribute from a data object")
 			return syscall.EREMOTEIO
 		}
@@ -125,9 +125,9 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 			return syscall.EREMOTEIO
 		}
 
-		entry, err := dir.FS.IRODSClient.Stat(irodsPath)
+		irodsEntry, err := dir.FS.IRODSClientSession.Stat(irodsPath)
 		if err != nil {
-			if irodsfs_clienttype.IsFileNotFoundError(err) {
+			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
 				return syscall.ENOENT
 			}
@@ -136,19 +136,19 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 			return syscall.EREMOTEIO
 		}
 
-		attr.Inode = uint64(entry.ID)
+		attr.Inode = uint64(irodsEntry.ID)
 		attr.Uid = dir.FS.UID
 		attr.Gid = dir.FS.GID
-		attr.Ctime = entry.CreateTime
-		attr.Mtime = entry.ModifyTime
-		attr.Atime = entry.ModifyTime
+		attr.Ctime = irodsEntry.CreateTime
+		attr.Mtime = irodsEntry.ModifyTime
+		attr.Atime = irodsEntry.ModifyTime
 		attr.Size = 0
-		attr.Mode = os.ModeDir | mapDirACL(vfsEntry, dir, entry)
+		attr.Mode = os.ModeDir | mapDirACL(vfsEntry, dir, irodsEntry)
 		return nil
-	} else {
-		logger.Errorf("unknown VFS Entry type : %s", vfsEntry.Type)
-		return syscall.EREMOTEIO
 	}
+
+	logger.Errorf("unknown VFS Entry type : %s", vfsEntry.Type)
+	return syscall.EREMOTEIO
 }
 
 // Lookup returns a node for the path
@@ -159,7 +159,8 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
-		"function": "Dir.Lookup",
+		"struct":   "Dir",
+		"function": "Lookup",
 	})
 
 	targetPath := utils.JoinPath(dir.Path, name)
@@ -195,9 +196,9 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 			return nil, syscall.EREMOTEIO
 		}
 
-		entry, err := dir.FS.IRODSClient.Stat(irodsPath)
+		irodsEntry, err := dir.FS.IRODSClientSession.Stat(irodsPath)
 		if err != nil {
-			if irodsfs_clienttype.IsFileNotFoundError(err) {
+			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
 				return nil, syscall.ENOENT
 			}
@@ -206,22 +207,22 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 			return nil, syscall.EREMOTEIO
 		}
 
-		switch entry.Type {
-		case irodsfs_client.FileEntry:
+		switch irodsEntry.Type {
+		case irodsapi.FileEntry:
 			return &File{
 				FS:      dir.FS,
-				InodeID: entry.ID,
+				InodeID: irodsEntry.ID,
 				Path:    targetPath,
-				Entry:   vfs.NewVFSEntryFromIRODSFSEntry(targetPath, entry, vfsEntry.ReadOnly),
+				Entry:   vfs.NewVFSEntryFromIRODSFSEntry(targetPath, irodsEntry, vfsEntry.ReadOnly),
 			}, nil
-		case irodsfs_client.DirectoryEntry:
+		case irodsapi.DirectoryEntry:
 			return &Dir{
 				FS:      dir.FS,
-				InodeID: entry.ID,
+				InodeID: irodsEntry.ID,
 				Path:    targetPath,
 			}, nil
 		default:
-			logger.Errorf("unknown entry type - %s", entry.Type)
+			logger.Errorf("unknown entry type - %s", irodsEntry.Type)
 			return nil, syscall.EREMOTEIO
 		}
 	} else {
@@ -238,7 +239,8 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
-		"function": "Dir.ReadDirAll",
+		"struct":   "Dir",
+		"function": "ReadDirAll",
 	})
 
 	logger.Infof("Calling ReadDirAll - %s", dir.Path)
@@ -272,9 +274,9 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 					entryType := fuse.DT_File
 
 					switch entry.IRODSEntry.Type {
-					case irodsfs_client.FileEntry:
+					case irodsapi.FileEntry:
 						entryType = fuse.DT_File
-					case irodsfs_client.DirectoryEntry:
+					case irodsapi.DirectoryEntry:
 						entryType = fuse.DT_Dir
 					default:
 						logger.Errorf("unknown entry type - %s", entry.Type)
@@ -304,7 +306,7 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 			return nil, syscall.EREMOTEIO
 		}
 
-		entries, err := dir.FS.IRODSClient.List(irodsPath)
+		irodsEntries, err := dir.FS.IRODSClientSession.List(irodsPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to list - %s", irodsPath)
 			return nil, syscall.EREMOTEIO
@@ -312,27 +314,27 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 
 		dirEntries := []fuse.Dirent{}
 
-		for _, entry := range entries {
+		for _, irodsEntry := range irodsEntries {
 			entryType := fuse.DT_File
 
-			switch entry.Type {
-			case irodsfs_client.FileEntry:
+			switch irodsEntry.Type {
+			case irodsapi.FileEntry:
 				entryType = fuse.DT_File
-			case irodsfs_client.DirectoryEntry:
+			case irodsapi.DirectoryEntry:
 				entryType = fuse.DT_Dir
 			default:
-				logger.Errorf("unknown entry type - %s", entry.Type)
+				logger.Errorf("unknown entry type - %s", irodsEntry.Type)
 				return nil, syscall.EREMOTEIO
 			}
 
 			dirEntry := fuse.Dirent{
-				Inode: uint64(entry.ID),
+				Inode: uint64(irodsEntry.ID),
 				Type:  entryType,
-				Name:  entry.Name,
+				Name:  irodsEntry.Name,
 			}
 
 			dirEntries = append(dirEntries, dirEntry)
-			logger.Infof("Entry - %s %s", irodsPath, entry.Name)
+			logger.Infof("Entry - %s %s", irodsPath, irodsEntry.Name)
 		}
 
 		return dirEntries, nil
@@ -350,7 +352,8 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
-		"function": "Dir.Remove",
+		"struct":   "Dir",
+		"function": "Remove",
 	})
 
 	targetPath := utils.JoinPath(dir.Path, req.Name)
@@ -396,9 +399,9 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 			return syscall.EREMOTEIO
 		}
 
-		entry, err := dir.FS.IRODSClient.Stat(irodsPath)
+		irodsEntry, err := dir.FS.IRODSClientSession.Stat(irodsPath)
 		if err != nil {
-			if irodsfs_clienttype.IsFileNotFoundError(err) {
+			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
 				return syscall.ENOENT
 			}
@@ -407,23 +410,23 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 			return syscall.EREMOTEIO
 		}
 
-		switch entry.Type {
-		case irodsfs_client.FileEntry:
-			err = dir.FS.IRODSClient.RemoveFile(irodsPath, true)
+		switch irodsEntry.Type {
+		case irodsapi.FileEntry:
+			err = dir.FS.IRODSClientSession.RemoveFile(irodsPath, true)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to remove file - %s", irodsPath)
 				return syscall.EREMOTEIO
 			}
 			return nil
-		case irodsfs_client.DirectoryEntry:
-			err = dir.FS.IRODSClient.RemoveDir(irodsPath, false, true)
+		case irodsapi.DirectoryEntry:
+			err = dir.FS.IRODSClientSession.RemoveDir(irodsPath, false, true)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to remove dir - %s", irodsPath)
 				return syscall.EREMOTEIO
 			}
 			return nil
 		default:
-			logger.Errorf("unknown entry type - %s", entry.Type)
+			logger.Errorf("unknown entry type - %s", irodsEntry.Type)
 			return syscall.EREMOTEIO
 		}
 	} else {
@@ -440,7 +443,8 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
-		"function": "Dir.Mkdir",
+		"struct":   "Dir",
+		"function": "Mkdir",
 	})
 
 	targetPath := utils.JoinPath(dir.Path, req.Name)
@@ -485,13 +489,13 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 			return nil, syscall.EREMOTEIO
 		}
 
-		err = dir.FS.IRODSClient.MakeDir(irodsPath, false)
+		err = dir.FS.IRODSClientSession.MakeDir(irodsPath, false)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to make a dir - %s", irodsPath)
 			return nil, syscall.EREMOTEIO
 		}
 
-		entry, err := dir.FS.IRODSClient.Stat(irodsPath)
+		entry, err := dir.FS.IRODSClientSession.Stat(irodsPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to stat - %s", irodsPath)
 			return nil, syscall.EREMOTEIO
@@ -516,7 +520,8 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
-		"function": "Dir.Rename",
+		"struct":   "Dir",
+		"function": "Rename",
 	})
 
 	targetSrcPath := utils.JoinPath(dir.Path, req.OldName)
@@ -597,9 +602,9 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 			return syscall.EREMOTEIO
 		}
 
-		entry, err := dir.FS.IRODSClient.Stat(irodsSrcPath)
+		irodsEntry, err := dir.FS.IRODSClientSession.Stat(irodsSrcPath)
 		if err != nil {
-			if irodsfs_clienttype.IsFileNotFoundError(err) {
+			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsSrcPath)
 				return syscall.ENOENT
 			}
@@ -608,23 +613,23 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 			return syscall.EREMOTEIO
 		}
 
-		switch entry.Type {
-		case irodsfs_client.DirectoryEntry:
-			err = dir.FS.IRODSClient.RenameDirToDir(irodsSrcPath, irodsDestPath)
+		switch irodsEntry.Type {
+		case irodsapi.DirectoryEntry:
+			err = dir.FS.IRODSClientSession.RenameDirToDir(irodsSrcPath, irodsDestPath)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to rename dir - %s to %s", irodsSrcPath, irodsDestPath)
 				return syscall.EREMOTEIO
 			}
 
 			// report update of path
-			if entry.ID > 0 {
-				dir.FS.FileMetaUpdater.Add(entry.ID, targetDestPath)
+			if irodsEntry.ID > 0 {
+				dir.FS.FileMetaUpdater.Add(irodsEntry.ID, targetDestPath)
 			}
 			return nil
-		case irodsfs_client.FileEntry:
-			destEntry, err := dir.FS.IRODSClient.Stat(irodsDestPath)
+		case irodsapi.FileEntry:
+			destEntry, err := dir.FS.IRODSClientSession.Stat(irodsDestPath)
 			if err != nil {
-				if !irodsfs_clienttype.IsFileNotFoundError(err) {
+				if !irodsapi.IsFileNotFoundError(err) {
 					logger.WithError(err).Errorf("failed to stat - %s", irodsDestPath)
 					return syscall.EREMOTEIO
 				}
@@ -632,26 +637,26 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 
 			if destEntry.ID > 0 {
 				// delete first
-				err = dir.FS.IRODSClient.RemoveFile(irodsDestPath, true)
+				err = dir.FS.IRODSClientSession.RemoveFile(irodsDestPath, true)
 				if err != nil {
 					logger.WithError(err).Errorf("failed to delete file - %s", irodsDestPath)
 					return syscall.EREMOTEIO
 				}
 			}
 
-			err = dir.FS.IRODSClient.RenameFileToFile(irodsSrcPath, irodsDestPath)
+			err = dir.FS.IRODSClientSession.RenameFileToFile(irodsSrcPath, irodsDestPath)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to rename file - %s to %s", irodsSrcPath, irodsDestPath)
 				return syscall.EREMOTEIO
 			}
 
 			// report update of path
-			if entry.ID > 0 {
-				dir.FS.FileMetaUpdater.Add(entry.ID, targetDestPath)
+			if irodsEntry.ID > 0 {
+				dir.FS.FileMetaUpdater.Add(irodsEntry.ID, targetDestPath)
 			}
 			return nil
 		default:
-			logger.Errorf("unknown entry type - %s", entry.Type)
+			logger.Errorf("unknown entry type - %s", irodsEntry.Type)
 			return syscall.EREMOTEIO
 		}
 	} else {
@@ -668,7 +673,8 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
-		"function": "Dir.Create",
+		"struct":   "Dir",
+		"function": "Create",
 	})
 
 	targetPath := utils.JoinPath(dir.Path, req.Name)
@@ -682,21 +688,21 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 		targetPath = utils.JoinPath(dir.Path, req.Name)
 	}
 
-	openMode := string(irodsfs_clienttype.FileOpenModeReadOnly)
+	openMode := string(irodsapi.FileOpenModeReadOnly)
 
 	if req.Flags.IsWriteOnly() {
-		openMode = string(irodsfs_clienttype.FileOpenModeWriteOnly)
+		openMode = string(irodsapi.FileOpenModeWriteOnly)
 
 		if req.Flags&fuse.OpenAppend == fuse.OpenAppend {
 			// append
-			openMode = string(irodsfs_clienttype.FileOpenModeAppend)
+			openMode = string(irodsapi.FileOpenModeAppend)
 		} else if req.Flags&fuse.OpenTruncate == fuse.OpenTruncate {
 			// truncate
-			openMode = string(irodsfs_clienttype.FileOpenModeWriteTruncate)
+			openMode = string(irodsapi.FileOpenModeWriteTruncate)
 		}
 		resp.Flags |= fuse.OpenDirectIO
 	} else if req.Flags.IsReadWrite() {
-		openMode = string(irodsfs_clienttype.FileOpenModeReadWrite)
+		openMode = string(irodsapi.FileOpenModeReadWrite)
 	} else {
 		logger.Errorf("unknown file open mode - %s", req.Flags.String())
 		return nil, nil, syscall.EACCES
@@ -734,7 +740,7 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 			return nil, nil, syscall.EREMOTEIO
 		}
 
-		handle, err := dir.FS.IRODSClient.CreateFile(irodsPath, "")
+		handle, err := dir.FS.IRODSClientSession.CreateFile(irodsPath, "")
 		if err != nil {
 			logger.WithError(err).Errorf("failed to create a file - %s", irodsPath)
 			return nil, nil, syscall.EREMOTEIO
@@ -756,9 +762,9 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 
 		// reopen - to open file with openmode
 		logger.Infof("Calling Open - %s, mode(%s)", irodsPath, openMode)
-		handle, err = file.FS.IRODSClient.OpenFile(irodsPath, "", openMode)
+		handle, err = file.FS.IRODSClientSession.OpenFile(irodsPath, "", openMode)
 		if err != nil {
-			if irodsfs_clienttype.IsFileNotFoundError(err) {
+			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
 				return nil, nil, syscall.ENOENT
 			}
