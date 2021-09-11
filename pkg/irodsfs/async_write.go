@@ -162,26 +162,15 @@ func (asyncWrite *AsyncWrite) backgroundWriteTask() {
 
 							asyncWrite.FileHandleLock.Lock()
 
-							if asyncWrite.IRODSFileHandle.GetOffset() != offset {
-								_, err := asyncWrite.IRODSFileHandle.Seek(offset, irodsapi.SeekSet)
-								if err != nil {
-									logger.WithError(err).Errorf("failed to seek - %s, %d", filePath, offset)
-									asyncWrite.addAsyncError(err)
-									hasError = true
-								}
+							err := asyncWrite.IRODSFileHandle.WriteAt(offset, bufferData)
+							if err != nil {
+								logger.WithError(err).Errorf("failed to write data - %s, %d", filePath, len(bufferData))
+								asyncWrite.addAsyncError(err)
+								hasError = true
 							}
 
-							if !hasError {
-								err := asyncWrite.IRODSFileHandle.Write(bufferData)
-								if err != nil {
-									logger.WithError(err).Errorf("failed to write data - %s, %d", filePath, len(bufferData))
-									asyncWrite.addAsyncError(err)
-									hasError = true
-								}
-
-								// Report
-								asyncWrite.FS.MonitoringReporter.ReportFileTransfer(asyncWrite.IRODSFileHandle.GetEntry().Path, asyncWrite.IRODSFileHandle, offset, int64(len(bufferData)))
-							}
+							// Report
+							asyncWrite.FS.MonitoringReporter.ReportFileTransfer(asyncWrite.IRODSFileHandle.GetEntry().Path, asyncWrite.IRODSFileHandle, offset, int64(len(bufferData)))
 
 							asyncWrite.FileHandleLock.Unlock()
 						}

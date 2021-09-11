@@ -16,21 +16,21 @@ type VFS struct {
 	PathMappings []PathMapping
 	// Entries is a map holding VFS Entries.
 	// Key is absolute path in VFS, value is entry object
-	Entries            map[string]*VFSEntry
-	IRODSClientSession irodsapi.IRODSClientSession
+	Entries     map[string]*VFSEntry
+	IRODSClient irodsapi.IRODSClient
 }
 
 // NewVFS creates a new VFS
-func NewVFS(session irodsapi.IRODSClientSession, mappings []PathMapping) (*VFS, error) {
+func NewVFS(client irodsapi.IRODSClient, mappings []PathMapping) (*VFS, error) {
 	logger := log.WithFields(log.Fields{
 		"package":  "vfs",
 		"function": "NewVFS",
 	})
 
 	vfs := &VFS{
-		PathMappings:       mappings,
-		Entries:            map[string]*VFSEntry{},
-		IRODSClientSession: session,
+		PathMappings: mappings,
+		Entries:      map[string]*VFSEntry{},
+		IRODSClient:  client,
 	}
 
 	err := vfs.Build()
@@ -125,7 +125,7 @@ func (vfs *VFS) buildOne(mapping *PathMapping) error {
 					ID:         0,
 					Name:       utils.GetFileName(parentDir),
 					Path:       parentDir,
-					Owner:      vfs.IRODSClientSession.GetAccount().ClientUser,
+					Owner:      vfs.IRODSClient.GetAccount().ClientUser,
 					Size:       0,
 					CreateTime: now,
 					ModifyTime: now,
@@ -146,8 +146,8 @@ func (vfs *VFS) buildOne(mapping *PathMapping) error {
 	}
 
 	if mapping.ResourceType == PathMappingDirectory && mapping.CreateDir {
-		if !vfs.IRODSClientSession.ExistsDir(mapping.IRODSPath) {
-			err := vfs.IRODSClientSession.MakeDir(mapping.IRODSPath, true)
+		if !vfs.IRODSClient.ExistsDir(mapping.IRODSPath) {
+			err := vfs.IRODSClient.MakeDir(mapping.IRODSPath, true)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to make a dir - %s", mapping.IRODSPath)
 				// fall below
@@ -156,7 +156,7 @@ func (vfs *VFS) buildOne(mapping *PathMapping) error {
 	}
 
 	// add leaf
-	irodsEntry, err := vfs.IRODSClientSession.Stat(mapping.IRODSPath)
+	irodsEntry, err := vfs.IRODSClient.Stat(mapping.IRODSPath)
 	if err != nil {
 		if mapping.IgnoreNotExist {
 			// ignore

@@ -40,7 +40,7 @@ func mapDirACL(vfsEntry *vfs.VFSEntry, dir *Dir, irodsEntry *irodsapi.IRODSEntry
 
 	logger.Infof("Checking ACL information of the Entry for %s and user %s", irodsEntry.Path, dir.FS.Config.ClientUser)
 
-	accesses, err := dir.FS.IRODSClientSession.ListDirACLsWithGroupUsers(irodsEntry.Path)
+	accesses, err := dir.FS.IRODSClient.ListDirACLsWithGroupUsers(irodsEntry.Path)
 	if err != nil {
 		logger.Errorf("failed to get ACL information of the Entry for %s", irodsEntry.Path)
 	}
@@ -125,7 +125,7 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 			return syscall.EREMOTEIO
 		}
 
-		irodsEntry, err := dir.FS.IRODSClientSession.Stat(irodsPath)
+		irodsEntry, err := dir.FS.IRODSClient.Stat(irodsPath)
 		if err != nil {
 			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
@@ -196,7 +196,7 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 			return nil, syscall.EREMOTEIO
 		}
 
-		irodsEntry, err := dir.FS.IRODSClientSession.Stat(irodsPath)
+		irodsEntry, err := dir.FS.IRODSClient.Stat(irodsPath)
 		if err != nil {
 			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
@@ -306,7 +306,7 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 			return nil, syscall.EREMOTEIO
 		}
 
-		irodsEntries, err := dir.FS.IRODSClientSession.List(irodsPath)
+		irodsEntries, err := dir.FS.IRODSClient.List(irodsPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to list - %s", irodsPath)
 			return nil, syscall.EREMOTEIO
@@ -399,7 +399,7 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 			return syscall.EREMOTEIO
 		}
 
-		irodsEntry, err := dir.FS.IRODSClientSession.Stat(irodsPath)
+		irodsEntry, err := dir.FS.IRODSClient.Stat(irodsPath)
 		if err != nil {
 			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
@@ -412,14 +412,14 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 
 		switch irodsEntry.Type {
 		case irodsapi.FileEntry:
-			err = dir.FS.IRODSClientSession.RemoveFile(irodsPath, true)
+			err = dir.FS.IRODSClient.RemoveFile(irodsPath, true)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to remove file - %s", irodsPath)
 				return syscall.EREMOTEIO
 			}
 			return nil
 		case irodsapi.DirectoryEntry:
-			err = dir.FS.IRODSClientSession.RemoveDir(irodsPath, false, true)
+			err = dir.FS.IRODSClient.RemoveDir(irodsPath, false, true)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to remove dir - %s", irodsPath)
 				return syscall.EREMOTEIO
@@ -489,13 +489,13 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 			return nil, syscall.EREMOTEIO
 		}
 
-		err = dir.FS.IRODSClientSession.MakeDir(irodsPath, false)
+		err = dir.FS.IRODSClient.MakeDir(irodsPath, false)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to make a dir - %s", irodsPath)
 			return nil, syscall.EREMOTEIO
 		}
 
-		entry, err := dir.FS.IRODSClientSession.Stat(irodsPath)
+		entry, err := dir.FS.IRODSClient.Stat(irodsPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to stat - %s", irodsPath)
 			return nil, syscall.EREMOTEIO
@@ -602,7 +602,7 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 			return syscall.EREMOTEIO
 		}
 
-		irodsEntry, err := dir.FS.IRODSClientSession.Stat(irodsSrcPath)
+		irodsEntry, err := dir.FS.IRODSClient.Stat(irodsSrcPath)
 		if err != nil {
 			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsSrcPath)
@@ -615,7 +615,7 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 
 		switch irodsEntry.Type {
 		case irodsapi.DirectoryEntry:
-			err = dir.FS.IRODSClientSession.RenameDirToDir(irodsSrcPath, irodsDestPath)
+			err = dir.FS.IRODSClient.RenameDirToDir(irodsSrcPath, irodsDestPath)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to rename dir - %s to %s", irodsSrcPath, irodsDestPath)
 				return syscall.EREMOTEIO
@@ -627,7 +627,7 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 			}
 			return nil
 		case irodsapi.FileEntry:
-			destEntry, err := dir.FS.IRODSClientSession.Stat(irodsDestPath)
+			destEntry, err := dir.FS.IRODSClient.Stat(irodsDestPath)
 			if err != nil {
 				if !irodsapi.IsFileNotFoundError(err) {
 					logger.WithError(err).Errorf("failed to stat - %s", irodsDestPath)
@@ -637,14 +637,14 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 
 			if destEntry.ID > 0 {
 				// delete first
-				err = dir.FS.IRODSClientSession.RemoveFile(irodsDestPath, true)
+				err = dir.FS.IRODSClient.RemoveFile(irodsDestPath, true)
 				if err != nil {
 					logger.WithError(err).Errorf("failed to delete file - %s", irodsDestPath)
 					return syscall.EREMOTEIO
 				}
 			}
 
-			err = dir.FS.IRODSClientSession.RenameFileToFile(irodsSrcPath, irodsDestPath)
+			err = dir.FS.IRODSClient.RenameFileToFile(irodsSrcPath, irodsDestPath)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to rename file - %s to %s", irodsSrcPath, irodsDestPath)
 				return syscall.EREMOTEIO
@@ -740,7 +740,7 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 			return nil, nil, syscall.EREMOTEIO
 		}
 
-		handle, err := dir.FS.IRODSClientSession.CreateFile(irodsPath, "")
+		handle, err := dir.FS.IRODSClient.CreateFile(irodsPath, "")
 		if err != nil {
 			logger.WithError(err).Errorf("failed to create a file - %s", irodsPath)
 			return nil, nil, syscall.EREMOTEIO
@@ -762,7 +762,7 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 
 		// reopen - to open file with openmode
 		logger.Infof("Calling Open - %s, mode(%s)", irodsPath, openMode)
-		handle, err = file.FS.IRODSClientSession.OpenFile(irodsPath, "", openMode)
+		handle, err = file.FS.IRODSClient.OpenFile(irodsPath, "", openMode)
 		if err != nil {
 			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)

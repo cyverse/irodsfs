@@ -58,7 +58,7 @@ func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, irodsEntry *irodsapi.IRODSEn
 
 	logger.Infof("Checking ACL information of the Entry for %s and user %s", irodsEntry.Path, file.FS.Config.ClientUser)
 
-	accesses, err := file.FS.IRODSClientSession.ListFileACLsWithGroupUsers(irodsEntry.Path)
+	accesses, err := file.FS.IRODSClient.ListFileACLsWithGroupUsers(irodsEntry.Path)
 	if err != nil {
 		logger.Errorf("failed to get ACL information of the Entry for %s", irodsEntry.Path)
 	}
@@ -128,7 +128,7 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 		}
 
 		// redo to get fresh info
-		irodsEntry, err := file.FS.IRODSClientSession.Stat(irodsPath)
+		irodsEntry, err := file.FS.IRODSClient.Stat(irodsPath)
 		if err != nil {
 			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
@@ -221,7 +221,7 @@ func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *
 		}
 
 		// redo to get fresh info
-		_, err = file.FS.IRODSClientSession.Stat(irodsPath)
+		_, err = file.FS.IRODSClient.Stat(irodsPath)
 		if err != nil {
 			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
@@ -232,7 +232,7 @@ func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *
 			return syscall.EREMOTEIO
 		}
 
-		err = file.FS.IRODSClientSession.TruncateFile(irodsPath, int64(req.Size))
+		err = file.FS.IRODSClient.TruncateFile(irodsPath, int64(req.Size))
 		if err != nil {
 			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
@@ -317,7 +317,7 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 			return nil, syscall.EREMOTEIO
 		}
 
-		handle, err := file.FS.IRODSClientSession.OpenFile(irodsPath, "", openMode)
+		handle, err := file.FS.IRODSClient.OpenFile(irodsPath, "", openMode)
 		if err != nil {
 			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
@@ -405,15 +405,7 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 	handle.FileHandleLock.Lock()
 	defer handle.FileHandleLock.Unlock()
 
-	if handle.FileHandle.GetOffset() != req.Offset {
-		_, err := handle.FileHandle.Seek(req.Offset, irodsapi.SeekSet)
-		if err != nil {
-			logger.WithError(err).Errorf("failed to seek - %s, %d", handle.Path, req.Offset)
-			return syscall.EREMOTEIO
-		}
-	}
-
-	data, err := handle.FileHandle.Read(req.Size)
+	data, err := handle.FileHandle.ReadAt(req.Offset, req.Size)
 	if err != nil {
 		logger.WithError(err).Errorf("failed to read - %s, %d", handle.Path, req.Size)
 		return syscall.EREMOTEIO
@@ -519,15 +511,7 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 		resp.Size = len(req.Data)
 	} else {
 		// write immediately
-		if handle.FileHandle.GetOffset() != req.Offset {
-			_, err := handle.FileHandle.Seek(req.Offset, irodsapi.SeekSet)
-			if err != nil {
-				logger.WithError(err).Errorf("failed to seek - %s, %d", handle.Path, req.Offset)
-				return syscall.EREMOTEIO
-			}
-		}
-
-		err := handle.FileHandle.Write(req.Data)
+		err := handle.FileHandle.WriteAt(req.Offset, req.Data)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to write - %s, %d", handle.Path, len(req.Data))
 			return syscall.EREMOTEIO

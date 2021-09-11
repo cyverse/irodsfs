@@ -40,14 +40,13 @@ func GetFuseMountOptions(config *commons.Config) []fuse.MountOption {
 
 // IRODSFS is a file system object
 type IRODSFS struct {
-	Config             *commons.Config
-	FuseConnection     *fuse.Conn
-	Fuse               *fusefs.Server
-	VFS                *vfs.VFS
-	FileMetaUpdater    *FileMetaUpdater
-	IRODSClient        irodsapi.IRODSClient
-	IRODSClientSession irodsapi.IRODSClientSession
-	FileBuffer         *FileBuffer
+	Config          *commons.Config
+	FuseConnection  *fuse.Conn
+	Fuse            *fusefs.Server
+	VFS             *vfs.VFS
+	FileMetaUpdater *FileMetaUpdater
+	IRODSClient     irodsapi.IRODSClient
+	FileBuffer      *FileBuffer
 
 	UID uint32
 	GID uint32
@@ -92,21 +91,19 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	)
 
 	var irodsClient irodsapi.IRODSClient = nil
-	var irodsClientSession irodsapi.IRODSClientSession = nil
 	if len(config.ProxyHost) > 0 {
 		// use proxy driver
 		return nil, fmt.Errorf("Not implemented yet")
 	} else {
 		// use go-irodsclient driver
-		irodsClient = irodsapi.NewGoIRODSClientDriver(fsconfig)
-		irodsClientSession, err = irodsClient.NewClientSession(account)
+		irodsClient, err = irodsapi.NewGoIRODSClientDriver(account, fsconfig)
 		if err != nil {
-			logger.WithError(err).Error("failed to create a new iRODS Client Session")
-			return nil, fmt.Errorf("failed to create a new iRODS Client Session - %v", err)
+			logger.WithError(err).Error("failed to create a new iRODS Client")
+			return nil, fmt.Errorf("failed to create a new iRODS Client - %v", err)
 		}
 	}
 
-	vfs, err := vfs.NewVFS(irodsClientSession, config.PathMappings)
+	vfs, err := vfs.NewVFS(irodsClient, config.PathMappings)
 	if err != nil {
 		logger.WithError(err).Error("failed to create VFS")
 		return nil, fmt.Errorf("failed to create VFS - %v", err)
@@ -121,13 +118,12 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	}
 
 	return &IRODSFS{
-		Config:             config,
-		Fuse:               nil,
-		VFS:                vfs,
-		FileMetaUpdater:    fileMetaUpdater,
-		IRODSClient:        irodsClient,
-		IRODSClientSession: irodsClientSession,
-		FileBuffer:         fileBuffer,
+		Config:          config,
+		Fuse:            nil,
+		VFS:             vfs,
+		FileMetaUpdater: fileMetaUpdater,
+		IRODSClient:     irodsClient,
+		FileBuffer:      fileBuffer,
 
 		UID: uint32(config.UID),
 		GID: uint32(config.GID),
@@ -220,11 +216,6 @@ func (fs *IRODSFS) Destroy() {
 	fuse.Unmount(fs.Config.MountPath)
 
 	logger.Info("Releasing resources")
-	if fs.IRODSClientSession != nil {
-		fs.IRODSClientSession.Release()
-		fs.IRODSClientSession = nil
-	}
-
 	if fs.IRODSClient != nil {
 		fs.IRODSClient.Release()
 		fs.IRODSClient = nil
