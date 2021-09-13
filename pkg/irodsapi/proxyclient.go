@@ -5,9 +5,7 @@ import (
 
 	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
 	irodsfs_clienttype "github.com/cyverse/go-irodsclient/irods/types"
-	"github.com/cyverse/go-irodsclient/irods/util"
 	irodsfs_proxy_client "github.com/cyverse/irodsfs-proxy/client"
-	"github.com/silenceper/pool"
 )
 
 // proxy access
@@ -26,69 +24,33 @@ func convProxyClientError(err error) error {
 
 // ProxyClient implements IRODSClient interface with iRODS FUSE Lite Proxy
 type ProxyClient struct {
-	Config         *irodsfs_client.FileSystemConfig
-	ProxyHost      string
-	Account        *irodsfs_clienttype.IRODSAccount
-	ConnectionPool pool.Pool
-}
-
-type ProxySession struct {
+	Config              *irodsfs_client.FileSystemConfig
+	ProxyHost           string
+	Account             *irodsfs_clienttype.IRODSAccount
 	ProxyServiceClient  *irodsfs_proxy_client.ProxyServiceClient
 	ProxyServiceSession *irodsfs_proxy_client.ProxyServiceSession
 }
 
 func NewProxyClientDriver(proxyHost string, proxyPort int, account *irodsfs_clienttype.IRODSAccount, config *irodsfs_client.FileSystemConfig) (IRODSClient, error) {
-	proxyClient := &ProxyClient{
-		Config:    config,
-		ProxyHost: fmt.Sprintf("%s:%d", proxyHost, proxyPort),
-		Account:   account,
-	}
-
-	poolConfig := pool.Config{
-		InitialCap:  1,
-		MaxIdle:     1,
-		MaxCap:      config.ConnectionMax,
-		Factory:     proxyClient.connOpen,
-		Close:       proxyClient.connClose,
-		IdleTimeout: config.ConnectionIdleTimeout,
-	}
-
-	p, err := pool.NewChannelPool(&poolConfig)
-	if err != nil {
-		util.LogErrorf("cannot create a new connection pool - %v", err)
-		return nil, err
-	}
-
-	proxyClient.ConnectionPool = p
-
-	return proxyClient, nil
-}
-
-func (client *ProxyClient) connOpen() (interface{}, error) {
-	// create a conenction
-	proxy := irodsfs_proxy_client.NewProxyServiceClient(client.ProxyHost)
-	err := proxy.Connect()
+	proxyHostPort := fmt.Sprintf("%s:%d", proxyHost, proxyPort)
+	proxyServiceClient := irodsfs_proxy_client.NewProxyServiceClient(proxyHostPort)
+	err := proxyServiceClient.Connect()
 	if err != nil {
 		return nil, err
 	}
 
-	proxySession, err := proxy.Login(client.Account, client.Config.ApplicationName)
+	proxyServiceSession, err := proxyServiceClient.Login(account, config.ApplicationName)
 	if err != nil {
 		return nil, err
 	}
 
-	return &ProxySession{
-		ProxyServiceClient:  proxy,
-		ProxyServiceSession: proxySession,
+	return &ProxyClient{
+		Config:              config,
+		ProxyHost:           proxyHostPort,
+		Account:             account,
+		ProxyServiceClient:  proxyServiceClient,
+		ProxyServiceSession: proxyServiceSession,
 	}, nil
-}
-
-func (client *ProxyClient) connClose(v interface{}) error {
-	// close a conenction
-	proxySession := v.(*ProxySession)
-	err := proxySession.ProxyServiceClient.Logout(proxySession.ProxyServiceSession)
-	proxySession.ProxyServiceClient.Disconnect()
-	return err
 }
 
 func (client *ProxyClient) GetAccount() *irodsfs_clienttype.IRODSAccount {
@@ -100,19 +62,12 @@ func (client *ProxyClient) GetApplicationName() string {
 }
 
 func (client *ProxyClient) Release() {
-	client.ConnectionPool.Release()
+	client.ProxyServiceClient.Logout(client.ProxyServiceSession)
+	client.ProxyServiceClient.Disconnect()
 }
 
 func (client *ProxyClient) List(path string) ([]*IRODSEntry, error) {
-	v, err := client.ConnectionPool.Get()
-	if err != nil {
-		return nil, err
-	}
-
-	defer client.ConnectionPool.Put(v)
-
-	conn := v.(*ProxySession)
-	entries, err := conn.ProxyServiceClient.List(conn.ProxyServiceSession, path)
+	entries, err := client.ProxyServiceClient.List(client.ProxyServiceSession, path)
 	if err != nil {
 		return nil, convProxyClientError(err)
 	}
@@ -137,15 +92,7 @@ func (client *ProxyClient) List(path string) ([]*IRODSEntry, error) {
 }
 
 func (client *ProxyClient) Stat(path string) (*IRODSEntry, error) {
-	v, err := client.ConnectionPool.Get()
-	if err != nil {
-		return nil, err
-	}
-
-	defer client.ConnectionPool.Put(v)
-
-	conn := v.(*ProxySession)
-	entry, err := conn.ProxyServiceClient.Stat(conn.ProxyServiceSession, path)
+	entry, err := client.ProxyServiceClient.Stat(client.ProxyServiceSession, path)
 	if err != nil {
 		return nil, convProxyClientError(err)
 	}
@@ -164,28 +111,11 @@ func (client *ProxyClient) Stat(path string) (*IRODSEntry, error) {
 }
 
 func (client *ProxyClient) ExistsDir(path string) bool {
-	v, err := client.ConnectionPool.Get()
-	if err != nil {
-		return false
-	}
-
-	defer client.ConnectionPool.Put(v)
-
-	conn := v.(*ProxySession)
-	return conn.ProxyServiceClient.ExistsDir(conn.ProxyServiceSession, path)
+	return client.ProxyServiceClient.ExistsDir(client.ProxyServiceSession, path)
 }
 
 func (client *ProxyClient) ListDirACLsWithGroupUsers(path string) ([]*IRODSAccess, error) {
-	v, err := client.ConnectionPool.Get()
-	if err != nil {
-		return nil, err
-	}
-
-	defer client.ConnectionPool.Put(v)
-
-	conn := v.(*ProxySession)
-
-	accesses, err := conn.ProxyServiceClient.ListDirACLsWithGroupUsers(conn.ProxyServiceSession, path)
+	accesses, err := client.ProxyServiceClient.ListDirACLsWithGroupUsers(client.ProxyServiceSession, path)
 	if err != nil {
 		return nil, convProxyClientError(err)
 	}
@@ -204,16 +134,7 @@ func (client *ProxyClient) ListDirACLsWithGroupUsers(path string) ([]*IRODSAcces
 }
 
 func (client *ProxyClient) ListFileACLsWithGroupUsers(path string) ([]*IRODSAccess, error) {
-	v, err := client.ConnectionPool.Get()
-	if err != nil {
-		return nil, err
-	}
-
-	defer client.ConnectionPool.Put(v)
-
-	conn := v.(*ProxySession)
-
-	accesses, err := conn.ProxyServiceClient.ListFileACLsWithGroupUsers(conn.ProxyServiceSession, path)
+	accesses, err := client.ProxyServiceClient.ListFileACLsWithGroupUsers(client.ProxyServiceSession, path)
 	if err != nil {
 		return nil, convProxyClientError(err)
 	}
@@ -231,141 +152,70 @@ func (client *ProxyClient) ListFileACLsWithGroupUsers(path string) ([]*IRODSAcce
 }
 
 func (client *ProxyClient) RemoveFile(path string, force bool) error {
-	v, err := client.ConnectionPool.Get()
-	if err != nil {
-		return err
-	}
-
-	defer client.ConnectionPool.Put(v)
-
-	conn := v.(*ProxySession)
-
-	err = conn.ProxyServiceClient.RemoveFile(conn.ProxyServiceSession, path, force)
+	err := client.ProxyServiceClient.RemoveFile(client.ProxyServiceSession, path, force)
 	return convProxyClientError(err)
 }
 
 func (client *ProxyClient) RemoveDir(path string, recurse bool, force bool) error {
-	v, err := client.ConnectionPool.Get()
-	if err != nil {
-		return err
-	}
-
-	defer client.ConnectionPool.Put(v)
-
-	conn := v.(*ProxySession)
-
-	err = conn.ProxyServiceClient.RemoveDir(conn.ProxyServiceSession, path, recurse, force)
+	err := client.ProxyServiceClient.RemoveDir(client.ProxyServiceSession, path, recurse, force)
 	return convProxyClientError(err)
 }
 
 func (client *ProxyClient) MakeDir(path string, recurse bool) error {
-	v, err := client.ConnectionPool.Get()
-	if err != nil {
-		return err
-	}
-
-	defer client.ConnectionPool.Put(v)
-
-	conn := v.(*ProxySession)
-
-	err = conn.ProxyServiceClient.MakeDir(conn.ProxyServiceSession, path, recurse)
+	err := client.ProxyServiceClient.MakeDir(client.ProxyServiceSession, path, recurse)
 	return convProxyClientError(err)
 }
 
 func (client *ProxyClient) RenameDirToDir(srcPath string, destPath string) error {
-	v, err := client.ConnectionPool.Get()
-	if err != nil {
-		return err
-	}
-
-	defer client.ConnectionPool.Put(v)
-
-	conn := v.(*ProxySession)
-
-	err = conn.ProxyServiceClient.RenameDirToDir(conn.ProxyServiceSession, srcPath, destPath)
+	err := client.ProxyServiceClient.RenameDirToDir(client.ProxyServiceSession, srcPath, destPath)
 	return convProxyClientError(err)
 }
 
 func (client *ProxyClient) RenameFileToFile(srcPath string, destPath string) error {
-	v, err := client.ConnectionPool.Get()
-	if err != nil {
-		return err
-	}
-
-	defer client.ConnectionPool.Put(v)
-
-	conn := v.(*ProxySession)
-
-	err = conn.ProxyServiceClient.RenameFileToFile(conn.ProxyServiceSession, srcPath, destPath)
+	err := client.ProxyServiceClient.RenameFileToFile(client.ProxyServiceSession, srcPath, destPath)
 	return convProxyClientError(err)
 }
 
 func (client *ProxyClient) CreateFile(path string, resource string) (IRODSFileHandle, error) {
-	v, err := client.ConnectionPool.Get()
-	if err != nil {
-		return nil, err
-	}
-
-	conn := v.(*ProxySession)
-
-	handle, err := conn.ProxyServiceClient.CreateFile(conn.ProxyServiceSession, path, resource)
+	handle, err := client.ProxyServiceClient.CreateFile(client.ProxyServiceSession, path, resource)
 	if err != nil {
 		return nil, convProxyClientError(err)
 	}
 
 	fileHandle := &ProxyClientFileHandle{
-		ID:           handle.FileHandleID,
-		Client:       client,
-		ProxySession: conn,
-		Handle:       handle,
+		ID:          handle.FileHandleID,
+		ProxyClient: client,
+		Handle:      handle,
 	}
 
 	return fileHandle, nil
 }
 
 func (client *ProxyClient) OpenFile(path string, resource string, mode string) (IRODSFileHandle, error) {
-	v, err := client.ConnectionPool.Get()
-	if err != nil {
-		return nil, err
-	}
-
-	conn := v.(*ProxySession)
-
-	handle, err := conn.ProxyServiceClient.OpenFile(conn.ProxyServiceSession, path, resource, mode)
+	handle, err := client.ProxyServiceClient.OpenFile(client.ProxyServiceSession, path, resource, mode)
 	if err != nil {
 		return nil, convProxyClientError(err)
 	}
 
 	fileHandle := &ProxyClientFileHandle{
-		ID:           handle.FileHandleID,
-		Client:       client,
-		ProxySession: conn,
-		Handle:       handle,
+		ID:          handle.FileHandleID,
+		ProxyClient: client,
+		Handle:      handle,
 	}
 
 	return fileHandle, nil
 }
 
 func (client *ProxyClient) TruncateFile(path string, size int64) error {
-	v, err := client.ConnectionPool.Get()
-	if err != nil {
-		return err
-	}
-
-	defer client.ConnectionPool.Put(v)
-
-	conn := v.(*ProxySession)
-
-	err = conn.ProxyServiceClient.TruncateFile(conn.ProxyServiceSession, path, size)
+	err := client.ProxyServiceClient.TruncateFile(client.ProxyServiceSession, path, size)
 	return convProxyClientError(err)
 }
 
 // ProxyClientFileHandle implements IRODSFileHandle
 type ProxyClientFileHandle struct {
-	ID           string
-	Client       *ProxyClient
-	ProxySession *ProxySession
-	Handle       *irodsfs_proxy_client.ProxyServiceFileHandle
+	ID          string
+	ProxyClient *ProxyClient
+	Handle      *irodsfs_proxy_client.ProxyServiceFileHandle
 }
 
 func (handle *ProxyClientFileHandle) GetID() string {
@@ -391,7 +241,7 @@ func (handle *ProxyClientFileHandle) GetOpenMode() FileOpenMode {
 }
 
 func (handle *ProxyClientFileHandle) GetOffset() int64 {
-	return handle.ProxySession.ProxyServiceClient.GetOffset(handle.Handle)
+	return handle.ProxyClient.ProxyServiceClient.GetOffset(handle.Handle)
 }
 
 func (handle *ProxyClientFileHandle) IsReadMode() bool {
@@ -403,13 +253,13 @@ func (handle *ProxyClientFileHandle) IsWriteMode() bool {
 }
 
 func (handle *ProxyClientFileHandle) ReadAt(offset int64, length int) ([]byte, error) {
-	return handle.ProxySession.ProxyServiceClient.ReadAt(handle.Handle, offset, int32(length))
+	return handle.ProxyClient.ProxyServiceClient.ReadAt(handle.Handle, offset, int32(length))
 }
 
 func (handle *ProxyClientFileHandle) WriteAt(offset int64, data []byte) error {
-	return handle.ProxySession.ProxyServiceClient.WriteAt(handle.Handle, offset, data)
+	return handle.ProxyClient.ProxyServiceClient.WriteAt(handle.Handle, offset, data)
 }
 
 func (handle *ProxyClientFileHandle) Close() error {
-	return handle.ProxySession.ProxyServiceClient.Close(handle.Handle)
+	return handle.ProxyClient.ProxyServiceClient.Close(handle.Handle)
 }
