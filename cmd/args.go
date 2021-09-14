@@ -236,8 +236,8 @@ func processArguments() (*commons.Config, *os.File, error, bool) {
 	flag.IntVar(&config.UID, "uid", -1, "Set UID of file/directory owner")
 	flag.IntVar(&config.GID, "gid", -1, "Set GID of file/directory owner")
 	flag.StringVar(&config.SystemUser, "sys_user", "", "Set System User of file/directory owner")
-	flag.StringVar(&config.Host, "proxy_host", "", "Set iRODS FUSE Lite Proxy host")
-	flag.IntVar(&config.Port, "proxy_port", 0, "Set iRODS FUSE Lite Proxy port")
+	flag.StringVar(&config.ProxyHost, "proxy_host", "", "Set iRODS FUSE Lite Proxy host")
+	flag.IntVar(&config.ProxyPort, "proxy_port", 12020, "Set iRODS FUSE Lite Proxy port")
 
 	flag.Parse()
 

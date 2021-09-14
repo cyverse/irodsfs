@@ -93,7 +93,11 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	var irodsClient irodsapi.IRODSClient = nil
 	if len(config.ProxyHost) > 0 {
 		// use proxy driver
-		return nil, fmt.Errorf("Not implemented yet")
+		irodsClient, err = irodsapi.NewProxyClientDriver(config.ProxyHost, config.ProxyPort, account, fsconfig)
+		if err != nil {
+			logger.WithError(err).Error("failed to create a new iRODS Proxy Client")
+			return nil, fmt.Errorf("failed to create a new iRODS Proxy Client - %v", err)
+		}
 	} else {
 		// use go-irodsclient driver
 		irodsClient, err = irodsapi.NewGoIRODSClientDriver(account, fsconfig)

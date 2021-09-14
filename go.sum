@@ -18,6 +18,10 @@ github.com/cyverse/irodsfs-monitor v0.0.0-20210910002441-53b92691457c h1:zBaNfHH
 github.com/cyverse/irodsfs-monitor v0.0.0-20210910002441-53b92691457c/go.mod h1:8UE1mT26+0vAsqS9UJ6Q/vlKq3da6FLdt5p6Tt1AIC4=
 github.com/cyverse/irodsfs-proxy v0.0.0-20210911000028-dd0d8eeab2f1 h1:hoxUvq9UA4NybzgYViGAQHRKC6t8AarU8XNwIJwVamc=
 github.com/cyverse/irodsfs-proxy v0.0.0-20210911000028-dd0d8eeab2f1/go.mod h1:Ac8oMTQMHxOhkWZvBFMpCu1tUOnyKzaIpH9gUzJc/Go=
+github.com/cyverse/irodsfs-proxy v0.0.0-20210914204514-6c4af27b6e7f h1:XfYjTsHG67vp7m+nDzOVtoUQBgp/drfJXesFN5jGuZI=
+github.com/cyverse/irodsfs-proxy v0.0.0-20210914204514-6c4af27b6e7f/go.mod h1:Ac8oMTQMHxOhkWZvBFMpCu1tUOnyKzaIpH9gUzJc/Go=
+github.com/cyverse/irodsfs-proxy v0.0.0-20210914205035-cd1fd342756d h1:HaPuwCKaxpyp5103o5e6DZraggHbJ0Po1NM+Ix9xFno=
+github.com/cyverse/irodsfs-proxy v0.0.0-20210914205035-cd1fd342756d/go.mod h1:Ac8oMTQMHxOhkWZvBFMpCu1tUOnyKzaIpH9gUzJc/Go=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
