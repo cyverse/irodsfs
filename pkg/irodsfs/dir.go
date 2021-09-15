@@ -21,6 +21,7 @@ type Dir struct {
 	FS      *IRODSFS
 	InodeID int64
 	Path    string
+	Mutex   sync.RWMutex // for accessing Path
 }
 
 func mapDirACL(vfsEntry *vfs.VFSEntry, dir *Dir, irodsEntry *irodsapi.IRODSEntry) os.FileMode {
@@ -85,13 +86,13 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 		"function": "Attr",
 	})
 
-	logger.Infof("Calling Attr - %s", dir.Path)
+	// apply pending update if exists
+	dir.FS.FileMetaUpdater.Apply(dir)
 
-	if update, ok := dir.FS.FileMetaUpdater.Pop(dir.InodeID); ok {
-		// update found
-		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
-		dir.Path = update.Path
-	}
+	dir.Mutex.RLock()
+	defer dir.Mutex.RUnlock()
+
+	logger.Infof("Calling Attr - %s", dir.Path)
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(dir.Path)
 	if vfsEntry == nil {
@@ -163,16 +164,15 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 		"function": "Lookup",
 	})
 
+	// apply pending update if exists
+	dir.FS.FileMetaUpdater.Apply(dir)
+
+	dir.Mutex.RLock()
+	defer dir.Mutex.RUnlock()
+
 	targetPath := utils.JoinPath(dir.Path, name)
 
 	logger.Infof("Calling Lookup - %s", targetPath)
-
-	if update, ok := dir.FS.FileMetaUpdater.Pop(dir.InodeID); ok {
-		// update found
-		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
-		dir.Path = update.Path
-		targetPath = utils.JoinPath(dir.Path, name)
-	}
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(targetPath)
 	if vfsEntry == nil {
@@ -243,13 +243,13 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 		"function": "ReadDirAll",
 	})
 
-	logger.Infof("Calling ReadDirAll - %s", dir.Path)
+	// apply pending update if exists
+	dir.FS.FileMetaUpdater.Apply(dir)
 
-	if update, ok := dir.FS.FileMetaUpdater.Pop(dir.InodeID); ok {
-		// update found
-		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
-		dir.Path = update.Path
-	}
+	dir.Mutex.RLock()
+	defer dir.Mutex.RUnlock()
+
+	logger.Infof("Calling ReadDirAll - %s", dir.Path)
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(dir.Path)
 	if vfsEntry == nil {
@@ -356,16 +356,15 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 		"function": "Remove",
 	})
 
+	// apply pending update if exists
+	dir.FS.FileMetaUpdater.Apply(dir)
+
+	dir.Mutex.RLock()
+	defer dir.Mutex.RUnlock()
+
 	targetPath := utils.JoinPath(dir.Path, req.Name)
 
 	logger.Infof("Calling Remove - %s", targetPath)
-
-	if update, ok := dir.FS.FileMetaUpdater.Pop(dir.InodeID); ok {
-		// update found
-		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
-		dir.Path = update.Path
-		targetPath = utils.JoinPath(dir.Path, req.Name)
-	}
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(targetPath)
 	if vfsEntry == nil {
@@ -447,16 +446,15 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 		"function": "Mkdir",
 	})
 
+	// apply pending update if exists
+	dir.FS.FileMetaUpdater.Apply(dir)
+
+	dir.Mutex.RLock()
+	defer dir.Mutex.RUnlock()
+
 	targetPath := utils.JoinPath(dir.Path, req.Name)
 
 	logger.Infof("Calling Mkdir - %s", targetPath)
-
-	if update, ok := dir.FS.FileMetaUpdater.Pop(dir.InodeID); ok {
-		// update found
-		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
-		dir.Path = update.Path
-		targetPath = utils.JoinPath(dir.Path, req.Name)
-	}
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(targetPath)
 	if vfsEntry == nil {
@@ -524,20 +522,22 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 		"function": "Rename",
 	})
 
+	// apply pending update if exists
+	dir.FS.FileMetaUpdater.Apply(dir)
+
+	dir.Mutex.RLock()
+	defer dir.Mutex.RUnlock()
+
 	targetSrcPath := utils.JoinPath(dir.Path, req.OldName)
 
 	newdir := newDir.(*Dir)
+
+	newdir.Mutex.RLock()
+	defer newdir.Mutex.RUnlock()
+
 	targetDestPath := utils.JoinPath(newdir.Path, req.NewName)
 
 	logger.Infof("Calling Rename - %s to %s", targetSrcPath, targetDestPath)
-
-	if update, ok := dir.FS.FileMetaUpdater.Pop(dir.InodeID); ok {
-		// update found
-		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
-		dir.Path = update.Path
-		targetSrcPath = utils.JoinPath(dir.Path, req.OldName)
-		targetDestPath = utils.JoinPath(newdir.Path, req.NewName)
-	}
 
 	vfsSrcEntry := dir.FS.VFS.GetClosestEntry(targetSrcPath)
 	if vfsSrcEntry == nil {
@@ -677,16 +677,15 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 		"function": "Create",
 	})
 
+	// apply pending update if exists
+	dir.FS.FileMetaUpdater.Apply(dir)
+
+	dir.Mutex.RLock()
+	defer dir.Mutex.RUnlock()
+
 	targetPath := utils.JoinPath(dir.Path, req.Name)
 
 	logger.Infof("Calling Create - %s", targetPath)
-
-	if update, ok := dir.FS.FileMetaUpdater.Pop(dir.InodeID); ok {
-		// update found
-		logger.Infof("Update found - replace path from %s to %s", dir.Path, update.Path)
-		dir.Path = update.Path
-		targetPath = utils.JoinPath(dir.Path, req.Name)
-	}
 
 	openMode := string(irodsapi.FileOpenModeReadOnly)
 

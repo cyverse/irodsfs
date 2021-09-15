@@ -1,6 +1,10 @@
 package irodsfs
 
-import "sync"
+import (
+	"sync"
+
+	fusefs "bazil.org/fuse/fs"
+)
 
 // FileMetaUpdater holds updates on file metadata temporarily.
 // So subsequent fs operations find them to refresh metadata.
@@ -60,4 +64,31 @@ func (updater *FileMetaUpdater) Pop(inode int64) (*FileMetaUpdated, bool) {
 		return u, ok
 	}
 	return nil, false
+}
+
+// Pop pops the update on a file/directory with the inode
+func (updater *FileMetaUpdater) Apply(node fusefs.Node) {
+	updater.Mutex.Lock()
+	defer updater.Mutex.Unlock()
+
+	switch fnode := node.(type) {
+	case *Dir:
+		if u, ok := updater.UpdatedFiles[fnode.InodeID]; ok {
+			delete(updater.UpdatedFiles, fnode.InodeID)
+
+			// update path
+			fnode.Mutex.Lock()
+			fnode.Path = u.Path
+			fnode.Mutex.Unlock()
+		}
+	case *File:
+		if u, ok := updater.UpdatedFiles[fnode.InodeID]; ok {
+			delete(updater.UpdatedFiles, fnode.InodeID)
+
+			// update path
+			fnode.Mutex.Lock()
+			fnode.Path = u.Path
+			fnode.Mutex.Unlock()
+		}
+	}
 }

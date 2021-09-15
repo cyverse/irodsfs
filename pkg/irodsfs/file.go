@@ -25,6 +25,7 @@ type File struct {
 	InodeID int64
 	Path    string
 	Entry   *vfs.VFSEntry
+	Mutex   sync.RWMutex // for accessing Path
 }
 
 // FileHandle is a file handle
@@ -103,13 +104,13 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 		"function": "Attr",
 	})
 
-	logger.Infof("Calling Attr - %s", file.Path)
+	// apply pending update if exists
+	file.FS.FileMetaUpdater.Apply(file)
 
-	if update, ok := file.FS.FileMetaUpdater.Pop(file.InodeID); ok {
-		// update found
-		logger.Infof("Update found - replace path from %s to %s", file.Path, update.Path)
-		file.Path = update.Path
-	}
+	file.Mutex.RLock()
+	defer file.Mutex.RUnlock()
+
+	logger.Infof("Calling Attr - %s", file.Path)
 
 	vfsEntry := file.FS.VFS.GetClosestEntry(file.Path)
 	if vfsEntry == nil {
@@ -168,13 +169,13 @@ func (file *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *f
 		"function": "Setattr",
 	})
 
-	logger.Infof("Calling Setattr - %s", file.Path)
+	// apply pending update if exists
+	file.FS.FileMetaUpdater.Apply(file)
 
-	if update, ok := file.FS.FileMetaUpdater.Pop(file.InodeID); ok {
-		// update found
-		logger.Infof("Update found - replace path from %s to %s", file.Path, update.Path)
-		file.Path = update.Path
-	}
+	file.Mutex.RLock()
+	defer file.Mutex.RUnlock()
+
+	logger.Infof("Calling Setattr - %s", file.Path)
 
 	if req.Valid.Size() {
 		// size changed
@@ -196,13 +197,13 @@ func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *
 		"function": "Truncate",
 	})
 
-	logger.Infof("Calling Truncate - %s, %d", file.Path, req.Size)
+	// apply pending update if exists
+	file.FS.FileMetaUpdater.Apply(file)
 
-	if update, ok := file.FS.FileMetaUpdater.Pop(file.InodeID); ok {
-		// update found
-		logger.Infof("Update found - replace path from %s to %s", file.Path, update.Path)
-		file.Path = update.Path
-	}
+	file.Mutex.RLock()
+	defer file.Mutex.RUnlock()
+
+	logger.Infof("Calling Truncate - %s, %d", file.Path, req.Size)
 
 	vfsEntry := file.FS.VFS.GetClosestEntry(file.Path)
 	if vfsEntry == nil {
@@ -262,6 +263,12 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		"function": "Open",
 	})
 
+	// apply pending update if exists
+	file.FS.FileMetaUpdater.Apply(file)
+
+	file.Mutex.RLock()
+	defer file.Mutex.RUnlock()
+
 	openMode := string(irodsapi.FileOpenModeReadOnly)
 
 	if req.Flags.IsReadOnly() {
@@ -287,12 +294,6 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 	}
 
 	logger.Infof("Calling Open - %s, mode(%s)", file.Path, openMode)
-
-	if update, ok := file.FS.FileMetaUpdater.Pop(file.InodeID); ok {
-		// update found
-		logger.Infof("Update found - replace path from %s to %s", file.Path, update.Path)
-		file.Path = update.Path
-	}
 
 	vfsEntry := file.FS.VFS.GetClosestEntry(file.Path)
 	if vfsEntry == nil {
