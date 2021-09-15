@@ -115,10 +115,13 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 
 	fileMetaUpdater := NewFileMetaUpdater()
 
-	fileBuffer, err := NewFileBuffer(config.FileBufferStoragePath, config.FileBufferSizeMax)
-	if err != nil {
-		logger.WithError(err).Error("failed to create FileBuffer")
-		return nil, fmt.Errorf("failed to create FileBuffer - %v", err)
+	var fileBuffer *FileBuffer
+	if len(config.ProxyHost) == 0 {
+		fileBuffer, err = NewFileBuffer(config.FileBufferStoragePath, config.FileBufferSizeMax)
+		if err != nil {
+			logger.WithError(err).Error("failed to create FileBuffer")
+			return nil, fmt.Errorf("failed to create FileBuffer - %v", err)
+		}
 	}
 
 	return &IRODSFS{
