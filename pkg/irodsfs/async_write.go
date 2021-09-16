@@ -24,6 +24,10 @@ type AsyncWrite struct {
 
 // NewAsyncWrite create a new AsyncWrite
 func NewAsyncWrite(fs *IRODSFS, fileHandle irodsapi.IRODSFileHandle, fileHandleLock *sync.Mutex) (*AsyncWrite, error) {
+	if fs.FileBuffer == nil {
+		return nil, fmt.Errorf("file buffer is not initialized")
+	}
+
 	asyncWrite := &AsyncWrite{
 		FS:              fs,
 		IRODSFileHandle: fileHandle,

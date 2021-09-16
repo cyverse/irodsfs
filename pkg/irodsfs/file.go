@@ -336,7 +336,7 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		}
 
 		var asyncWrite *AsyncWrite
-		if req.Flags.IsWriteOnly() {
+		if req.Flags.IsWriteOnly() && len(file.FS.Config.ProxyHost) == 0 && file.FS.FileBuffer != nil {
 			asyncWrite, err = NewAsyncWrite(file.FS, handle, handleMutex)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to create a new async write - %s", irodsPath)
