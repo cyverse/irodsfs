@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	bazil.org/fuse v0.0.0-20200524192727-fb710f7dfd05
-	github.com/cyverse/go-irodsclient v0.5.5-0.20210910205101-c02251afdb4d
+	github.com/cyverse/go-irodsclient v0.5.5-0.20210916002403-c18087e326de
 	github.com/cyverse/irodsfs-monitor v0.0.0-20210910002441-53b92691457c
 	github.com/cyverse/irodsfs-proxy v0.0.0-20210914205035-cd1fd342756d
 	github.com/eapache/channels v1.1.0
