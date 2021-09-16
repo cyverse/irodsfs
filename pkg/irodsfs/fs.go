@@ -116,7 +116,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	fileMetaUpdater := NewFileMetaUpdater()
 
 	var fileBuffer *FileBuffer
-	if len(config.ProxyHost) == 0 && config.FileBufferSizeMax > 0 {
+	if len(config.ProxyHost) == 0 && config.FileBufferSizeMax > 0 && len(config.FileBufferStoragePath) > 0 {
 		fileBuffer, err = NewFileBuffer(config.FileBufferStoragePath, config.FileBufferSizeMax)
 		if err != nil {
 			logger.WithError(err).Error("failed to create FileBuffer")

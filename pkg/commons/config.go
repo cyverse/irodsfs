@@ -381,14 +381,6 @@ func (config *Config) Validate() error {
 		return fmt.Errorf("connection max must be equal or greater than 1")
 	}
 
-	if len(config.FileBufferStoragePath) == 0 {
-		return fmt.Errorf("file buffer storage path must be given")
-	}
-
-	if config.FileBufferSizeMax < 10485760 {
-		return fmt.Errorf("file buffer size max must be equal or greater than 10485760")
-	}
-
 	if config.AuthScheme != AuthSchemePAM && config.AuthScheme != AuthSchemeNative {
 		return fmt.Errorf("unknown auth scheme - %v", config.AuthScheme)
 	}
