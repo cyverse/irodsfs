@@ -1,5 +1,6 @@
-package irodsfs
+package buffer
 
+/*
 import (
 	"bytes"
 	"crypto/sha256"
@@ -17,23 +18,16 @@ import (
 type FileBufferEntryStatus string
 
 const (
-	FileBufferEntryStatusInvalid FileBufferEntryStatus = "invalid"
-	FileBufferEntryStatusWriting FileBufferEntryStatus = "writing"
-	FileBufferEntryStatusReady   FileBufferEntryStatus = "ready"
-)
-
-const (
 	FileBufferEntryMax int = 1000
 )
 
-// FileBufferEntry is an entry in FileBuffer
-type FileBufferEntry struct {
+type FileEntry struct {
 	Key          string
-	Section      string
+	Group        string
 	Size         int64
-	Status       FileBufferEntryStatus
 	AccessCount  int
 	CreationTime time.Time
+	Mutex        sync.RWMutex
 }
 
 // FileBufferSection defines a section in FileBuffer
@@ -550,3 +544,4 @@ func (buffer *FileBuffer) clearStorage() error {
 
 	return lasterr
 }
+*/

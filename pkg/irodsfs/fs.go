@@ -8,6 +8,7 @@ import (
 	fusefs "bazil.org/fuse/fs"
 	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
 	irodsfs_clienttype "github.com/cyverse/go-irodsclient/irods/types"
+	"github.com/cyverse/irodsfs/pkg/buffer"
 	"github.com/cyverse/irodsfs/pkg/commons"
 	"github.com/cyverse/irodsfs/pkg/irodsapi"
 	"github.com/cyverse/irodsfs/pkg/report"
@@ -46,7 +47,7 @@ type IRODSFS struct {
 	VFS             *vfs.VFS
 	FileMetaUpdater *FileMetaUpdater
 	IRODSClient     irodsapi.IRODSClient
-	FileBuffer      *FileBuffer
+	Buffer          buffer.Buffer
 
 	UID uint32
 	GID uint32
@@ -115,13 +116,9 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 
 	fileMetaUpdater := NewFileMetaUpdater()
 
-	var fileBuffer *FileBuffer
-	if len(config.ProxyHost) == 0 && config.FileBufferSizeMax > 0 && len(config.FileBufferStoragePath) > 0 {
-		fileBuffer, err = NewFileBuffer(config.FileBufferStoragePath, config.FileBufferSizeMax)
-		if err != nil {
-			logger.WithError(err).Error("failed to create FileBuffer")
-			return nil, fmt.Errorf("failed to create FileBuffer - %v", err)
-		}
+	var ramBuffer buffer.Buffer
+	if len(config.ProxyHost) == 0 && config.BufferSizeMax > 0 {
+		ramBuffer = buffer.NewRAMBuffer(config.BufferSizeMax)
 	}
 
 	return &IRODSFS{
@@ -130,7 +127,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		VFS:             vfs,
 		FileMetaUpdater: fileMetaUpdater,
 		IRODSClient:     irodsClient,
-		FileBuffer:      fileBuffer,
+		Buffer:          ramBuffer,
 
 		UID: uint32(config.UID),
 		GID: uint32(config.GID),
@@ -228,9 +225,9 @@ func (fs *IRODSFS) Destroy() {
 		fs.IRODSClient = nil
 	}
 
-	if fs.FileBuffer != nil {
-		fs.FileBuffer.Destroy()
-		fs.FileBuffer = nil
+	if fs.Buffer != nil {
+		fs.Buffer.DeleteAllEntryGroups()
+		fs.Buffer = nil
 	}
 }
 

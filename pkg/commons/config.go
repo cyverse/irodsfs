@@ -12,23 +12,22 @@ import (
 )
 
 const (
-	PortDefault                        int           = 1247
-	ReadAheadMaxDefault                int           = 1024 * 64 // 64KB
-	ConnectionMaxDefault               int           = 10
-	OperationTimeoutDefault            time.Duration = 5 * time.Minute
-	ConnectionIdleTimeoutDefault       time.Duration = 5 * time.Minute
-	MetadataCacheTimeoutDefault        time.Duration = 5 * time.Minute
-	MetadataCacheCleanupTimeDefault    time.Duration = 5 * time.Minute
-	FileBufferStoragePathPrefixDefault string        = "/tmp/irodsfs"
-	LogFilePathPrefixDefault           string        = "/tmp/irodsfs"
-	FileBufferSizeMaxDefault           int64         = 1024 * 1024 * 1024 // 1GB
-	AuthSchemePAM                      string        = "pam"
-	AuthSchemeNative                   string        = "native"
-	AuthSchemeDefault                  string        = AuthSchemeNative
-	EncryptionKeySizeDefault           int           = 32
-	EncryptionAlgorithmDefault         string        = "AES-256-CBC"
-	SaltSizeDefault                    int           = 8
-	HashRoundsDefault                  int           = 16
+	PortDefault                     int           = 1247
+	ReadAheadMaxDefault             int           = 1024 * 64 // 64KB
+	ConnectionMaxDefault            int           = 10
+	OperationTimeoutDefault         time.Duration = 5 * time.Minute
+	ConnectionIdleTimeoutDefault    time.Duration = 5 * time.Minute
+	MetadataCacheTimeoutDefault     time.Duration = 5 * time.Minute
+	MetadataCacheCleanupTimeDefault time.Duration = 5 * time.Minute
+	LogFilePathPrefixDefault        string        = "/tmp/irodsfs"
+	BufferSizeMaxDefault            int64         = 1024 * 1024 * 64 // 64MB
+	AuthSchemePAM                   string        = "pam"
+	AuthSchemeNative                string        = "native"
+	AuthSchemeDefault               string        = AuthSchemeNative
+	EncryptionKeySizeDefault        int           = 32
+	EncryptionAlgorithmDefault      string        = "AES-256-CBC"
+	SaltSizeDefault                 int           = 8
+	HashRoundsDefault               int           = 16
 )
 
 var (
@@ -42,11 +41,6 @@ func getInstanceID() string {
 	}
 
 	return instanceID
-}
-
-// GetDefaultFileBufferStoragePath returns default file buffer storage path
-func GetDefaultFileBufferStoragePath() string {
-	return fmt.Sprintf("%s_%s", FileBufferStoragePathPrefixDefault, getInstanceID())
 }
 
 // GetDefaultLogFilePath returns default log file path
@@ -84,8 +78,7 @@ type Config struct {
 	ConnectionMax            int           `yaml:"connection_max"`
 	MetadataCacheTimeout     time.Duration `yaml:"metadata_cache_timeout"`
 	MetadataCacheCleanupTime time.Duration `yaml:"metadata_cache_cleanup_time"`
-	FileBufferStoragePath    string        `yaml:"file_buffer_storage_path"`
-	FileBufferSizeMax        int64         `yaml:"file_buffer_size_max"`
+	BufferSizeMax            int64         `yaml:"buffer_size_max"`
 
 	LogPath    string `yaml:"log_path,omitempty"`
 	MonitorURL string `yaml:"monitor_url,omitempty"`
@@ -126,8 +119,7 @@ type configAlias struct {
 	ConnectionMax            int    `yaml:"connection_max"`
 	MetadataCacheTimeout     string `yaml:"metadata_cache_timeout"`
 	MetadataCacheCleanupTime string `yaml:"metadata_cache_cleanup_time"`
-	FileBufferStoragePath    string `yaml:"file_buffer_storage_path"`
-	FileBufferSizeMax        int64  `yaml:"file_buffer_size_max"`
+	BufferSizeMax            int64  `yaml:"buffer_size_max"`
 
 	LogPath    string `yaml:"log_path,omitempty"`
 	MonitorURL string `yaml:"monitor_url,omitempty"`
@@ -165,8 +157,7 @@ func NewDefaultConfig() *Config {
 		ConnectionMax:            ConnectionMaxDefault,
 		MetadataCacheTimeout:     MetadataCacheTimeoutDefault,
 		MetadataCacheCleanupTime: MetadataCacheCleanupTimeDefault,
-		FileBufferStoragePath:    GetDefaultFileBufferStoragePath(),
-		FileBufferSizeMax:        FileBufferSizeMaxDefault,
+		BufferSizeMax:            BufferSizeMaxDefault,
 
 		LogPath:    GetDefaultLogFilePath(),
 		MonitorURL: "",
@@ -199,10 +190,9 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		SaltSize:            SaltSizeDefault,
 		HashRounds:          HashRoundsDefault,
 
-		ReadAheadMax:          ReadAheadMaxDefault,
-		ConnectionMax:         ConnectionMaxDefault,
-		FileBufferStoragePath: GetDefaultFileBufferStoragePath(),
-		FileBufferSizeMax:     FileBufferSizeMaxDefault,
+		ReadAheadMax:  ReadAheadMaxDefault,
+		ConnectionMax: ConnectionMaxDefault,
+		BufferSizeMax: BufferSizeMaxDefault,
 
 		LogPath:    GetDefaultLogFilePath(),
 		MonitorURL: "",
@@ -290,8 +280,7 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		ConnectionMax:            alias.ConnectionMax,
 		MetadataCacheTimeout:     metadataCacheTimeout,
 		MetadataCacheCleanupTime: metadataCacheCleanupTime,
-		FileBufferStoragePath:    alias.FileBufferStoragePath,
-		FileBufferSizeMax:        alias.FileBufferSizeMax,
+		BufferSizeMax:            alias.BufferSizeMax,
 
 		LogPath:    alias.LogPath,
 		MonitorURL: alias.MonitorURL,

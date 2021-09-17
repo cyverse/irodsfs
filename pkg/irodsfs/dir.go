@@ -779,7 +779,7 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 		handleMutex := &sync.Mutex{}
 
 		var asyncWrite *AsyncWrite
-		if req.Flags.IsWriteOnly() && len(dir.FS.Config.ProxyHost) == 0 && dir.FS.FileBuffer != nil {
+		if req.Flags.IsWriteOnly() && len(dir.FS.Config.ProxyHost) == 0 && dir.FS.Buffer != nil {
 			// it should not use proxy client
 			asyncWrite, err = NewAsyncWrite(file.FS, handle, handleMutex)
 			if err != nil {

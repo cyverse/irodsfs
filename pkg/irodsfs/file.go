@@ -336,7 +336,7 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		}
 
 		var asyncWrite *AsyncWrite
-		if req.Flags.IsWriteOnly() && len(file.FS.Config.ProxyHost) == 0 && file.FS.FileBuffer != nil {
+		if req.Flags.IsWriteOnly() && len(file.FS.Config.ProxyHost) == 0 && file.FS.Buffer != nil {
 			asyncWrite, err = NewAsyncWrite(file.FS, handle, handleMutex)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to create a new async write - %s", irodsPath)
@@ -561,7 +561,7 @@ func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) err
 		}
 
 		// wait until all queued tasks complete
-		handle.AsyncWrite.WaitBackgroundWrites()
+		handle.AsyncWrite.WaitForBackgroundWrites()
 
 		err := handle.AsyncWrite.GetAsyncError()
 		if err != nil {
@@ -597,6 +597,9 @@ func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest)
 		// wait until all queued tasks complete
 		handle.AsyncWrite.Release()
 	}
+
+	handle.FileHandleLock.Lock()
+	defer handle.FileHandleLock.Unlock()
 
 	err := handle.FileHandle.Close()
 	if err != nil {

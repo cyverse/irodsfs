@@ -71,7 +71,7 @@ func (reporter *MonitoringReporter) ReportNewInstance(fsConfig *commons.Config) 
 			ConnectionMax:            fsConfig.ConnectionMax,
 			MetadataCacheTimeout:     fsConfig.MetadataCacheTimeout.String(),
 			MetadataCacheCleanupTime: fsConfig.MetadataCacheCleanupTime.String(),
-			FileBufferSizeMax:        fsConfig.FileBufferSizeMax,
+			BufferSizeMax:            fsConfig.BufferSizeMax,
 
 			ProxyHost: fsConfig.ProxyHost,
 			ProxyPort: fsConfig.ProxyPort,

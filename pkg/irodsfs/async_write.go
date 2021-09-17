@@ -5,8 +5,9 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/cyverse/irodsfs/pkg/buffer"
 	"github.com/cyverse/irodsfs/pkg/irodsapi"
-	channels "github.com/eapache/channels"
+	"github.com/eapache/channels"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -16,16 +17,20 @@ type AsyncWrite struct {
 	IRODSFileHandle irodsapi.IRODSFileHandle
 	FileHandleLock  *sync.Mutex
 
-	FileBuffer     *FileBuffer
+	Buffer               buffer.Buffer
+	BufferEntryGroupName string
+
 	WriteWaitTasks sync.WaitGroup
 	WriteQueue     channels.Channel
-	WriteIOErrors  []error
+
+	PendingErrors []error
+	Mutex         sync.Mutex // for WriteIOErrors
 }
 
 // NewAsyncWrite create a new AsyncWrite
 func NewAsyncWrite(fs *IRODSFS, fileHandle irodsapi.IRODSFileHandle, fileHandleLock *sync.Mutex) (*AsyncWrite, error) {
-	if fs.FileBuffer == nil {
-		return nil, fmt.Errorf("file buffer is not initialized")
+	if fs.Buffer == nil {
+		return nil, fmt.Errorf("buffer is not initialized")
 	}
 
 	asyncWrite := &AsyncWrite{
@@ -33,11 +38,15 @@ func NewAsyncWrite(fs *IRODSFS, fileHandle irodsapi.IRODSFileHandle, fileHandleL
 		IRODSFileHandle: fileHandle,
 		FileHandleLock:  fileHandleLock,
 
-		FileBuffer:     fs.FileBuffer,
+		Buffer:               fs.Buffer,
+		BufferEntryGroupName: fmt.Sprintf("write:%s", fileHandle.GetEntry().Path),
+
 		WriteWaitTasks: sync.WaitGroup{},
 		WriteQueue:     channels.NewInfiniteChannel(),
-		WriteIOErrors:  []error{},
+		PendingErrors:  []error{},
 	}
+
+	fs.Buffer.CreateEntryGroup(asyncWrite.BufferEntryGroupName)
 
 	go asyncWrite.backgroundWriteTask()
 
@@ -47,14 +56,25 @@ func NewAsyncWrite(fs *IRODSFS, fileHandle irodsapi.IRODSFileHandle, fileHandleL
 // Release releases all resources
 func (asyncWrite *AsyncWrite) Release() {
 	// wait until all queued tasks complete
-	asyncWrite.WaitBackgroundWrites()
+	asyncWrite.WaitForBackgroundWrites()
 
-	if asyncWrite.FileBuffer != nil {
-		sectionName := asyncWrite.getFileBufferSectionName()
-		asyncWrite.FileBuffer.ClearSection(sectionName)
+	if asyncWrite.Buffer != nil {
+		asyncWrite.Buffer.DeleteEntryGroup(asyncWrite.BufferEntryGroupName)
 	}
 
 	asyncWrite.WriteQueue.Close()
+}
+
+func (asyncWrite *AsyncWrite) getBufferEntryGroup() buffer.EntryGroup {
+	return asyncWrite.Buffer.GetEntryGroup(asyncWrite.BufferEntryGroupName)
+}
+
+func (asyncWrite *AsyncWrite) getBufferEntryKey(offset int64) string {
+	return fmt.Sprintf("%d", offset)
+}
+
+func (asyncWrite *AsyncWrite) getBufferEntryOffset(key string) (int64, error) {
+	return strconv.ParseInt(key, 10, 64)
 }
 
 // Write writes data
@@ -69,30 +89,23 @@ func (asyncWrite *AsyncWrite) Write(offset int64, data []byte) error {
 		return nil
 	}
 
-	sectionName := asyncWrite.getFileBufferSectionName()
-	bufferKey := asyncWrite.getFileBufferKey(offset)
+	entryKey := asyncWrite.getBufferEntryKey(offset)
+	entryGroup := asyncWrite.getBufferEntryGroup()
 
-	err := asyncWrite.FileBuffer.WaitForSpace(int64(len(data)))
+	_, err := entryGroup.CreateEntry(entryKey, data)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to wait space for cache write - %s, %s", sectionName, bufferKey)
+		logger.WithError(err).Errorf("failed to put an entry to buffer - %s, %s", asyncWrite.BufferEntryGroupName, entryKey)
 		return err
 	}
 
-	err = asyncWrite.FileBuffer.Put(sectionName, bufferKey, data)
-	if err != nil {
-		logger.WithError(err).Errorf("failed to put cache - %s, %s", sectionName, bufferKey)
-		return err
-	}
+	// schedule background write
+	asyncWrite.WriteWaitTasks.Add(1)
+	asyncWrite.WriteQueue.In() <- entryKey
 
-	err = asyncWrite.queueBackgroundWrite(bufferKey)
-	if err != nil {
-		logger.WithError(err).Errorf("failed to queue background write - %s, %s", sectionName, bufferKey)
-		return err
-	}
-
+	// any pending
 	err = asyncWrite.GetAsyncError()
 	if err != nil {
-		logger.WithError(err).Errorf("got an async write failure - %s, %v", sectionName, err)
+		logger.WithError(err).Errorf("failed to write - %s, %v", asyncWrite.BufferEntryGroupName, err)
 		return err
 	}
 
@@ -100,24 +113,23 @@ func (asyncWrite *AsyncWrite) Write(offset int64, data []byte) error {
 }
 
 func (asyncWrite *AsyncWrite) GetAsyncError() error {
-	if len(asyncWrite.WriteIOErrors) > 0 {
-		return asyncWrite.WriteIOErrors[0]
+	asyncWrite.Mutex.Lock()
+	defer asyncWrite.Mutex.Unlock()
+
+	if len(asyncWrite.PendingErrors) > 0 {
+		return asyncWrite.PendingErrors[0]
 	}
 	return nil
 }
 
 func (asyncWrite *AsyncWrite) addAsyncError(err error) {
-	asyncWrite.WriteIOErrors = append(asyncWrite.WriteIOErrors, err)
+	asyncWrite.Mutex.Lock()
+	defer asyncWrite.Mutex.Unlock()
+
+	asyncWrite.PendingErrors = append(asyncWrite.PendingErrors, err)
 }
 
-func (asyncWrite *AsyncWrite) queueBackgroundWrite(key string) error {
-	// queue key
-	asyncWrite.WriteWaitTasks.Add(1)
-	asyncWrite.WriteQueue.In() <- key
-	return nil
-}
-
-func (asyncWrite *AsyncWrite) WaitBackgroundWrites() {
+func (asyncWrite *AsyncWrite) WaitForBackgroundWrites() {
 	asyncWrite.WriteWaitTasks.Wait()
 }
 
@@ -128,7 +140,8 @@ func (asyncWrite *AsyncWrite) backgroundWriteTask() {
 		"function": "backgroundWriteTask",
 	})
 
-	sectionName := asyncWrite.getFileBufferSectionName()
+	entryGroup := asyncWrite.getBufferEntryGroup()
+
 	filePath := asyncWrite.IRODSFileHandle.GetEntry().Path
 
 	for {
@@ -141,60 +154,45 @@ func (asyncWrite *AsyncWrite) backgroundWriteTask() {
 		if outData != nil {
 			key := outData.(string)
 
-			// buffer key is still in file buffer
-			if bufferEntry, ok := asyncWrite.FileBuffer.GetBufferEntry(sectionName, key); ok {
-				// write
-				hasError := false
-
-				if bufferEntry.Status == FileBufferEntryStatusReady {
-					bufferData, err := asyncWrite.FileBuffer.Pop(sectionName, key)
-					if err != nil {
-						logger.WithError(err).Errorf("failed to get buffered data - %s, %s", sectionName, key)
-						asyncWrite.addAsyncError(err)
-						hasError = true
-					}
-
-					if !hasError {
-						// upload buffer data
-						offset, err := asyncWrite.getFileBufferOffsetFromKey(key)
-						if err != nil {
-							logger.WithError(err).Errorf("failed to get buffer offset - %s, %s", sectionName, key)
-							asyncWrite.addAsyncError(err)
-							hasError = true
-						} else {
-							logger.Infof("Async Writing - %s, Offset %d", filePath, offset)
-
-							asyncWrite.FileHandleLock.Lock()
-
-							err := asyncWrite.IRODSFileHandle.WriteAt(offset, bufferData)
-							if err != nil {
-								logger.WithError(err).Errorf("failed to write data - %s, %d", filePath, len(bufferData))
-								asyncWrite.addAsyncError(err)
-								hasError = true
-							}
-
-							// Report
-							asyncWrite.FS.MonitoringReporter.ReportFileTransfer(asyncWrite.IRODSFileHandle.GetEntry().Path, asyncWrite.IRODSFileHandle, offset, int64(len(bufferData)))
-
-							asyncWrite.FileHandleLock.Unlock()
-						}
-					}
-				}
+			offset, err := asyncWrite.getBufferEntryOffset(key)
+			if err != nil {
+				logger.WithError(err).Errorf("failed to get entry offset - %s, %s", asyncWrite.BufferEntryGroupName, key)
+				asyncWrite.addAsyncError(err)
+				continue
 			}
+
+			entry := entryGroup.PopEntry(key)
+			if entry == nil {
+				err = fmt.Errorf("failed to get an entry - %s, %s", asyncWrite.BufferEntryGroupName, key)
+				logger.Error(err)
+				asyncWrite.addAsyncError(err)
+				continue
+			}
+
+			data := entry.GetData()
+			if len(data) != entry.GetSize() && len(data) <= 0 {
+				err = fmt.Errorf("failed to get data - %s, %s", asyncWrite.BufferEntryGroupName, key)
+				logger.Error(err)
+				asyncWrite.addAsyncError(err)
+				continue
+			}
+
+			logger.Infof("Async Writing - %s, Offset %d", filePath, offset)
+			asyncWrite.FileHandleLock.Lock()
+
+			err = asyncWrite.IRODSFileHandle.WriteAt(offset, data)
+			if err != nil {
+				logger.WithError(err).Errorf("failed to write data - %s, %d, %d", filePath, offset, len(data))
+				asyncWrite.addAsyncError(err)
+				continue
+			}
+
+			// Report
+			asyncWrite.FS.MonitoringReporter.ReportFileTransfer(asyncWrite.IRODSFileHandle.GetEntry().Path, asyncWrite.IRODSFileHandle, offset, int64(len(data)))
+
+			asyncWrite.FileHandleLock.Unlock()
 
 			asyncWrite.WriteWaitTasks.Done()
 		}
 	}
-}
-
-func (asyncWrite *AsyncWrite) getFileBufferSectionName() string {
-	return fmt.Sprintf("write:%s", asyncWrite.IRODSFileHandle.GetEntry().Path)
-}
-
-func (asyncWrite *AsyncWrite) getFileBufferKey(startOffset int64) string {
-	return fmt.Sprintf("%d", startOffset)
-}
-
-func (asyncWrite *AsyncWrite) getFileBufferOffsetFromKey(key string) (int64, error) {
-	return strconv.ParseInt(key, 10, 64)
 }
