@@ -62,8 +62,8 @@ type Config struct {
 	SystemUser   string            `yaml:"system_user"`
 	MountPath    string            `yaml:"mount_path,omitempty"`
 
-	ProxyHost string `yaml:"proxy_host,omitempty"`
-	ProxyPort int    `yaml:"proxy_port,omitempty"`
+	PoolHost string `yaml:"pool_host,omitempty"`
+	PoolPort int    `yaml:"pool_port,omitempty"`
 
 	AuthScheme          string `yaml:"authscheme"`
 	CACertificateFile   string `yaml:"ssl_ca_cert_file"`
@@ -103,8 +103,8 @@ type configAlias struct {
 	SystemUser   string            `yaml:"system_user"`
 	MountPath    string            `yaml:"mount_path,omitempty"`
 
-	ProxyHost string `yaml:"proxy_host,omitempty"`
-	ProxyPort int    `yaml:"proxy_port,omitempty"`
+	PoolHost string `yaml:"pool_host,omitempty"`
+	PoolPort int    `yaml:"pool_port,omitempty"`
 
 	AuthScheme          string `yaml:"authscheme"`
 	CACertificateFile   string `yaml:"ssl_ca_cert_file"`
@@ -142,8 +142,8 @@ func NewDefaultConfig() *Config {
 		GID:          gid,
 		SystemUser:   systemUser,
 
-		ProxyHost: "",
-		ProxyPort: 0,
+		PoolHost: "",
+		PoolPort: 0,
 
 		AuthScheme:          AuthSchemeDefault,
 		EncryptionKeySize:   EncryptionKeySizeDefault,
@@ -181,8 +181,8 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		GID:          gid,
 		SystemUser:   systemUser,
 
-		ProxyHost: "",
-		ProxyPort: 0,
+		PoolHost: "",
+		PoolPort: 0,
 
 		AuthScheme:          AuthSchemeDefault,
 		EncryptionKeySize:   EncryptionKeySizeDefault,
@@ -264,8 +264,8 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		SystemUser:   systemUser,
 		MountPath:    alias.MountPath,
 
-		ProxyHost: alias.ProxyHost,
-		ProxyPort: alias.ProxyPort,
+		PoolHost: alias.PoolHost,
+		PoolPort: alias.PoolPort,
 
 		AuthScheme:          alias.AuthScheme,
 		CACertificateFile:   alias.CACertificateFile,

@@ -92,12 +92,12 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	)
 
 	var irodsClient irodsapi.IRODSClient = nil
-	if len(config.ProxyHost) > 0 {
-		// use proxy driver
-		irodsClient, err = irodsapi.NewProxyClientDriver(config.ProxyHost, config.ProxyPort, account, fsconfig)
+	if len(config.PoolHost) > 0 {
+		// use pool driver
+		irodsClient, err = irodsapi.NewPoolClientDriver(config.PoolHost, config.PoolPort, account, fsconfig)
 		if err != nil {
-			logger.WithError(err).Error("failed to create a new iRODS Proxy Client")
-			return nil, fmt.Errorf("failed to create a new iRODS Proxy Client - %v", err)
+			logger.WithError(err).Error("failed to create a new iRODS Pool Client")
+			return nil, fmt.Errorf("failed to create a new iRODS Pool Client - %v", err)
 		}
 	} else {
 		// use go-irodsclient driver
@@ -117,7 +117,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	fileMetaUpdater := NewFileMetaUpdater()
 
 	var ramBuffer buffer.Buffer
-	if len(config.ProxyHost) == 0 && config.BufferSizeMax > 0 {
+	if len(config.PoolHost) == 0 && config.BufferSizeMax > 0 {
 		ramBuffer = buffer.NewRAMBuffer(config.BufferSizeMax)
 	}
 

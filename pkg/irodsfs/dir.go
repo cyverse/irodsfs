@@ -779,8 +779,8 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 		handleMutex := &sync.Mutex{}
 
 		var asyncWrite *AsyncWrite
-		if req.Flags.IsWriteOnly() && len(dir.FS.Config.ProxyHost) == 0 && dir.FS.Buffer != nil {
-			// it should not use proxy client
+		if req.Flags.IsWriteOnly() && len(dir.FS.Config.PoolHost) == 0 && dir.FS.Buffer != nil {
+			// it should not use pool client
 			asyncWrite, err = NewAsyncWrite(file.FS, handle, handleMutex)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to create a new async write - %s", irodsPath)

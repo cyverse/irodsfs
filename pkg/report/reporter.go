@@ -73,8 +73,8 @@ func (reporter *MonitoringReporter) ReportNewInstance(fsConfig *commons.Config) 
 			MetadataCacheCleanupTime: fsConfig.MetadataCacheCleanupTime.String(),
 			BufferSizeMax:            fsConfig.BufferSizeMax,
 
-			ProxyHost: fsConfig.ProxyHost,
-			ProxyPort: fsConfig.ProxyPort,
+			PoolHost: fsConfig.PoolHost,
+			PoolPort: fsConfig.PoolPort,
 
 			CreationTime: time.Now().UTC(),
 		}
