@@ -1,11 +1,10 @@
-package irodsfs
+package asyncwrite
 
 import (
 	"fmt"
 	"strconv"
 	"sync"
 
-	"github.com/cyverse/irodsfs/pkg/buffer"
 	"github.com/cyverse/irodsfs/pkg/irodsapi"
 	"github.com/cyverse/irodsfs/pkg/report"
 	"github.com/eapache/channels"
@@ -17,7 +16,7 @@ type AsyncWrite struct {
 	IRODSFileHandle irodsapi.IRODSFileHandle
 	FileHandleLock  *sync.Mutex
 
-	Buffer               buffer.Buffer
+	Buffer               Buffer
 	BufferEntryGroupName string
 
 	WriteWaitTasks sync.WaitGroup
@@ -30,7 +29,7 @@ type AsyncWrite struct {
 }
 
 // NewAsyncWrite create a new AsyncWrite
-func NewAsyncWrite(fileHandle irodsapi.IRODSFileHandle, fileHandleLock *sync.Mutex, writeBuffer buffer.Buffer, monitoringReporter *report.MonitoringReporter) (*AsyncWrite, error) {
+func NewAsyncWrite(fileHandle irodsapi.IRODSFileHandle, fileHandleLock *sync.Mutex, writeBuffer Buffer, monitoringReporter *report.MonitoringReporter) (*AsyncWrite, error) {
 	asyncWrite := &AsyncWrite{
 		IRODSFileHandle: fileHandle,
 		FileHandleLock:  fileHandleLock,
@@ -64,7 +63,7 @@ func (asyncWrite *AsyncWrite) Release() {
 	asyncWrite.WriteQueue.Close()
 }
 
-func (asyncWrite *AsyncWrite) getBufferEntryGroup() buffer.EntryGroup {
+func (asyncWrite *AsyncWrite) getBufferEntryGroup() EntryGroup {
 	return asyncWrite.Buffer.GetEntryGroup(asyncWrite.BufferEntryGroupName)
 }
 

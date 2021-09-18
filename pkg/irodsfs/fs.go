@@ -8,7 +8,7 @@ import (
 	fusefs "bazil.org/fuse/fs"
 	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
 	irodsfs_clienttype "github.com/cyverse/go-irodsclient/irods/types"
-	"github.com/cyverse/irodsfs/pkg/buffer"
+	"github.com/cyverse/irodsfs/pkg/asyncwrite"
 	"github.com/cyverse/irodsfs/pkg/commons"
 	"github.com/cyverse/irodsfs/pkg/irodsapi"
 	"github.com/cyverse/irodsfs/pkg/report"
@@ -47,7 +47,7 @@ type IRODSFS struct {
 	VFS             *vfs.VFS
 	FileMetaUpdater *FileMetaUpdater
 	IRODSClient     irodsapi.IRODSClient
-	Buffer          buffer.Buffer
+	Buffer          asyncwrite.Buffer
 
 	UID uint32
 	GID uint32
@@ -116,9 +116,9 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 
 	fileMetaUpdater := NewFileMetaUpdater()
 
-	var ramBuffer buffer.Buffer
+	var ramBuffer asyncwrite.Buffer
 	if len(config.PoolHost) == 0 && config.BufferSizeMax > 0 {
-		ramBuffer = buffer.NewRAMBuffer(config.BufferSizeMax)
+		ramBuffer = asyncwrite.NewRAMBuffer(config.BufferSizeMax)
 	}
 
 	return &IRODSFS{

@@ -10,6 +10,7 @@ import (
 
 	fuse "bazil.org/fuse"
 	fusefs "bazil.org/fuse/fs"
+	"github.com/cyverse/irodsfs/pkg/asyncwrite"
 	"github.com/cyverse/irodsfs/pkg/irodsapi"
 	"github.com/cyverse/irodsfs/pkg/utils"
 	"github.com/cyverse/irodsfs/pkg/vfs"
@@ -778,10 +779,10 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 
 		handleMutex := &sync.Mutex{}
 
-		var asyncWrite *AsyncWrite
+		var asyncWrite *asyncwrite.AsyncWrite
 		if req.Flags.IsWriteOnly() && len(dir.FS.Config.PoolHost) == 0 && dir.FS.Buffer != nil {
 			// it should not use pool client
-			asyncWrite, err = NewAsyncWrite(handle, handleMutex, dir.FS.Buffer, dir.FS.MonitoringReporter)
+			asyncWrite, err = asyncwrite.NewAsyncWrite(handle, handleMutex, dir.FS.Buffer, dir.FS.MonitoringReporter)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to create a new async write - %s", irodsPath)
 				return nil, nil, syscall.EREMOTEIO

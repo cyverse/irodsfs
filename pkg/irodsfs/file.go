@@ -10,6 +10,7 @@ import (
 
 	"bazil.org/fuse"
 	fusefs "bazil.org/fuse/fs"
+	"github.com/cyverse/irodsfs/pkg/asyncwrite"
 	"github.com/cyverse/irodsfs/pkg/irodsapi"
 	"github.com/cyverse/irodsfs/pkg/vfs"
 	log "github.com/sirupsen/logrus"
@@ -39,7 +40,7 @@ type FileHandle struct {
 
 	WriteBuffer            bytes.Buffer
 	WriteBufferStartOffset int64
-	AsyncWrite             *AsyncWrite
+	AsyncWrite             *asyncwrite.AsyncWrite
 }
 
 func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, irodsEntry *irodsapi.IRODSEntry) os.FileMode {
@@ -335,9 +336,9 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 			file.FS.MonitoringReporter.ReportNewFileTransferStart(file.Entry.IRODSEntry.Path, handle, file.Entry.IRODSEntry.Size)
 		}
 
-		var asyncWrite *AsyncWrite
+		var asyncWrite *asyncwrite.AsyncWrite
 		if req.Flags.IsWriteOnly() && len(file.FS.Config.PoolHost) == 0 && file.FS.Buffer != nil {
-			asyncWrite, err = NewAsyncWrite(handle, handleMutex, file.FS.Buffer, file.FS.MonitoringReporter)
+			asyncWrite, err = asyncwrite.NewAsyncWrite(handle, handleMutex, file.FS.Buffer, file.FS.MonitoringReporter)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to create a new async write - %s", irodsPath)
 				return nil, syscall.EREMOTEIO
