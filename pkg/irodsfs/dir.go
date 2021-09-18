@@ -781,7 +781,7 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 		var asyncWrite *AsyncWrite
 		if req.Flags.IsWriteOnly() && len(dir.FS.Config.PoolHost) == 0 && dir.FS.Buffer != nil {
 			// it should not use pool client
-			asyncWrite, err = NewAsyncWrite(file.FS, handle, handleMutex)
+			asyncWrite, err = NewAsyncWrite(handle, handleMutex, dir.FS.Buffer, dir.FS.MonitoringReporter)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to create a new async write - %s", irodsPath)
 				return nil, nil, syscall.EREMOTEIO

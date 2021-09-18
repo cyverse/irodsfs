@@ -337,7 +337,7 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 
 		var asyncWrite *AsyncWrite
 		if req.Flags.IsWriteOnly() && len(file.FS.Config.PoolHost) == 0 && file.FS.Buffer != nil {
-			asyncWrite, err = NewAsyncWrite(file.FS, handle, handleMutex)
+			asyncWrite, err = NewAsyncWrite(handle, handleMutex, file.FS.Buffer, file.FS.MonitoringReporter)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to create a new async write - %s", irodsPath)
 				return nil, syscall.EREMOTEIO

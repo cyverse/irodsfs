@@ -7,13 +7,13 @@ import (
 
 	"github.com/cyverse/irodsfs/pkg/buffer"
 	"github.com/cyverse/irodsfs/pkg/irodsapi"
+	"github.com/cyverse/irodsfs/pkg/report"
 	"github.com/eapache/channels"
 	log "github.com/sirupsen/logrus"
 )
 
 // AsyncWrite helps async write
 type AsyncWrite struct {
-	FS              *IRODSFS
 	IRODSFileHandle irodsapi.IRODSFileHandle
 	FileHandleLock  *sync.Mutex
 
@@ -25,28 +25,27 @@ type AsyncWrite struct {
 
 	PendingErrors []error
 	Mutex         sync.Mutex // for WriteIOErrors
+
+	MonitoringReporter *report.MonitoringReporter
 }
 
 // NewAsyncWrite create a new AsyncWrite
-func NewAsyncWrite(fs *IRODSFS, fileHandle irodsapi.IRODSFileHandle, fileHandleLock *sync.Mutex) (*AsyncWrite, error) {
-	if fs.Buffer == nil {
-		return nil, fmt.Errorf("buffer is not initialized")
-	}
-
+func NewAsyncWrite(fileHandle irodsapi.IRODSFileHandle, fileHandleLock *sync.Mutex, writeBuffer buffer.Buffer, monitoringReporter *report.MonitoringReporter) (*AsyncWrite, error) {
 	asyncWrite := &AsyncWrite{
-		FS:              fs,
 		IRODSFileHandle: fileHandle,
 		FileHandleLock:  fileHandleLock,
 
-		Buffer:               fs.Buffer,
+		Buffer:               writeBuffer,
 		BufferEntryGroupName: fmt.Sprintf("write:%s", fileHandle.GetEntry().Path),
 
 		WriteWaitTasks: sync.WaitGroup{},
 		WriteQueue:     channels.NewInfiniteChannel(),
 		PendingErrors:  []error{},
+
+		MonitoringReporter: monitoringReporter,
 	}
 
-	fs.Buffer.CreateEntryGroup(asyncWrite.BufferEntryGroupName)
+	writeBuffer.CreateEntryGroup(asyncWrite.BufferEntryGroupName)
 
 	go asyncWrite.backgroundWriteTask()
 
@@ -188,7 +187,9 @@ func (asyncWrite *AsyncWrite) backgroundWriteTask() {
 			}
 
 			// Report
-			asyncWrite.FS.MonitoringReporter.ReportFileTransfer(asyncWrite.IRODSFileHandle.GetEntry().Path, asyncWrite.IRODSFileHandle, offset, int64(len(data)))
+			if asyncWrite.MonitoringReporter != nil {
+				asyncWrite.MonitoringReporter.ReportFileTransfer(asyncWrite.IRODSFileHandle.GetEntry().Path, asyncWrite.IRODSFileHandle, offset, int64(len(data)))
+			}
 
 			asyncWrite.FileHandleLock.Unlock()
 
