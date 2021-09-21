@@ -204,15 +204,17 @@ func (fs *IRODSFS) StopFuse() {
 
 	logger.Info("Stopping FileSystem")
 
+	go func() {
+		logger.Info("Testing mount point")
+		time.Sleep(100 * time.Millisecond)
+		// this is to create a request to dead fuse
+		// causing the fuse client to notice it's closing
+		os.Stat(fs.Config.MountPath)
+	}()
+
 	// forcefully close the fuse connection
 	fs.KillFUSE = true
 	fs.FuseConnection.Close()
-
-	logger.Info("Testing mount point")
-	time.Sleep(100 * time.Millisecond)
-	// this is to create a request to dead fuse
-	// causing the fuse client to notice it's closing
-	os.Stat(fs.Config.MountPath)
 }
 
 // Destroy destroys the file system
