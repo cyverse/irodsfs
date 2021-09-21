@@ -16,12 +16,15 @@ type RAMEntry struct {
 }
 
 func NewRAMEntry(buffer *RAMBuffer, group *RAMEntryGroup, key string, data []byte) *RAMEntry {
+	dataCopy := make([]byte, len(data))
+	copy(dataCopy, data)
+
 	return &RAMEntry{
 		Key:          key,
 		Size:         len(data),
 		AccessCount:  0,
 		CreationTime: time.Now(),
-		Data:         data,
+		Data:         dataCopy,
 	}
 }
 

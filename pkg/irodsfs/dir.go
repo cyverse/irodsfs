@@ -1,7 +1,6 @@
 package irodsfs
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -779,14 +778,13 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 
 		handleMutex := &sync.Mutex{}
 
-		var asyncWrite *asyncwrite.AsyncWrite
-		if req.Flags.IsWriteOnly() && len(dir.FS.Config.PoolHost) == 0 && dir.FS.Buffer != nil {
-			// it should not use pool client
-			asyncWrite, err = asyncwrite.NewAsyncWrite(handle, handleMutex, dir.FS.Buffer, dir.FS.MonitoringReporter)
-			if err != nil {
-				logger.WithError(err).Errorf("failed to create a new async write - %s", irodsPath)
-				return nil, nil, syscall.EREMOTEIO
-			}
+		var writer asyncwrite.Writer
+		if req.Flags.IsWriteOnly() && len(dir.FS.Config.PoolHost) == 0 {
+			asyncWriter := asyncwrite.NewAsyncWriter(irodsPath, handle, handleMutex, dir.FS.Buffer, dir.FS.MonitoringReporter)
+			//syncWriter := asyncwrite.NewSyncWriter(irodsPath, handle, handleMutex, dir.FS.MonitoringReporter)
+			writer = asyncwrite.NewBufferedWriter(irodsPath, asyncWriter)
+		} else {
+			writer = asyncwrite.NewSyncWriter(irodsPath, handle, handleMutex, dir.FS.MonitoringReporter)
 		}
 
 		fileHandle := &FileHandle{
@@ -797,9 +795,7 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 			FileHandle:     handle,
 			FileHandleLock: handleMutex,
 
-			WriteBuffer:            bytes.Buffer{},
-			WriteBufferStartOffset: 0,
-			AsyncWrite:             asyncWrite,
+			Writer: writer,
 		}
 
 		return file, fileHandle, nil

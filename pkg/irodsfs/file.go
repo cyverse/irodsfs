@@ -1,7 +1,6 @@
 package irodsfs
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -38,9 +37,7 @@ type FileHandle struct {
 	FileHandle     irodsapi.IRODSFileHandle
 	FileHandleLock *sync.Mutex
 
-	WriteBuffer            bytes.Buffer
-	WriteBufferStartOffset int64
-	AsyncWrite             *asyncwrite.AsyncWrite
+	Writer asyncwrite.Writer
 }
 
 func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, irodsEntry *irodsapi.IRODSEntry) os.FileMode {
@@ -336,13 +333,13 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 			file.FS.MonitoringReporter.ReportNewFileTransferStart(file.Entry.IRODSEntry.Path, handle, file.Entry.IRODSEntry.Size)
 		}
 
-		var asyncWrite *asyncwrite.AsyncWrite
-		if req.Flags.IsWriteOnly() && len(file.FS.Config.PoolHost) == 0 && file.FS.Buffer != nil {
-			asyncWrite, err = asyncwrite.NewAsyncWrite(handle, handleMutex, file.FS.Buffer, file.FS.MonitoringReporter)
-			if err != nil {
-				logger.WithError(err).Errorf("failed to create a new async write - %s", irodsPath)
-				return nil, syscall.EREMOTEIO
-			}
+		var writer asyncwrite.Writer
+		if req.Flags.IsWriteOnly() && len(file.FS.Config.PoolHost) == 0 {
+			asyncWriter := asyncwrite.NewAsyncWriter(irodsPath, handle, handleMutex, file.FS.Buffer, file.FS.MonitoringReporter)
+			//syncWriter := asyncwrite.NewSyncWriter(irodsPath, handle, handleMutex, file.FS.MonitoringReporter)
+			writer = asyncwrite.NewBufferedWriter(irodsPath, asyncWriter)
+		} else {
+			writer = asyncwrite.NewSyncWriter(irodsPath, handle, handleMutex, file.FS.MonitoringReporter)
 		}
 
 		fileHandle := &FileHandle{
@@ -353,9 +350,7 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 			FileHandle:     handle,
 			FileHandleLock: handleMutex,
 
-			WriteBuffer:            bytes.Buffer{},
-			WriteBufferStartOffset: 0,
-			AsyncWrite:             asyncWrite,
+			Writer: writer,
 		}
 
 		return fileHandle, nil
@@ -452,79 +447,13 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 		return nil
 	}
 
-	handle.FileHandleLock.Lock()
-	defer handle.FileHandleLock.Unlock()
-
-	if handle.AsyncWrite != nil {
-		// write async
-		// check if data is continuous from prior write
-		if handle.WriteBuffer.Len() > 0 {
-			// has data
-			if handle.WriteBufferStartOffset+int64(handle.WriteBuffer.Len()) != req.Offset {
-				// not continuous
-				// Spill to disk cache
-				err := handle.AsyncWrite.Write(handle.WriteBufferStartOffset, handle.WriteBuffer.Bytes())
-				if err != nil {
-					logger.WithError(err).Errorf("failed to write - %s, %d", handle.Path, handle.WriteBufferStartOffset)
-					return err
-				}
-
-				handle.WriteBufferStartOffset = 0
-				handle.WriteBuffer.Reset()
-
-				// write to buffer
-				_, err = handle.WriteBuffer.Write(req.Data)
-				if err != nil {
-					logger.WithError(err).Errorf("failed to buffer data for file %s, offset %d, length %d", handle.Path, req.Offset, len(req.Data))
-					return err
-				}
-				handle.WriteBufferStartOffset = req.Offset
-			} else {
-				// continuous
-				// write to buffer
-				_, err := handle.WriteBuffer.Write(req.Data)
-				if err != nil {
-					logger.WithError(err).Errorf("failed to buffer data for file %s, offset %d, length %d", handle.Path, req.Offset, len(req.Data))
-					return err
-				}
-			}
-		} else {
-			// write to buffer
-			_, err := handle.WriteBuffer.Write(req.Data)
-			if err != nil {
-				logger.WithError(err).Errorf("failed to buffer data for file %s, offset %d, length %d", handle.Path, req.Offset, len(req.Data))
-				return err
-			}
-			handle.WriteBufferStartOffset = req.Offset
-		}
-
-		if handle.WriteBuffer.Len() >= WriteBlockSize {
-			// Spill to disk cache
-			err := handle.AsyncWrite.Write(handle.WriteBufferStartOffset, handle.WriteBuffer.Bytes())
-			if err != nil {
-				logger.WithError(err).Errorf("failed to write - %s, %d", handle.Path, handle.WriteBufferStartOffset)
-				return err
-			}
-
-			handle.WriteBufferStartOffset = 0
-			handle.WriteBuffer.Reset()
-		}
-
-		resp.Size = len(req.Data)
-	} else {
-		// write immediately
-		err := handle.FileHandle.WriteAt(req.Offset, req.Data)
-		if err != nil {
-			logger.WithError(err).Errorf("failed to write - %s, %d", handle.Path, len(req.Data))
-			return syscall.EREMOTEIO
-		}
-
-		resp.Size = len(req.Data)
-
-		// Report
-		handle.FS.MonitoringReporter.ReportFileTransfer(handle.IRODSFSEntry.Path, handle.FileHandle, req.Offset, int64(resp.Size))
+	err := handle.Writer.WriteAt(req.Offset, req.Data)
+	if err != nil {
+		logger.WithError(err).Errorf("failed to write data for file %s, offset %d, length %d", handle.Path, req.Offset, len(req.Data))
+		return syscall.EREMOTEIO
 	}
 
+	resp.Size = len(req.Data)
 	return nil
 }
 
@@ -548,27 +477,10 @@ func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) err
 	}
 
 	// Flush
-	if handle.AsyncWrite != nil {
-		// spill
-		if handle.WriteBuffer.Len() > 0 {
-			err := handle.AsyncWrite.Write(handle.WriteBufferStartOffset, handle.WriteBuffer.Bytes())
-			if err != nil {
-				logger.WithError(err).Errorf("failed to write - %s, %d", handle.Path, handle.WriteBufferStartOffset)
-				return err
-			}
-
-			handle.WriteBufferStartOffset = 0
-			handle.WriteBuffer.Reset()
-		}
-
-		// wait until all queued tasks complete
-		handle.AsyncWrite.WaitForBackgroundWrites()
-
-		err := handle.AsyncWrite.GetAsyncError()
-		if err != nil {
-			logger.WithError(err).Errorf("got an async write failure - %s, %v", handle.Path, err)
-			return err
-		}
+	err := handle.Writer.Flush()
+	if err != nil {
+		logger.WithError(err).Errorf("failed to flush - %s", handle.Path)
+		return syscall.EREMOTEIO
 	}
 
 	return nil
@@ -594,9 +506,15 @@ func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest)
 	}
 
 	// Flush
-	if handle.AsyncWrite != nil {
+	if handle.Writer != nil {
 		// wait until all queued tasks complete
-		handle.AsyncWrite.Release()
+		handle.Writer.Release()
+
+		err := handle.Writer.GetPendingError()
+		if err != nil {
+			logger.WithError(err).Errorf("got a write failure - %s, %v", handle.Path, err)
+			return syscall.EREMOTEIO
+		}
 	}
 
 	handle.FileHandleLock.Lock()
