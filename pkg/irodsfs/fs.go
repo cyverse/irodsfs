@@ -2,7 +2,9 @@ package irodsfs
 
 import (
 	"fmt"
+	"os"
 	"syscall"
+	"time"
 
 	"bazil.org/fuse"
 	fusefs "bazil.org/fuse/fs"
@@ -55,6 +57,7 @@ type IRODSFS struct {
 	MonitoringReporter *report.MonitoringReporter
 
 	Terminated bool
+	KillFUSE   bool
 }
 
 // NewFileSystem creates a new file system
@@ -181,10 +184,35 @@ func (fs *IRODSFS) StartFuse() error {
 	fs.Fuse = fuseServer
 
 	if err := fuseServer.Serve(fs); err != nil {
+		if fs.KillFUSE {
+			// suppress error
+			return nil
+		}
+
 		logger.WithError(err).Error("failed to start FUSE server")
 		return err
 	}
 	return nil
+}
+
+func (fs *IRODSFS) StopFuse() {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "IRODSFS",
+		"function": "StopFuse",
+	})
+
+	logger.Info("Stopping FileSystem")
+
+	// forcefully close the fuse connection
+	fs.KillFUSE = true
+	fs.FuseConnection.Close()
+
+	logger.Info("Testing mount point")
+	time.Sleep(100 * time.Millisecond)
+	// this is to create a request to dead fuse
+	// causing the fuse client to notice it's closing
+	os.Stat(fs.Config.MountPath)
 }
 
 // Destroy destroys the file system
@@ -209,16 +237,6 @@ func (fs *IRODSFS) Destroy() {
 		fs.MonitoringReporter = nil
 	}
 
-	if fs.FuseConnection != nil {
-		logger.Info("Closing fuse connection")
-		fs.FuseConnection.Close()
-		fs.FuseConnection = nil
-	}
-
-	// try to unmount (error may occur but ignore it)
-	logger.Info("Unmounting mountpath")
-	fuse.Unmount(fs.Config.MountPath)
-
 	logger.Info("Releasing resources")
 	if fs.IRODSClient != nil {
 		fs.IRODSClient.Release()
@@ -229,6 +247,16 @@ func (fs *IRODSFS) Destroy() {
 		fs.Buffer.DeleteAllEntryGroups()
 		fs.Buffer = nil
 	}
+
+	if fs.FuseConnection != nil {
+		logger.Info("Closing fuse connection")
+		fs.FuseConnection.Close()
+		fs.FuseConnection = nil
+	}
+
+	// try to unmount (error may occur but ignore it)
+	logger.Info("Unmounting mountpath")
+	fuse.Unmount(fs.Config.MountPath)
 }
 
 // Root returns root directory node

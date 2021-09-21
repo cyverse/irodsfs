@@ -133,7 +133,7 @@ def main(argv):
     irodsBin = which("irodsfs")
 
     if not irodsBin:
-        print("failed to find irodsfs (iRODS FUSE) installed from PATH environment", file=sys.stderr)
+        print("failed to find irodsfs (iRODS FUSE Lite) installed from PATH environment", file=sys.stderr)
         sys.exit(1)
 
     print("found irodsfs > %s" % irodsBin)

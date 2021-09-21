@@ -151,7 +151,7 @@ func parentRun(irodsfsExec string, config *commons.Config) error {
 		// foreground
 		err = run(config, false)
 		if err != nil {
-			logger.WithError(err).Error("failed to run irodsfs")
+			logger.WithError(err).Error("failed to run iRODS FUSE Lite")
 			return err
 		}
 	}
@@ -196,7 +196,7 @@ func parentMain() {
 	// run
 	err = parentRun(os.Args[0], config)
 	if err != nil {
-		logger.WithError(err).Error("failed to run the parent process")
+		logger.WithError(err).Error("failed to run the foreground process")
 		logger.Fatal(err)
 	}
 
@@ -266,7 +266,7 @@ func childMain() {
 	// background
 	err = run(config, true)
 	if err != nil {
-		logger.WithError(err).Error("failed to run irodsfs")
+		logger.WithError(err).Error("failed to run iRODS FUSE Lite")
 		os.Exit(1)
 	}
 
@@ -297,18 +297,20 @@ func run(config *commons.Config, isChildProcess bool) error {
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL, syscall.SIGQUIT)
 
 	go func() {
-		<-signalChan
+		receivedSignal := <-signalChan
+
+		logger.Infof("received signal (%s), terminating iRODS FUSE Lite", receivedSignal.String())
 		if isChildProcess {
 			fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
 		}
 
-		fs.Destroy()
-		os.Exit(0)
+		fs.StopFuse()
 	}()
 
 	err = fs.ConnectToFuse()
 	if err != nil {
-		logger.Error(err)
+		logger.WithError(err).Error("failed to connect to FUSE, terminating iRODS FUSE Lite")
+
 		if isChildProcess {
 			fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
 		}
@@ -328,12 +330,13 @@ func run(config *commons.Config, isChildProcess bool) error {
 
 	err = fs.StartFuse()
 	if err != nil {
-		logger.WithError(err).Error("failed to start FUSE")
+		logger.WithError(err).Error("failed to start FUSE, terminating iRODS FUSE Lite")
 		fs.Destroy()
 		return err
 	}
 
 	// returns if mount fails, or stopped.
+	logger.Info("FUSE stopped, terminating iRODS FUSE Lite")
 	fs.Destroy()
 	return nil
 }
