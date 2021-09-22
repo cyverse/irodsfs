@@ -1,8 +1,6 @@
 package asyncwrite
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"sync"
 
 	"github.com/cyverse/irodsfs/pkg/irodsapi"
@@ -49,11 +47,7 @@ func (writer *SyncWriter) WriteAt(offset int64, data []byte) error {
 		return nil
 	}
 
-	hash := sha1.New()
-	hash.Write(data)
-	hashString := hex.EncodeToString(hash.Sum(nil))
-
-	logger.Infof("Sync Writing - %s, Offset %d, length %d, hash %s", writer.Path, offset, len(data), hashString)
+	logger.Infof("Sync Writing - %s, Offset %d, length %d", writer.Path, offset, len(data))
 
 	writer.FileHandleLock.Lock()
 

@@ -1,8 +1,6 @@
 package asyncwrite
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"fmt"
 	"strconv"
 	"sync"
@@ -39,7 +37,7 @@ func NewAsyncWriter(path string, fileHandle irodsapi.IRODSFileHandle, fileHandle
 		FileHandleLock:  fileHandleLock,
 
 		Buffer:               writeBuffer,
-		BufferEntryGroupName: fmt.Sprintf("write:%s", fileHandle.GetEntry().Path),
+		BufferEntryGroupName: fmt.Sprintf("write:%s", path),
 
 		WriteWaitTasks: sync.WaitGroup{},
 		WriteQueue:     channels.NewInfiniteChannel(),
@@ -196,11 +194,7 @@ func (writer *AsyncWriter) backgroundWriteTask() {
 				continue
 			}
 
-			hash := sha1.New()
-			hash.Write(data)
-			hashString := hex.EncodeToString(hash.Sum(nil))
-
-			logger.Infof("Async Writing - %s, Offset %d, length %d, hash %s", writer.Path, offset, len(data), hashString)
+			logger.Infof("Async Writing - %s, Offset %d, length %d", writer.Path, offset, len(data))
 			writer.FileHandleLock.Lock()
 
 			err = writer.IRODSFileHandle.WriteAt(offset, data)
