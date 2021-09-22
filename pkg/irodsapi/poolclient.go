@@ -3,8 +3,8 @@ package irodsapi
 import (
 	"fmt"
 
-	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
-	irodsfs_clienttype "github.com/cyverse/go-irodsclient/irods/types"
+	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsfs_pool_client "github.com/cyverse/irodsfs-pool/client"
 )
 
@@ -16,7 +16,7 @@ func convPoolClientError(err error) error {
 		return nil
 	}
 
-	if irodsfs_clienttype.IsFileNotFoundError(err) {
+	if irodsclient_types.IsFileNotFoundError(err) {
 		return NewFileNotFoundError(err.Error())
 	}
 	return err
@@ -24,14 +24,14 @@ func convPoolClientError(err error) error {
 
 // PoolClient implements IRODSClient interface with iRODS FUSE Lite Pool
 type PoolClient struct {
-	Config             *irodsfs_client.FileSystemConfig
+	Config             *irodsclient_fs.FileSystemConfig
 	PoolHost           string
-	Account            *irodsfs_clienttype.IRODSAccount
+	Account            *irodsclient_types.IRODSAccount
 	PoolServiceClient  *irodsfs_pool_client.PoolServiceClient
 	PoolServiceSession *irodsfs_pool_client.PoolServiceSession
 }
 
-func NewPoolClientDriver(poolHost string, poolPort int, account *irodsfs_clienttype.IRODSAccount, config *irodsfs_client.FileSystemConfig) (IRODSClient, error) {
+func NewPoolClientDriver(poolHost string, poolPort int, account *irodsclient_types.IRODSAccount, config *irodsclient_fs.FileSystemConfig) (IRODSClient, error) {
 	poolHostPort := fmt.Sprintf("%s:%d", poolHost, poolPort)
 	poolServiceClient := irodsfs_pool_client.NewPoolServiceClient(poolHostPort)
 	err := poolServiceClient.Connect()
@@ -53,7 +53,7 @@ func NewPoolClientDriver(poolHost string, poolPort int, account *irodsfs_clientt
 	}, nil
 }
 
-func (client *PoolClient) GetAccount() *irodsfs_clienttype.IRODSAccount {
+func (client *PoolClient) GetAccount() *irodsclient_types.IRODSAccount {
 	return client.Account
 }
 

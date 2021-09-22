@@ -1,13 +1,13 @@
 package irodsapi
 
 import (
-	irodsfs_clienttype "github.com/cyverse/go-irodsclient/irods/types"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 )
 
 type IRODSClient interface {
 	Release()
 
-	GetAccount() *irodsfs_clienttype.IRODSAccount
+	GetAccount() *irodsclient_types.IRODSAccount
 	GetApplicationName() string
 
 	// API

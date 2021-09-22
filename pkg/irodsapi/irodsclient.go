@@ -3,8 +3,8 @@ package irodsapi
 import (
 	"fmt"
 
-	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
-	irodsfs_clienttype "github.com/cyverse/go-irodsclient/irods/types"
+	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 )
 
 // direct access to iRODS server
@@ -15,7 +15,7 @@ func convGoIRODSClientError(err error) error {
 		return nil
 	}
 
-	if irodsfs_clienttype.IsFileNotFoundError(err) {
+	if irodsclient_types.IsFileNotFoundError(err) {
 		return NewFileNotFoundError(err.Error())
 	}
 	return err
@@ -23,13 +23,13 @@ func convGoIRODSClientError(err error) error {
 
 // GoIRODSClient implements IRODSClient interface with go-irodsclient
 type GoIRODSClient struct {
-	Config    *irodsfs_client.FileSystemConfig
-	Account   *irodsfs_clienttype.IRODSAccount
-	GoIRODSFS *irodsfs_client.FileSystem
+	Config    *irodsclient_fs.FileSystemConfig
+	Account   *irodsclient_types.IRODSAccount
+	GoIRODSFS *irodsclient_fs.FileSystem
 }
 
-func NewGoIRODSClientDriver(account *irodsfs_clienttype.IRODSAccount, config *irodsfs_client.FileSystemConfig) (IRODSClient, error) {
-	goirodsfs, err := irodsfs_client.NewFileSystem(account, config)
+func NewGoIRODSClientDriver(account *irodsclient_types.IRODSAccount, config *irodsclient_fs.FileSystemConfig) (IRODSClient, error) {
+	goirodsfs, err := irodsclient_fs.NewFileSystem(account, config)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ func NewGoIRODSClientDriver(account *irodsfs_clienttype.IRODSAccount, config *ir
 	}, nil
 }
 
-func (client *GoIRODSClient) GetAccount() *irodsfs_clienttype.IRODSAccount {
+func (client *GoIRODSClient) GetAccount() *irodsclient_types.IRODSAccount {
 	return client.Account
 }
 
@@ -257,7 +257,7 @@ func (client *GoIRODSClient) TruncateFile(path string, size int64) error {
 type GoIRODSClientFileHandle struct {
 	ID     string
 	Client *GoIRODSClient
-	Handle *irodsfs_client.FileHandle
+	Handle *irodsclient_fs.FileHandle
 }
 
 func (handle *GoIRODSClientFileHandle) GetID() string {

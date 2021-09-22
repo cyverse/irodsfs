@@ -8,8 +8,8 @@ import (
 
 	"bazil.org/fuse"
 	fusefs "bazil.org/fuse/fs"
-	irodsfs_client "github.com/cyverse/go-irodsclient/fs"
-	irodsfs_clienttype "github.com/cyverse/go-irodsclient/irods/types"
+	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/irodsfs/pkg/asyncwrite"
 	"github.com/cyverse/irodsfs/pkg/commons"
 	"github.com/cyverse/irodsfs/pkg/irodsapi"
@@ -67,16 +67,16 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		"function": "NewFileSystem",
 	})
 
-	account, err := irodsfs_clienttype.CreateIRODSProxyAccount(config.Host, config.Port,
+	account, err := irodsclient_types.CreateIRODSProxyAccount(config.Host, config.Port,
 		config.ClientUser, config.Zone, config.ProxyUser, config.Zone,
-		irodsfs_clienttype.AuthSchemeNative, config.Password)
+		irodsclient_types.AuthSchemeNative, config.Password)
 	if err != nil {
 		logger.WithError(err).Error("failed to create IRODS Account")
 		return nil, fmt.Errorf("failed to create IRODS Account - %v", err)
 	}
 
 	if config.AuthScheme == commons.AuthSchemePAM {
-		sslConfig, err := irodsfs_clienttype.CreateIRODSSSLConfig(config.CACertificateFile, config.EncryptionKeySize,
+		sslConfig, err := irodsclient_types.CreateIRODSSSLConfig(config.CACertificateFile, config.EncryptionKeySize,
 			config.EncryptionAlgorithm, config.SaltSize, config.HashRounds)
 		if err != nil {
 			logger.WithError(err).Error("failed to create IRODS SSL Config")
@@ -86,7 +86,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		account.SetSSLConfiguration(sslConfig)
 	}
 
-	fsconfig := irodsfs_client.NewFileSystemConfig(
+	fsconfig := irodsclient_fs.NewFileSystemConfig(
 		FSName,
 		config.OperationTimeout, config.ConnectionIdleTimeout,
 		config.ConnectionMax, config.MetadataCacheTimeout,
