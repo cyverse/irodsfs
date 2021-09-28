@@ -19,12 +19,16 @@ github.com/cyverse/go-irodsclient v0.5.5-0.20210922193456-5383ca409984 h1:K9lq5k
 github.com/cyverse/go-irodsclient v0.5.5-0.20210922193456-5383ca409984/go.mod h1:PVmKLbP3uBZZw9ihroy1RdnY2vNCkwXGYeDtPgVle30=
 github.com/cyverse/go-irodsclient v0.5.5-0.20210923005549-0856f717aa03 h1:iK1sSZvX0SSCJglcMKoo0GrC3Yl+J6MWmzDHn1xbPxQ=
 github.com/cyverse/go-irodsclient v0.5.5-0.20210923005549-0856f717aa03/go.mod h1:PVmKLbP3uBZZw9ihroy1RdnY2vNCkwXGYeDtPgVle30=
+github.com/cyverse/go-irodsclient v0.5.5 h1:lIwPMXGnW3jv72AldhTtME9npJtxVeV97qwvOiA88Qo=
+github.com/cyverse/go-irodsclient v0.5.5/go.mod h1:PVmKLbP3uBZZw9ihroy1RdnY2vNCkwXGYeDtPgVle30=
 github.com/cyverse/irodsfs-monitor v0.0.0-20210917223838-2f6d5cbbde0a h1:8GgM3Dw+qwJ436tpHlQbq5exsvfCzFEehuWLlZTPtcE=
 github.com/cyverse/irodsfs-monitor v0.0.0-20210917223838-2f6d5cbbde0a/go.mod h1:8UE1mT26+0vAsqS9UJ6Q/vlKq3da6FLdt5p6Tt1AIC4=
 github.com/cyverse/irodsfs-pool v0.0.0-20210917222908-ff8e1fe2e2aa h1:mvq7BC6pAmukfayUX9XvuzZFF0wXkO6M3OT2jZF3AOg=
 github.com/cyverse/irodsfs-pool v0.0.0-20210917222908-ff8e1fe2e2aa/go.mod h1:xKeJC3XiQDbpBTDyj6s8peRbXj8yqw8WLnCcCxUTcEk=
 github.com/cyverse/irodsfs-pool v0.0.0-20210922182355-4b0b98f854f7 h1:HU/BXR0mUWqL6m5GueVhjI0IoLXiOIHVR3g9u4uNrxI=
 github.com/cyverse/irodsfs-pool v0.0.0-20210922182355-4b0b98f854f7/go.mod h1:Mn4OroAyFDmKiGDgc/jpiNLA12jKdajW2FFH1ulZLMs=
+github.com/cyverse/irodsfs-pool v0.0.0-20210928170820-b7db9faba505 h1:AShIkpwLSC6Etv8fsM1q+h9gAKLYOPl5QYW6T5jQtdQ=
+github.com/cyverse/irodsfs-pool v0.0.0-20210928170820-b7db9faba505/go.mod h1:Rhy1snkU7dPzwmV79jaBuWQj/tzRJ+4yaI6wgjbCClo=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
@@ -34,6 +38,7 @@ github.com/eapache/channels v1.1.0/go.mod h1:jMm2qB5Ubtg9zLd+inMZd2/NUvXgzmWXsDa
 github.com/eapache/queue v1.1.0 h1:YOEu7KNc61ntiQlcEeUIoDTJ2o8mQznoNvUhiigpIqc=
 github.com/eapache/queue v1.1.0/go.mod h1:6eCeP0CKFpHLu8blIFXhExK/dRa7WDZfr6jVFPTqq+I=
 github.com/elazarl/go-bindata-assetfs v1.0.0/go.mod h1:v+YaWX3bdea5J/mo8dSETolEo7R71Vk1u8bnjau5yw4=
+github.com/emirpasic/gods v1.12.0/go.mod h1:YfzfFFoVP/catgzJb4IKIqXjX78Ha8FMSDh3ymbK86o=
 github.com/envoyproxy/go-control-plane v0.9.0/go.mod h1:YTl/9mNaCwkRvm6d1a2C3ymFceY/DCBVvsKhRF0iEA4=
 github.com/envoyproxy/go-control-plane v0.9.1-0.20191026205805-5f8ba28d4473/go.mod h1:YTl/9mNaCwkRvm6d1a2C3ymFceY/DCBVvsKhRF0iEA4=
 github.com/envoyproxy/go-control-plane v0.9.4/go.mod h1:6rpuAdCZL397s3pYoYcLgu1mIlRU8Am5FuJP05cCM98=
