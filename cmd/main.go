@@ -39,6 +39,7 @@ func main() {
 	childProcessArgument := fmt.Sprintf("-%s", ChildProcessArgument)
 	for _, arg := range os.Args[1:] {
 		if arg == childProcessArgument {
+			// background
 			isChildProc = true
 			break
 		}
@@ -169,7 +170,7 @@ func parentMain() {
 	// parse argument
 	config, logFile, err, exit := processArguments()
 	if err != nil {
-		logger.WithError(err).Error("failed to process argumebnts")
+		logger.WithError(err).Error("failed to process arguments")
 		if exit {
 			logger.Fatal(err)
 		}

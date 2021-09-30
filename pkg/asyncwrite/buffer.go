@@ -32,6 +32,8 @@ type EntryGroup interface {
 }
 
 type Buffer interface {
+	Release()
+
 	GetSizeCap() int64
 
 	GetTotalEntries() int

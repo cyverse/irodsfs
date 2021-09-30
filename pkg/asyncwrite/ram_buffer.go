@@ -261,6 +261,10 @@ func NewRAMBuffer(sizeCap int64) *RAMBuffer {
 	}
 }
 
+func (buffer *RAMBuffer) Release() {
+	buffer.DeleteAllEntryGroups()
+}
+
 func (buffer *RAMBuffer) GetSizeCap() int64 {
 	return buffer.SizeCap
 }

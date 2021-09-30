@@ -246,7 +246,7 @@ func (fs *IRODSFS) Destroy() {
 	}
 
 	if fs.Buffer != nil {
-		fs.Buffer.DeleteAllEntryGroups()
+		fs.Buffer.Release()
 		fs.Buffer = nil
 	}
 
