@@ -18,6 +18,7 @@ import (
 	"github.com/cyverse/irodsfs/pkg/commons"
 	"github.com/cyverse/irodsfs/pkg/vfs"
 	"golang.org/x/term"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"gopkg.in/yaml.v2"
 
 	log "github.com/sirupsen/logrus"
@@ -180,7 +181,7 @@ func inputMissingParams(config *commons.Config, stdinClosed bool) error {
 }
 
 // processArguments processes command-line parameters
-func processArguments() (*commons.Config, *os.File, error, bool) {
+func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "processArguments",
@@ -256,20 +257,15 @@ func processArguments() (*commons.Config, *os.File, error, bool) {
 		return nil, nil, nil, true
 	}
 
-	var logFile *os.File
-	logFile = nil
+	var logWriter io.WriteCloser
 	if config.LogPath == "-" || len(config.LogPath) == 0 {
 		log.SetOutput(os.Stderr)
 	} else {
-		logFileHandle, err := os.OpenFile(config.LogPath, os.O_WRONLY|os.O_CREATE, 0755)
-		if err != nil {
-			logger.WithError(err).Errorf("failed to create log file - %s", config.LogPath)
-		} else {
-			// use multi output - to output to file and stdout
-			mw := io.MultiWriter(os.Stderr, logFileHandle)
-			log.SetOutput(mw)
-			logFile = logFileHandle
-		}
+		logWriter = getLogWriter(config.LogPath)
+
+		// use multi output - to output to file and stdout
+		mw := io.MultiWriter(os.Stderr, logWriter)
+		log.SetOutput(mw)
 	}
 
 	logger.Infof("Logging to %s", config.LogPath)
@@ -282,12 +278,12 @@ func processArguments() (*commons.Config, *os.File, error, bool) {
 			yamlBytes, err := ioutil.ReadAll(stdinReader)
 			if err != nil {
 				logger.WithError(err).Error("failed to read STDIN")
-				return nil, logFile, err, true
+				return nil, logWriter, err, true
 			}
 
 			err = yaml.Unmarshal(yamlBytes, &config)
 			if err != nil {
-				return nil, logFile, fmt.Errorf("failed to unmarshal YAML - %v", err), true
+				return nil, logWriter, fmt.Errorf("failed to unmarshal YAML - %v", err), true
 			}
 
 			stdinClosed = true
@@ -296,29 +292,29 @@ func processArguments() (*commons.Config, *os.File, error, bool) {
 			configFileAbsPath, err := filepath.Abs(configFilePath)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to access the local yaml file %s", configFilePath)
-				return nil, logFile, err, true
+				return nil, logWriter, err, true
 			}
 
 			fileinfo, err := os.Stat(configFileAbsPath)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to access the local yaml file %s", configFileAbsPath)
-				return nil, logFile, err, true
+				return nil, logWriter, err, true
 			}
 
 			if fileinfo.IsDir() {
 				logger.WithError(err).Errorf("local yaml file %s is not a file", configFileAbsPath)
-				return nil, logFile, fmt.Errorf("local yaml file %s is not a file", configFileAbsPath), true
+				return nil, logWriter, fmt.Errorf("local yaml file %s is not a file", configFileAbsPath), true
 			}
 
 			yamlBytes, err := ioutil.ReadFile(configFileAbsPath)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to read the local yaml file %s", configFileAbsPath)
-				return nil, logFile, err, true
+				return nil, logWriter, err, true
 			}
 
 			err = yaml.Unmarshal(yamlBytes, &config)
 			if err != nil {
-				return nil, logFile, fmt.Errorf("failed to unmarshal YAML - %v", err), true
+				return nil, logWriter, fmt.Errorf("failed to unmarshal YAML - %v", err), true
 			}
 		}
 	}
@@ -328,30 +324,30 @@ func processArguments() (*commons.Config, *os.File, error, bool) {
 		mappingFileAbsPath, err := filepath.Abs(mappingFilePath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to access the local yaml file %s", mappingFilePath)
-			return nil, logFile, err, true
+			return nil, logWriter, err, true
 		}
 
 		fileinfo, err := os.Stat(mappingFileAbsPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to access the local yaml file %s", mappingFileAbsPath)
-			return nil, logFile, err, true
+			return nil, logWriter, err, true
 		}
 
 		if fileinfo.IsDir() {
 			logger.WithError(err).Errorf("local yaml file %s is not a file", mappingFileAbsPath)
-			return nil, logFile, fmt.Errorf("local yaml file %s is not a file", mappingFileAbsPath), true
+			return nil, logWriter, fmt.Errorf("local yaml file %s is not a file", mappingFileAbsPath), true
 		}
 
 		yamlBytes, err := ioutil.ReadFile(mappingFileAbsPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to read the local yaml file %s", mappingFileAbsPath)
-			return nil, logFile, err, true
+			return nil, logWriter, err, true
 		}
 
 		pathMappings := []vfs.PathMapping{}
 		err = yaml.Unmarshal(yamlBytes, &pathMappings)
 		if err != nil {
-			return nil, logFile, fmt.Errorf("failed to unmarshal YAML - %v", err), true
+			return nil, logWriter, fmt.Errorf("failed to unmarshal YAML - %v", err), true
 		}
 
 		config.PathMappings = pathMappings
@@ -362,7 +358,7 @@ func processArguments() (*commons.Config, *os.File, error, bool) {
 		timeout, err := time.ParseDuration(operationTimeout)
 		if err != nil {
 			logger.WithError(err).Error("failed to parse Operation Timeout parameter into time.duration")
-			return nil, logFile, err, true
+			return nil, logWriter, err, true
 		}
 
 		config.OperationTimeout = timeout
@@ -372,7 +368,7 @@ func processArguments() (*commons.Config, *os.File, error, bool) {
 		timeout, err := time.ParseDuration(connectionIdleTimeout)
 		if err != nil {
 			logger.WithError(err).Error("failed to parse Connection Idle Timeout parameter into time.duration")
-			return nil, logFile, err, true
+			return nil, logWriter, err, true
 		}
 
 		config.ConnectionIdleTimeout = timeout
@@ -382,7 +378,7 @@ func processArguments() (*commons.Config, *os.File, error, bool) {
 		timeout, err := time.ParseDuration(metadataCacheTimeout)
 		if err != nil {
 			logger.WithError(err).Error("failed to parse Metadata Cache Timeout parameter into time.duration")
-			return nil, logFile, err, true
+			return nil, logWriter, err, true
 		}
 
 		config.MetadataCacheTimeout = timeout
@@ -392,7 +388,7 @@ func processArguments() (*commons.Config, *os.File, error, bool) {
 		timeout, err := time.ParseDuration(metadataCacheCleanupTime)
 		if err != nil {
 			logger.WithError(err).Error("failed to parse Metadata Cache Cleanup Time parameter into time.duration")
-			return nil, logFile, err, true
+			return nil, logWriter, err, true
 		}
 
 		config.MetadataCacheCleanupTime = timeout
@@ -401,14 +397,14 @@ func processArguments() (*commons.Config, *os.File, error, bool) {
 	err := config.CorrectSystemUser()
 	if err != nil {
 		logger.WithError(err).Error("failed to correct system user configuration")
-		return nil, logFile, err, true
+		return nil, logWriter, err, true
 	}
 
 	// positional arguments
 	mountPath := ""
 	if flag.NArg() == 0 {
 		flag.Usage()
-		return nil, logFile, nil, true
+		return nil, logWriter, nil, true
 	}
 
 	lastArgIdx := flag.NArg() - 1
@@ -423,7 +419,7 @@ func processArguments() (*commons.Config, *os.File, error, bool) {
 			access, err := parseIRODSURL(inputPath)
 			if err != nil {
 				logger.WithError(err).Error("failed to parse iRODS source path")
-				return nil, logFile, err, true
+				return nil, logWriter, err, true
 			}
 
 			if len(access.Host) > 0 {
@@ -468,17 +464,27 @@ func processArguments() (*commons.Config, *os.File, error, bool) {
 	err = inputMissingParams(config, stdinClosed)
 	if err != nil {
 		logger.WithError(err).Error("failed to input missing parameters")
-		return nil, logFile, err, true
+		return nil, logWriter, err, true
 	}
 
 	// the second argument is local directory that irodsfs will be mounted
 	mountpoint, err := filepath.Abs(mountPath)
 	if err != nil {
 		logger.WithError(err).Errorf("failed to access the mount point %s", mountPath)
-		return nil, logFile, err, true
+		return nil, logWriter, err, true
 	}
 
 	config.MountPath = mountpoint
 
-	return config, logFile, nil, false
+	return config, logWriter, nil, false
+}
+
+func getLogWriter(logPath string) io.WriteCloser {
+	return &lumberjack.Logger{
+		Filename:   logPath,
+		MaxSize:    100, // 100MB
+		MaxBackups: 0,
+		MaxAge:     30, // 30 days
+		Compress:   false,
+	}
 }
