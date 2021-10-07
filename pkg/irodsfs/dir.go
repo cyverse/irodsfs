@@ -40,6 +40,7 @@ func mapDirACL(vfsEntry *vfs.VFSEntry, dir *Dir, irodsEntry *irodsapi.IRODSEntry
 	}
 
 	logger.Infof("Checking ACL information of the Entry for %s and user %s", irodsEntry.Path, dir.FS.Config.ClientUser)
+	defer logger.Infof("Returned")
 
 	accesses, err := dir.FS.IRODSClient.ListDirACLsWithGroupUsers(irodsEntry.Path)
 	if err != nil {
@@ -93,6 +94,7 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 	defer dir.Mutex.RUnlock()
 
 	logger.Infof("Calling Attr - %s", dir.Path)
+	defer logger.Infof("Returned")
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(dir.Path)
 	if vfsEntry == nil {
@@ -173,6 +175,7 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 	targetPath := utils.JoinPath(dir.Path, name)
 
 	logger.Infof("Calling Lookup - %s", targetPath)
+	defer logger.Infof("Returned")
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(targetPath)
 	if vfsEntry == nil {
@@ -250,6 +253,7 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	defer dir.Mutex.RUnlock()
 
 	logger.Infof("Calling ReadDirAll - %s", dir.Path)
+	defer logger.Infof("Returned")
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(dir.Path)
 	if vfsEntry == nil {
@@ -365,6 +369,7 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 	targetPath := utils.JoinPath(dir.Path, req.Name)
 
 	logger.Infof("Calling Remove - %s", targetPath)
+	defer logger.Infof("Returned")
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(targetPath)
 	if vfsEntry == nil {
@@ -455,6 +460,7 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 	targetPath := utils.JoinPath(dir.Path, req.Name)
 
 	logger.Infof("Calling Mkdir - %s", targetPath)
+	defer logger.Infof("Returned")
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(targetPath)
 	if vfsEntry == nil {
@@ -686,6 +692,7 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 	targetPath := utils.JoinPath(dir.Path, req.Name)
 
 	logger.Infof("Calling Create - %s", targetPath)
+	defer logger.Infof("Returned")
 
 	openMode := string(irodsapi.FileOpenModeReadOnly)
 

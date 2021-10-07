@@ -266,7 +266,6 @@ func childMain() {
 		logWriter.Close()
 		// delete if it is successful close
 		os.Remove(config.LogPath)
-
 	}
 }
 

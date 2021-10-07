@@ -148,6 +148,9 @@ func (fs *IRODSFS) ConnectToFuse() error {
 		"function": "ConnectToFuse",
 	})
 
+	logger.Infof("Connecting to FUSE, mount on %s", fs.Config.MountPath)
+	logger.Info("Returned")
+
 	fuseConn, err := fuse.Mount(fs.Config.MountPath, GetFuseMountOptions(fs.Config)...)
 	if err != nil {
 		logger.WithError(err).Error("failed to connect to FUSE")
@@ -239,7 +242,7 @@ func (fs *IRODSFS) Destroy() {
 		fs.MonitoringReporter = nil
 	}
 
-	logger.Info("Releasing resources")
+	logger.Info("> Releasing resources")
 	if fs.IRODSClient != nil {
 		fs.IRODSClient.Release()
 		fs.IRODSClient = nil
@@ -251,14 +254,16 @@ func (fs *IRODSFS) Destroy() {
 	}
 
 	if fs.FuseConnection != nil {
-		logger.Info("Closing fuse connection")
+		logger.Info("> Closing fuse connection")
 		fs.FuseConnection.Close()
 		fs.FuseConnection = nil
 	}
 
 	// try to unmount (error may occur but ignore it)
-	logger.Info("Unmounting mountpath")
+	logger.Info("> Unmounting mountpath")
 	fuse.Unmount(fs.Config.MountPath)
+
+	logger.Info("Destroyed FileSystem")
 }
 
 // Root returns root directory node
