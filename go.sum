@@ -15,6 +15,12 @@ github.com/cncf/udpa/go v0.0.0-20201120205902-5459f2c99403/go.mod h1:WmhPx2Nbnht
 github.com/cncf/xds/go v0.0.0-20210312221358-fbca930ec8ed/go.mod h1:eXthEFrGJvWHgFFCl3hGmgk+/aYT6PnTQLykKQRLhEs=
 github.com/cyverse/go-irodsclient v0.5.6 h1:Mo5pGfOAA1Ge09h45SWXAdXTKKKo96hjOiNxI9xdJHQ=
 github.com/cyverse/go-irodsclient v0.5.6/go.mod h1:PVmKLbP3uBZZw9ihroy1RdnY2vNCkwXGYeDtPgVle30=
+github.com/cyverse/go-irodsclient v0.5.7-0.20211008220801-663867d96a08 h1:Ab/YC3OvpeTB+w8RddOfT1C+I0RCNRHcMh2rcZ9N2Fg=
+github.com/cyverse/go-irodsclient v0.5.7-0.20211008220801-663867d96a08/go.mod h1:EQP9ooeC/E6YesxBRGAjadbuSCq5ufiYxBIZKU6RZ5c=
+github.com/cyverse/go-irodsclient v0.5.7-0.20211008230122-22e3321764d4 h1:/HwbTvILsxA0UVYz2fzbli3ikZeNnNe2/A09E3+Zpgs=
+github.com/cyverse/go-irodsclient v0.5.7-0.20211008230122-22e3321764d4/go.mod h1:EQP9ooeC/E6YesxBRGAjadbuSCq5ufiYxBIZKU6RZ5c=
+github.com/cyverse/go-irodsclient v0.5.7 h1:jNGQOw97cLqP4UC+FyUz4EymCQES2FsWs2Uwykd+CBM=
+github.com/cyverse/go-irodsclient v0.5.7/go.mod h1:EQP9ooeC/E6YesxBRGAjadbuSCq5ufiYxBIZKU6RZ5c=
 github.com/cyverse/irodsfs-monitor v0.0.0-20210917223838-2f6d5cbbde0a h1:8GgM3Dw+qwJ436tpHlQbq5exsvfCzFEehuWLlZTPtcE=
 github.com/cyverse/irodsfs-monitor v0.0.0-20210917223838-2f6d5cbbde0a/go.mod h1:8UE1mT26+0vAsqS9UJ6Q/vlKq3da6FLdt5p6Tt1AIC4=
 github.com/cyverse/irodsfs-pool v0.1.2 h1:hVlKCs4ZmPs0RUXn6Hnyi+fHkyRkkfc2q6dnQWqB+xo=
