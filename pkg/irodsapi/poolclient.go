@@ -6,6 +6,7 @@ import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsfs_pool_client "github.com/cyverse/irodsfs-pool/client"
+	log "github.com/sirupsen/logrus"
 )
 
 // pool access
@@ -32,18 +33,27 @@ type PoolClient struct {
 }
 
 func NewPoolClientDriver(poolHost string, poolPort int, account *irodsclient_types.IRODSAccount, config *irodsclient_fs.FileSystemConfig) (IRODSClient, error) {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"function": "NewPoolClientDriver",
+	})
+
 	poolHostPort := fmt.Sprintf("%s:%d", poolHost, poolPort)
-	poolServiceClient := irodsfs_pool_client.NewPoolServiceClient(poolHostPort)
+	poolServiceClient := irodsfs_pool_client.NewPoolServiceClient(poolHostPort, config.OperationTimeout)
+
+	logger.Infof("Connect to pool service - %s", poolHostPort)
 	err := poolServiceClient.Connect()
 	if err != nil {
 		return nil, err
 	}
 
+	logger.Infof("Login to pool service - user %s", account.ClientUser)
 	poolServiceSession, err := poolServiceClient.Login(account, config.ApplicationName)
 	if err != nil {
 		return nil, err
 	}
 
+	logger.Info("Logged in to pool service")
 	return &PoolClient{
 		Config:             config,
 		PoolHost:           poolHostPort,
