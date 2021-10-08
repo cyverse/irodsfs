@@ -20,6 +20,7 @@ const (
 	MetadataCacheTimeoutDefault     time.Duration = 5 * time.Minute
 	MetadataCacheCleanupTimeDefault time.Duration = 5 * time.Minute
 	LogFilePathPrefixDefault        string        = "/tmp/irodsfs"
+	LogFilePathChildDefault         string        = "/tmp/irodsfs_child.log"
 	BufferSizeMaxDefault            int64         = 1024 * 1024 * 64 // 64MB
 	AuthSchemePAM                   string        = "pam"
 	AuthSchemeNative                string        = "native"

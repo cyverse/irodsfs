@@ -33,6 +33,7 @@ func NewVFS(client irodsapi.IRODSClient, mappings []PathMapping) (*VFS, error) {
 		IRODSClient:  client,
 	}
 
+	logger.Info("Building VFS")
 	err := vfs.Build()
 	if err != nil {
 		logger.WithError(err).Error("failed to build VFS")
@@ -104,6 +105,8 @@ func (vfs *VFS) buildOne(mapping *PathMapping) error {
 		"function": "buildOne",
 	})
 
+	logger.Infof("Building VFS Entry - %s", mapping.IRODSPath)
+
 	now := time.Now()
 
 	parentDirs := utils.GetParentDirs(mapping.MappingPath)
@@ -146,7 +149,9 @@ func (vfs *VFS) buildOne(mapping *PathMapping) error {
 	}
 
 	if mapping.ResourceType == PathMappingDirectory && mapping.CreateDir {
+		logger.Infof("Checking if path exists - %s", mapping.IRODSPath)
 		if !vfs.IRODSClient.ExistsDir(mapping.IRODSPath) {
+			logger.Infof("Creating path - %s", mapping.IRODSPath)
 			err := vfs.IRODSClient.MakeDir(mapping.IRODSPath, true)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to make a dir - %s", mapping.IRODSPath)
@@ -156,6 +161,7 @@ func (vfs *VFS) buildOne(mapping *PathMapping) error {
 	}
 
 	// add leaf
+	logger.Infof("Checking path - %s", mapping.IRODSPath)
 	irodsEntry, err := vfs.IRODSClient.Stat(mapping.IRODSPath)
 	if err != nil {
 		if mapping.IgnoreNotExist {
@@ -167,6 +173,7 @@ func (vfs *VFS) buildOne(mapping *PathMapping) error {
 		return err
 	}
 
+	logger.Infof("Creating VFS entry mapping - irods path %s => vfs path %s (%t)", irodsEntry, mapping.MappingPath, mapping.ReadOnly)
 	entry := NewVFSEntryFromIRODSFSEntry(mapping.MappingPath, irodsEntry, mapping.ReadOnly)
 	vfs.Entries[mapping.MappingPath] = entry
 

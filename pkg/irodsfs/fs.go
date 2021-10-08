@@ -94,9 +94,11 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		true,
 	)
 
+	logger.Info("Initializing a client driver")
 	var irodsClient irodsapi.IRODSClient = nil
 	if len(config.PoolHost) > 0 {
 		// use pool driver
+		logger.Info("Initializing irodsfs-pool driver")
 		irodsClient, err = irodsapi.NewPoolClientDriver(config.PoolHost, config.PoolPort, account, fsconfig)
 		if err != nil {
 			logger.WithError(err).Error("failed to create a new iRODS Pool Client")
@@ -104,6 +106,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		}
 	} else {
 		// use go-irodsclient driver
+		logger.Info("Initializing go-irodsclient driver")
 		irodsClient, err = irodsapi.NewGoIRODSClientDriver(account, fsconfig)
 		if err != nil {
 			logger.WithError(err).Error("failed to create a new iRODS Client")
@@ -111,18 +114,24 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		}
 	}
 
+	logger.Info("Initializing VFS")
 	vfs, err := vfs.NewVFS(irodsClient, config.PathMappings)
 	if err != nil {
 		logger.WithError(err).Error("failed to create VFS")
 		return nil, fmt.Errorf("failed to create VFS - %v", err)
 	}
 
+	logger.Info("Initializing File Meta Updater")
 	fileMetaUpdater := NewFileMetaUpdater()
 
 	var ramBuffer asyncwrite.Buffer
 	if len(config.PoolHost) == 0 && config.BufferSizeMax > 0 {
+		logger.Infof("Initializing RAMBuffer, bufferSize %d", config.BufferSizeMax)
 		ramBuffer = asyncwrite.NewRAMBuffer(config.BufferSizeMax)
 	}
+
+	logger.Info("Initializing Monitoring Reporter")
+	reporter := report.NewMonitoringReporter(config.MonitorURL, true)
 
 	return &IRODSFS{
 		Config:          config,
@@ -135,7 +144,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		UID: uint32(config.UID),
 		GID: uint32(config.GID),
 
-		MonitoringReporter: report.NewMonitoringReporter(config.MonitorURL, true),
+		MonitoringReporter: reporter,
 		Terminated:         false,
 	}, nil
 }

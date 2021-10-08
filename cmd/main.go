@@ -33,6 +33,8 @@ func (w *NilWriter) Write(p []byte) (n int, err error) {
 }
 
 func main() {
+	log.SetLevel(log.DebugLevel)
+
 	// check if this is subprocess running in the background
 	isChildProc := false
 
@@ -131,7 +133,7 @@ func parentRun(irodsfsExec string, config *commons.Config) error {
 					childProcessFailed = true
 					break
 				} else {
-					fmt.Fprintln(os.Stderr, errMsg)
+					logger.Info(errMsg)
 				}
 			} else {
 				// check err
@@ -216,8 +218,13 @@ func childMain() {
 		"function": "childMain",
 	})
 
+	// output to default log file for child process
+	childLogWriter := getLogWriter(commons.LogFilePathChildDefault)
+	log.SetOutput(childLogWriter)
+
 	logger.Info("Start background process")
 
+	logger.Info("Check STDIN to communicate to parent process")
 	// read from stdin
 	_, err := os.Stdin.Stat()
 	if err != nil {
@@ -226,12 +233,14 @@ func childMain() {
 		os.Exit(1)
 	}
 
+	logger.Info("Reading configuration from STDIN")
 	configBytes, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
 		logger.WithError(err).Error("failed to read configuration")
 		fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
 		os.Exit(1)
 	}
+	logger.Info("Successfully read configuration from STDIN")
 
 	config, err := commons.NewConfigFromYAML(configBytes)
 	if err != nil {
@@ -254,6 +263,8 @@ func childMain() {
 		os.Exit(1)
 	}
 
+	logger.Info("Run background process")
+
 	// background
 	err = run(config, true)
 	if err != nil {
@@ -262,7 +273,6 @@ func childMain() {
 	}
 
 	if logWriter != nil {
-		logger.Infof("Successful program exit - removing log file %s")
 		logWriter.Close()
 		// delete if it is successful close
 		os.Remove(config.LogPath)
@@ -276,6 +286,7 @@ func run(config *commons.Config, isChildProcess bool) error {
 		"function": "run",
 	})
 
+	logger.Info("Creating a File System")
 	fs, err := irodsfs.NewFileSystem(config)
 	if err != nil {
 		logger.WithError(err).Error("failed to create filesystem")
@@ -284,6 +295,8 @@ func run(config *commons.Config, isChildProcess bool) error {
 		}
 		return err
 	}
+
+	logger.Info("Successfully created a File System")
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL, syscall.SIGQUIT)
@@ -298,6 +311,8 @@ func run(config *commons.Config, isChildProcess bool) error {
 
 		fs.StopFuse()
 	}()
+
+	logger.Info("Connecting to FUSE")
 
 	err = fs.ConnectToFuse()
 	if err != nil {
