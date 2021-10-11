@@ -32,7 +32,7 @@ type PoolClient struct {
 	PoolServiceSession *irodsfs_pool_client.PoolServiceSession
 }
 
-func NewPoolClientDriver(poolHost string, poolPort int, account *irodsclient_types.IRODSAccount, config *irodsclient_fs.FileSystemConfig) (IRODSClient, error) {
+func NewPoolClientDriver(poolHost string, poolPort int, account *irodsclient_types.IRODSAccount, config *irodsclient_fs.FileSystemConfig, clientID string) (IRODSClient, error) {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsapi",
 		"function": "NewPoolClientDriver",
@@ -48,7 +48,7 @@ func NewPoolClientDriver(poolHost string, poolPort int, account *irodsclient_typ
 	}
 
 	logger.Infof("Login to pool service - user %s", account.ClientUser)
-	poolServiceSession, err := poolServiceClient.Login(account, config.ApplicationName)
+	poolServiceSession, err := poolServiceClient.Login(account, config.ApplicationName, clientID)
 	if err != nil {
 		return nil, err
 	}
@@ -268,6 +268,10 @@ func (handle *PoolClientFileHandle) ReadAt(offset int64, length int) ([]byte, er
 
 func (handle *PoolClientFileHandle) WriteAt(offset int64, data []byte) error {
 	return handle.PoolClient.PoolServiceClient.WriteAt(handle.Handle, offset, data)
+}
+
+func (handle *PoolClientFileHandle) Flush() error {
+	return handle.PoolClient.PoolServiceClient.Flush(handle.Handle)
 }
 
 func (handle *PoolClientFileHandle) Close() error {

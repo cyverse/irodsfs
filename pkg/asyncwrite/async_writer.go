@@ -128,7 +128,11 @@ func (writer *AsyncWriter) Flush() error {
 		return err
 	}
 
-	return nil
+	writer.FileHandleLock.Lock()
+	defer writer.FileHandleLock.Unlock()
+
+	return writer.IRODSFileHandle.Flush()
+
 }
 
 func (writer *AsyncWriter) GetPendingError() error {

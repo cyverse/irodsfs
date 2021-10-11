@@ -302,6 +302,10 @@ func (handle *GoIRODSClientFileHandle) WriteAt(offset int64, data []byte) error 
 	return handle.Handle.WriteAt(offset, data)
 }
 
+func (handle *GoIRODSClientFileHandle) Flush() error {
+	return nil
+}
+
 func (handle *GoIRODSClientFileHandle) Close() error {
 	return handle.Handle.Close()
 }

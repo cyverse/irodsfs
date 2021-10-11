@@ -35,5 +35,6 @@ type IRODSFileHandle interface {
 	IsWriteMode() bool
 	ReadAt(offset int64, length int) ([]byte, error)
 	WriteAt(offset int64, data []byte) error
+	Flush() error
 	Close() error
 }

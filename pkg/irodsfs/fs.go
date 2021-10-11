@@ -99,7 +99,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	if len(config.PoolHost) > 0 {
 		// use pool driver
 		logger.Info("Initializing irodsfs-pool driver")
-		irodsClient, err = irodsapi.NewPoolClientDriver(config.PoolHost, config.PoolPort, account, fsconfig)
+		irodsClient, err = irodsapi.NewPoolClientDriver(config.PoolHost, config.PoolPort, account, fsconfig, config.InstanceID)
 		if err != nil {
 			logger.WithError(err).Error("failed to create a new iRODS Pool Client")
 			return nil, fmt.Errorf("failed to create a new iRODS Pool Client - %v", err)

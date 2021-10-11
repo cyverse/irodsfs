@@ -69,7 +69,10 @@ func (writer *SyncWriter) WriteAt(offset int64, data []byte) error {
 }
 
 func (writer *SyncWriter) Flush() error {
-	return nil
+	writer.FileHandleLock.Lock()
+	defer writer.FileHandleLock.Unlock()
+
+	return writer.IRODSFileHandle.Flush()
 }
 
 func (writer *SyncWriter) GetPendingError() error {
