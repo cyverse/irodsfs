@@ -6,7 +6,7 @@ require (
 	bazil.org/fuse v0.0.0-20200524192727-fb710f7dfd05
 	github.com/cyverse/go-irodsclient v0.5.7
 	github.com/cyverse/irodsfs-monitor v0.0.0-20210917223838-2f6d5cbbde0a
-	github.com/cyverse/irodsfs-pool v0.1.3
+	github.com/cyverse/irodsfs-pool v0.1.4
 	github.com/eapache/channels v1.1.0
 	github.com/rs/xid v1.3.0
 	github.com/sirupsen/logrus v1.8.1
