@@ -1,4 +1,4 @@
-package asyncwrite
+package io
 
 import (
 	"fmt"
@@ -56,7 +56,7 @@ func NewAsyncWriter(path string, fileHandle irodsapi.IRODSFileHandle, fileHandle
 // Release releases all resources
 func (writer *AsyncWriter) Release() {
 	logger := log.WithFields(log.Fields{
-		"package":  "asyncwrite",
+		"package":  "io",
 		"struct":   "AsyncWriter",
 		"function": "Release",
 	})
@@ -76,7 +76,7 @@ func (writer *AsyncWriter) Release() {
 	writer.WriteQueue.Close()
 }
 
-func (writer *AsyncWriter) getBufferEntryGroup() EntryGroup {
+func (writer *AsyncWriter) getBufferEntryGroup() BufferEntryGroup {
 	return writer.Buffer.GetEntryGroup(writer.BufferEntryGroupName)
 }
 
@@ -91,7 +91,7 @@ func (writer *AsyncWriter) getBufferEntryOffset(key string) (int64, error) {
 // Write writes data
 func (writer *AsyncWriter) WriteAt(offset int64, data []byte) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "asyncwrite",
+		"package":  "io",
 		"struct":   "AsyncWriter",
 		"function": "WriteAt",
 	})
@@ -131,7 +131,7 @@ func (writer *AsyncWriter) WriteAt(offset int64, data []byte) error {
 
 func (writer *AsyncWriter) Flush() error {
 	logger := log.WithFields(log.Fields{
-		"package":  "asyncwrite",
+		"package":  "io",
 		"struct":   "AsyncWriter",
 		"function": "Flush",
 	})
@@ -182,7 +182,7 @@ func (writer *AsyncWriter) waitForBackgroundWrites() {
 
 func (writer *AsyncWriter) backgroundWriteTask() {
 	logger := log.WithFields(log.Fields{
-		"package":  "asyncwrite",
+		"package":  "io",
 		"struct":   "AsyncWriter",
 		"function": "backgroundWriteTask",
 	})

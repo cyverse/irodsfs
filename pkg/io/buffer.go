@@ -1,11 +1,11 @@
-package asyncwrite
+package io
 
 import (
 	"time"
 )
 
-// BufferEntry is an entry
-type Entry interface {
+// BufferEntry is a buffer entry (e.g., a file chunk)
+type BufferEntry interface {
 	GetKey() string
 	GetSize() int
 	GetAccessCount() int
@@ -14,8 +14,8 @@ type Entry interface {
 	GetData() []byte
 }
 
-// EntryGroup defines a group
-type EntryGroup interface {
+// BufferEntryGroup defines an entry group (e.g., a file)
+type BufferEntryGroup interface {
 	GetBuffer() Buffer
 
 	GetName() string
@@ -25,12 +25,13 @@ type EntryGroup interface {
 	GetEntryKeys() []string
 	DeleteAllEntries()
 
-	CreateEntry(key string, data []byte) (Entry, error)
-	GetEntry(key string) Entry
+	CreateEntry(key string, data []byte) (BufferEntry, error)
+	GetEntry(key string) BufferEntry
 	DeleteEntry(key string)
-	PopEntry(key string) Entry
+	PopEntry(key string) BufferEntry
 }
 
+// Buffer is a buffer management object
 type Buffer interface {
 	Release()
 
@@ -42,9 +43,9 @@ type Buffer interface {
 
 	WaitForSpace(spaceRequired int64) bool
 
-	CreateEntryGroup(name string) EntryGroup
-	GetEntryGroup(name string) EntryGroup
-	GetEntryGroups() []EntryGroup
+	CreateEntryGroup(name string) BufferEntryGroup
+	GetEntryGroup(name string) BufferEntryGroup
+	GetEntryGroups() []BufferEntryGroup
 	DeleteEntryGroup(name string)
 
 	DeleteAllEntryGroups()

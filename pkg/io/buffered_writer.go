@@ -1,4 +1,4 @@
-package asyncwrite
+package io
 
 import (
 	"bytes"
@@ -36,7 +36,7 @@ func NewBufferedWriter(path string, writer Writer) *BufferedWriter {
 // Release releases all resources
 func (writer *BufferedWriter) Release() {
 	logger := log.WithFields(log.Fields{
-		"package":  "asyncwrite",
+		"package":  "io",
 		"struct":   "BufferedWriter",
 		"function": "Release",
 	})
@@ -57,7 +57,7 @@ func (writer *BufferedWriter) Release() {
 
 func (writer *BufferedWriter) Flush() error {
 	logger := log.WithFields(log.Fields{
-		"package":  "asyncwrite",
+		"package":  "io",
 		"struct":   "BufferedWriter",
 		"function": "Flush",
 	})
@@ -85,7 +85,7 @@ func (writer *BufferedWriter) Flush() error {
 
 func (writer *BufferedWriter) WriteAt(offset int64, data []byte) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "asyncwrite",
+		"package":  "io",
 		"struct":   "BufferedWriter",
 		"function": "WriteAt",
 	})

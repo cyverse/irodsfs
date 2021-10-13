@@ -9,7 +9,7 @@ import (
 
 	"bazil.org/fuse"
 	fusefs "bazil.org/fuse/fs"
-	"github.com/cyverse/irodsfs/pkg/asyncwrite"
+	"github.com/cyverse/irodsfs/pkg/io"
 	"github.com/cyverse/irodsfs/pkg/irodsapi"
 	"github.com/cyverse/irodsfs/pkg/vfs"
 	log "github.com/sirupsen/logrus"
@@ -37,7 +37,7 @@ type FileHandle struct {
 	FileHandle     irodsapi.IRODSFileHandle
 	FileHandleLock *sync.Mutex
 
-	Writer asyncwrite.Writer
+	Writer io.Writer
 }
 
 func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, irodsEntry *irodsapi.IRODSEntry) os.FileMode {
@@ -368,13 +368,13 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 			file.FS.MonitoringReporter.ReportNewFileTransferStart(file.Entry.IRODSEntry.Path, handle, file.Entry.IRODSEntry.Size)
 		}
 
-		var writer asyncwrite.Writer
+		var writer io.Writer
 		if req.Flags.IsWriteOnly() && len(file.FS.Config.PoolHost) == 0 {
-			asyncWriter := asyncwrite.NewAsyncWriter(irodsPath, handle, handleMutex, file.FS.Buffer, file.FS.MonitoringReporter)
+			asyncWriter := io.NewAsyncWriter(irodsPath, handle, handleMutex, file.FS.Buffer, file.FS.MonitoringReporter)
 			//syncWriter := asyncwrite.NewSyncWriter(irodsPath, handle, handleMutex, file.FS.MonitoringReporter)
-			writer = asyncwrite.NewBufferedWriter(irodsPath, asyncWriter)
+			writer = io.NewBufferedWriter(irodsPath, asyncWriter)
 		} else {
-			writer = asyncwrite.NewSyncWriter(irodsPath, handle, handleMutex, file.FS.MonitoringReporter)
+			writer = io.NewSyncWriter(irodsPath, handle, handleMutex, file.FS.MonitoringReporter)
 		}
 
 		fileHandle := &FileHandle{

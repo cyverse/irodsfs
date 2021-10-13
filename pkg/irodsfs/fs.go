@@ -10,8 +10,8 @@ import (
 	fusefs "bazil.org/fuse/fs"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
-	"github.com/cyverse/irodsfs/pkg/asyncwrite"
 	"github.com/cyverse/irodsfs/pkg/commons"
+	"github.com/cyverse/irodsfs/pkg/io"
 	"github.com/cyverse/irodsfs/pkg/irodsapi"
 	"github.com/cyverse/irodsfs/pkg/report"
 	"github.com/cyverse/irodsfs/pkg/vfs"
@@ -49,7 +49,7 @@ type IRODSFS struct {
 	VFS             *vfs.VFS
 	FileMetaUpdater *FileMetaUpdater
 	IRODSClient     irodsapi.IRODSClient
-	Buffer          asyncwrite.Buffer
+	Buffer          io.Buffer
 
 	UID uint32
 	GID uint32
@@ -130,10 +130,10 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	logger.Info("Initializing File Meta Updater")
 	fileMetaUpdater := NewFileMetaUpdater()
 
-	var ramBuffer asyncwrite.Buffer
+	var ramBuffer io.Buffer
 	if len(config.PoolHost) == 0 && config.BufferSizeMax > 0 {
 		logger.Infof("Initializing RAMBuffer, bufferSize %d", config.BufferSizeMax)
-		ramBuffer = asyncwrite.NewRAMBuffer(config.BufferSizeMax)
+		ramBuffer = io.NewRAMBuffer(config.BufferSizeMax)
 	}
 
 	logger.Info("Initializing Monitoring Reporter")

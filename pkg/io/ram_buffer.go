@@ -1,4 +1,4 @@
-package asyncwrite
+package io
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-type RAMEntry struct {
+type RAMBufferEntry struct {
 	Key          string
 	Size         int
 	AccessCount  int
@@ -15,11 +15,11 @@ type RAMEntry struct {
 	Mutex        sync.Mutex
 }
 
-func NewRAMEntry(buffer *RAMBuffer, group *RAMEntryGroup, key string, data []byte) *RAMEntry {
+func NewRAMBufferEntry(key string, data []byte) *RAMBufferEntry {
 	dataCopy := make([]byte, len(data))
 	copy(dataCopy, data)
 
-	return &RAMEntry{
+	return &RAMBufferEntry{
 		Key:          key,
 		Size:         len(data),
 		AccessCount:  0,
@@ -28,26 +28,26 @@ func NewRAMEntry(buffer *RAMBuffer, group *RAMEntryGroup, key string, data []byt
 	}
 }
 
-func (entry *RAMEntry) GetKey() string {
+func (entry *RAMBufferEntry) GetKey() string {
 	return entry.Key
 }
 
-func (entry *RAMEntry) GetSize() int {
+func (entry *RAMBufferEntry) GetSize() int {
 	return entry.Size
 }
 
-func (entry *RAMEntry) GetAccessCount() int {
+func (entry *RAMBufferEntry) GetAccessCount() int {
 	entry.Mutex.Lock()
 	defer entry.Mutex.Unlock()
 
 	return entry.AccessCount
 }
 
-func (entry *RAMEntry) GetCreationTime() time.Time {
+func (entry *RAMBufferEntry) GetCreationTime() time.Time {
 	return entry.CreationTime
 }
 
-func (entry *RAMEntry) GetData() []byte {
+func (entry *RAMBufferEntry) GetData() []byte {
 	entry.Mutex.Lock()
 	defer entry.Mutex.Unlock()
 
@@ -55,36 +55,36 @@ func (entry *RAMEntry) GetData() []byte {
 	return entry.Data
 }
 
-// RAMEntryGroup defines a group
-type RAMEntryGroup struct {
+// RAMBufferEntryGroup defines a group
+type RAMBufferEntryGroup struct {
 	Buffer *RAMBuffer
 
 	Name     string
 	Size     int64
-	EntryMap map[string]*RAMEntry
+	EntryMap map[string]*RAMBufferEntry
 
 	Mutex sync.Mutex
 }
 
-func NewRAMEntryGroup(buffer *RAMBuffer, name string) *RAMEntryGroup {
-	return &RAMEntryGroup{
+func NewRAMBufferEntryGroup(buffer *RAMBuffer, name string) *RAMBufferEntryGroup {
+	return &RAMBufferEntryGroup{
 		Buffer: buffer,
 
 		Name:     name,
 		Size:     0,
-		EntryMap: map[string]*RAMEntry{},
+		EntryMap: map[string]*RAMBufferEntry{},
 	}
 }
 
-func (group *RAMEntryGroup) GetBuffer() Buffer {
+func (group *RAMBufferEntryGroup) GetBuffer() Buffer {
 	return group.Buffer
 }
 
-func (group *RAMEntryGroup) GetName() string {
+func (group *RAMBufferEntryGroup) GetName() string {
 	return group.Name
 }
 
-func (group *RAMEntryGroup) GetEntryCount() int {
+func (group *RAMBufferEntryGroup) GetEntryCount() int {
 	group.Buffer.Mutex.Lock()
 	defer group.Buffer.Mutex.Unlock()
 
@@ -94,14 +94,14 @@ func (group *RAMEntryGroup) GetEntryCount() int {
 	return len(group.EntryMap)
 }
 
-func (group *RAMEntryGroup) getEntryCountWithoutBufferLock() int {
+func (group *RAMBufferEntryGroup) getEntryCountWithoutBufferLock() int {
 	group.Mutex.Lock()
 	defer group.Mutex.Unlock()
 
 	return len(group.EntryMap)
 }
 
-func (group *RAMEntryGroup) GetSize() int64 {
+func (group *RAMBufferEntryGroup) GetSize() int64 {
 	group.Buffer.Mutex.Lock()
 	defer group.Buffer.Mutex.Unlock()
 
@@ -111,14 +111,14 @@ func (group *RAMEntryGroup) GetSize() int64 {
 	return group.Size
 }
 
-func (group *RAMEntryGroup) getSizeWithoutBufferLock() int64 {
+func (group *RAMBufferEntryGroup) getSizeWithoutBufferLock() int64 {
 	group.Mutex.Lock()
 	defer group.Mutex.Unlock()
 
 	return group.Size
 }
 
-func (group *RAMEntryGroup) GetEntryKeys() []string {
+func (group *RAMBufferEntryGroup) GetEntryKeys() []string {
 	group.Buffer.Mutex.Lock()
 	defer group.Buffer.Mutex.Unlock()
 
@@ -133,7 +133,7 @@ func (group *RAMEntryGroup) GetEntryKeys() []string {
 	return keys
 }
 
-func (group *RAMEntryGroup) DeleteAllEntries() {
+func (group *RAMBufferEntryGroup) DeleteAllEntries() {
 	group.Buffer.Mutex.Lock()
 	group.Mutex.Lock()
 
@@ -141,14 +141,14 @@ func (group *RAMEntryGroup) DeleteAllEntries() {
 		group.Size -= int64(entry.GetSize())
 	}
 
-	group.EntryMap = map[string]*RAMEntry{}
+	group.EntryMap = map[string]*RAMBufferEntry{}
 
 	group.Mutex.Unlock()
 	group.Buffer.Condition.Broadcast()
 	group.Buffer.Mutex.Unlock()
 }
 
-func (group *RAMEntryGroup) deleteAllEntriesWithoutBufferLock() {
+func (group *RAMBufferEntryGroup) deleteAllEntriesWithoutBufferLock() {
 	group.Mutex.Lock()
 	defer group.Mutex.Unlock()
 
@@ -156,10 +156,10 @@ func (group *RAMEntryGroup) deleteAllEntriesWithoutBufferLock() {
 		group.Size -= int64(entry.GetSize())
 	}
 
-	group.EntryMap = map[string]*RAMEntry{}
+	group.EntryMap = map[string]*RAMBufferEntry{}
 }
 
-func (group *RAMEntryGroup) CreateEntry(key string, data []byte) (Entry, error) {
+func (group *RAMBufferEntryGroup) CreateEntry(key string, data []byte) (BufferEntry, error) {
 	group.Buffer.Mutex.Lock()
 	if group.Buffer.SizeCap < int64(len(data)) {
 		group.Buffer.Mutex.Unlock()
@@ -179,7 +179,7 @@ func (group *RAMEntryGroup) CreateEntry(key string, data []byte) (Entry, error) 
 		if avail >= int64(len(data)) {
 			group.Mutex.Lock()
 
-			entry := NewRAMEntry(group.Buffer, group, key, data)
+			entry := NewRAMBufferEntry(key, data)
 			group.EntryMap[key] = entry
 			group.Size += int64(len(data))
 
@@ -194,7 +194,7 @@ func (group *RAMEntryGroup) CreateEntry(key string, data []byte) (Entry, error) 
 	}
 }
 
-func (group *RAMEntryGroup) GetEntry(key string) Entry {
+func (group *RAMBufferEntryGroup) GetEntry(key string) BufferEntry {
 	group.Buffer.Mutex.Lock()
 	defer group.Buffer.Mutex.Unlock()
 
@@ -208,7 +208,7 @@ func (group *RAMEntryGroup) GetEntry(key string) Entry {
 	return nil
 }
 
-func (group *RAMEntryGroup) DeleteEntry(key string) {
+func (group *RAMBufferEntryGroup) DeleteEntry(key string) {
 	group.Buffer.Mutex.Lock()
 	group.Mutex.Lock()
 
@@ -223,11 +223,11 @@ func (group *RAMEntryGroup) DeleteEntry(key string) {
 	group.Buffer.Mutex.Unlock()
 }
 
-func (group *RAMEntryGroup) PopEntry(key string) Entry {
+func (group *RAMBufferEntryGroup) PopEntry(key string) BufferEntry {
 	group.Buffer.Mutex.Lock()
 	group.Mutex.Lock()
 
-	var returnEntry Entry = nil
+	var returnEntry BufferEntry = nil
 	if entry, ok := group.EntryMap[key]; ok {
 		group.Size -= int64(entry.GetSize())
 		returnEntry = entry
@@ -245,7 +245,7 @@ func (group *RAMEntryGroup) PopEntry(key string) Entry {
 // RAMBuffer
 type RAMBuffer struct {
 	SizeCap       int64
-	EntryGroupMap map[string]*RAMEntryGroup
+	EntryGroupMap map[string]*RAMBufferEntryGroup
 
 	Mutex     *sync.Mutex
 	Condition *sync.Cond
@@ -255,7 +255,7 @@ func NewRAMBuffer(sizeCap int64) *RAMBuffer {
 	mutex := sync.Mutex{}
 	return &RAMBuffer{
 		SizeCap:       sizeCap,
-		EntryGroupMap: map[string]*RAMEntryGroup{},
+		EntryGroupMap: map[string]*RAMBufferEntryGroup{},
 		Mutex:         &mutex,
 		Condition:     sync.NewCond(&mutex),
 	}
@@ -334,17 +334,17 @@ func (buffer *RAMBuffer) WaitForSpace(spaceRequired int64) bool {
 	}
 }
 
-func (buffer *RAMBuffer) CreateEntryGroup(name string) EntryGroup {
+func (buffer *RAMBuffer) CreateEntryGroup(name string) BufferEntryGroup {
 	buffer.Mutex.Lock()
 	defer buffer.Mutex.Unlock()
 
-	group := NewRAMEntryGroup(buffer, name)
+	group := NewRAMBufferEntryGroup(buffer, name)
 	buffer.EntryGroupMap[name] = group
 
 	return group
 }
 
-func (buffer *RAMBuffer) GetEntryGroup(name string) EntryGroup {
+func (buffer *RAMBuffer) GetEntryGroup(name string) BufferEntryGroup {
 	buffer.Mutex.Lock()
 	defer buffer.Mutex.Unlock()
 
@@ -355,11 +355,11 @@ func (buffer *RAMBuffer) GetEntryGroup(name string) EntryGroup {
 	return nil
 }
 
-func (buffer *RAMBuffer) GetEntryGroups() []EntryGroup {
+func (buffer *RAMBuffer) GetEntryGroups() []BufferEntryGroup {
 	buffer.Mutex.Lock()
 	defer buffer.Mutex.Unlock()
 
-	groups := []EntryGroup{}
+	groups := []BufferEntryGroup{}
 
 	for _, group := range buffer.EntryGroupMap {
 		groups = append(groups, group)
@@ -388,7 +388,7 @@ func (buffer *RAMBuffer) DeleteAllEntryGroups() {
 		group.deleteAllEntriesWithoutBufferLock()
 	}
 
-	buffer.EntryGroupMap = map[string]*RAMEntryGroup{}
+	buffer.EntryGroupMap = map[string]*RAMBufferEntryGroup{}
 
 	buffer.Condition.Broadcast()
 	buffer.Mutex.Unlock()

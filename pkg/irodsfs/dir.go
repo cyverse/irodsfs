@@ -9,7 +9,7 @@ import (
 
 	fuse "bazil.org/fuse"
 	fusefs "bazil.org/fuse/fs"
-	"github.com/cyverse/irodsfs/pkg/asyncwrite"
+	"github.com/cyverse/irodsfs/pkg/io"
 	"github.com/cyverse/irodsfs/pkg/irodsapi"
 	"github.com/cyverse/irodsfs/pkg/utils"
 	"github.com/cyverse/irodsfs/pkg/vfs"
@@ -833,13 +833,13 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 
 		handleMutex := &sync.Mutex{}
 
-		var writer asyncwrite.Writer
+		var writer io.Writer
 		if req.Flags.IsWriteOnly() && len(dir.FS.Config.PoolHost) == 0 {
-			asyncWriter := asyncwrite.NewAsyncWriter(irodsPath, handle, handleMutex, dir.FS.Buffer, dir.FS.MonitoringReporter)
+			asyncWriter := io.NewAsyncWriter(irodsPath, handle, handleMutex, dir.FS.Buffer, dir.FS.MonitoringReporter)
 			//syncWriter := asyncwrite.NewSyncWriter(irodsPath, handle, handleMutex, dir.FS.MonitoringReporter)
-			writer = asyncwrite.NewBufferedWriter(irodsPath, asyncWriter)
+			writer = io.NewBufferedWriter(irodsPath, asyncWriter)
 		} else {
-			writer = asyncwrite.NewSyncWriter(irodsPath, handle, handleMutex, dir.FS.MonitoringReporter)
+			writer = io.NewSyncWriter(irodsPath, handle, handleMutex, dir.FS.MonitoringReporter)
 		}
 
 		fileHandle := &FileHandle{

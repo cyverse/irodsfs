@@ -1,4 +1,4 @@
-package asyncwrite
+package io
 
 // Writer helps data write
 type Writer interface {
