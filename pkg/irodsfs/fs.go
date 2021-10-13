@@ -67,6 +67,12 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		"function": "NewFileSystem",
 	})
 
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	account, err := irodsclient_types.CreateIRODSProxyAccount(config.Host, config.Port,
 		config.ClientUser, config.Zone, config.ProxyUser, config.Zone,
 		irodsclient_types.AuthSchemeNative, config.Password)
@@ -157,8 +163,13 @@ func (fs *IRODSFS) ConnectToFuse() error {
 		"function": "ConnectToFuse",
 	})
 
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	logger.Infof("Connecting to FUSE, mount on %s", fs.Config.MountPath)
-	logger.Info("Returned")
 
 	fuseConn, err := fuse.Mount(fs.Config.MountPath, GetFuseMountOptions(fs.Config)...)
 	if err != nil {
@@ -176,6 +187,7 @@ func (fs *IRODSFS) ConnectToFuse() error {
 		}
 	}
 
+	logger.Infof("Connected to FUSE, mount on %s", fs.Config.MountPath)
 	return nil
 }
 
@@ -186,6 +198,12 @@ func (fs *IRODSFS) StartFuse() error {
 		"struct":   "IRODSFS",
 		"function": "StartFuse",
 	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
 
 	if fs.FuseConnection == nil {
 		logger.Error("failed to start FUSE server without connection")
@@ -286,6 +304,12 @@ func (fs *IRODSFS) Root() (fusefs.Node, error) {
 		"struct":   "IRODSFS",
 		"function": "Root",
 	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
 
 	vfsEntry := fs.VFS.GetEntry("/")
 	if vfsEntry == nil {

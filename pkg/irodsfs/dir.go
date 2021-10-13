@@ -30,6 +30,12 @@ func mapDirACL(vfsEntry *vfs.VFSEntry, dir *Dir, irodsEntry *irodsapi.IRODSEntry
 		"function": "mapDirACL",
 	})
 
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	if irodsEntry.Owner == dir.FS.Config.ClientUser {
 		// mine
 		if vfsEntry.ReadOnly {
@@ -40,7 +46,7 @@ func mapDirACL(vfsEntry *vfs.VFSEntry, dir *Dir, irodsEntry *irodsapi.IRODSEntry
 	}
 
 	logger.Infof("Checking ACL information of the Entry for %s and user %s", irodsEntry.Path, dir.FS.Config.ClientUser)
-	defer logger.Infof("Returned")
+	defer logger.Infof("Checked ACL information of the Entry for %s and user %s", irodsEntry.Path, dir.FS.Config.ClientUser)
 
 	accesses, err := dir.FS.IRODSClient.ListDirACLsWithGroupUsers(irodsEntry.Path)
 	if err != nil {
@@ -87,6 +93,12 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 		"function": "Attr",
 	})
 
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	// apply pending update if exists
 	dir.FS.FileMetaUpdater.Apply(dir)
 
@@ -94,7 +106,7 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 	defer dir.Mutex.RUnlock()
 
 	logger.Infof("Calling Attr - %s", dir.Path)
-	defer logger.Infof("Returned")
+	defer logger.Infof("Called Attr - %s", dir.Path)
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(dir.Path)
 	if vfsEntry == nil {
@@ -166,6 +178,12 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 		"function": "Lookup",
 	})
 
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	// apply pending update if exists
 	dir.FS.FileMetaUpdater.Apply(dir)
 
@@ -175,7 +193,7 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 	targetPath := utils.JoinPath(dir.Path, name)
 
 	logger.Infof("Calling Lookup - %s", targetPath)
-	defer logger.Infof("Returned")
+	defer logger.Infof("Calling Lookup - %s", targetPath)
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(targetPath)
 	if vfsEntry == nil {
@@ -246,6 +264,12 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 		"function": "ReadDirAll",
 	})
 
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	// apply pending update if exists
 	dir.FS.FileMetaUpdater.Apply(dir)
 
@@ -253,7 +277,7 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	defer dir.Mutex.RUnlock()
 
 	logger.Infof("Calling ReadDirAll - %s", dir.Path)
-	defer logger.Infof("Returned")
+	defer logger.Infof("Called ReadDirAll - %s", dir.Path)
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(dir.Path)
 	if vfsEntry == nil {
@@ -360,6 +384,12 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 		"function": "Remove",
 	})
 
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	// apply pending update if exists
 	dir.FS.FileMetaUpdater.Apply(dir)
 
@@ -369,7 +399,7 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 	targetPath := utils.JoinPath(dir.Path, req.Name)
 
 	logger.Infof("Calling Remove - %s", targetPath)
-	defer logger.Infof("Returned")
+	defer logger.Infof("Called Remove - %s", targetPath)
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(targetPath)
 	if vfsEntry == nil {
@@ -451,6 +481,12 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 		"function": "Mkdir",
 	})
 
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	// apply pending update if exists
 	dir.FS.FileMetaUpdater.Apply(dir)
 
@@ -460,7 +496,7 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 	targetPath := utils.JoinPath(dir.Path, req.Name)
 
 	logger.Infof("Calling Mkdir - %s", targetPath)
-	defer logger.Infof("Returned")
+	defer logger.Infof("Called Mkdir - %s", targetPath)
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(targetPath)
 	if vfsEntry == nil {
@@ -527,6 +563,12 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 		"struct":   "Dir",
 		"function": "Rename",
 	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
 
 	// apply pending update if exists
 	dir.FS.FileMetaUpdater.Apply(dir)
@@ -683,6 +725,12 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 		"function": "Create",
 	})
 
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	// apply pending update if exists
 	dir.FS.FileMetaUpdater.Apply(dir)
 
@@ -692,7 +740,7 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 	targetPath := utils.JoinPath(dir.Path, req.Name)
 
 	logger.Infof("Calling Create - %s", targetPath)
-	defer logger.Infof("Returned")
+	defer logger.Infof("Called Create - %s", targetPath)
 
 	openMode := string(irodsapi.FileOpenModeReadOnly)
 

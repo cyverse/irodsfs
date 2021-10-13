@@ -32,6 +32,18 @@ func NewSyncWriter(path string, fileHandle irodsapi.IRODSFileHandle, fileHandleL
 
 // Release releases all resources
 func (writer *SyncWriter) Release() {
+	logger := log.WithFields(log.Fields{
+		"package":  "syncwrite",
+		"struct":   "SyncWriter",
+		"function": "Release",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	writer.Flush()
 }
 
@@ -42,6 +54,12 @@ func (writer *SyncWriter) WriteAt(offset int64, data []byte) error {
 		"struct":   "SyncWriter",
 		"function": "WriteAt",
 	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
 
 	if len(data) == 0 || offset < 0 {
 		return nil
@@ -69,6 +87,18 @@ func (writer *SyncWriter) WriteAt(offset int64, data []byte) error {
 }
 
 func (writer *SyncWriter) Flush() error {
+	logger := log.WithFields(log.Fields{
+		"package":  "syncwrite",
+		"struct":   "SyncWriter",
+		"function": "Flush",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	writer.FileHandleLock.Lock()
 	defer writer.FileHandleLock.Unlock()
 

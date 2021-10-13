@@ -38,6 +38,12 @@ func NewPoolClientDriver(poolHost string, poolPort int, account *irodsclient_typ
 		"function": "NewPoolClientDriver",
 	})
 
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	poolHostPort := fmt.Sprintf("%s:%d", poolHost, poolPort)
 	poolServiceClient := irodsfs_pool_client.NewPoolServiceClient(poolHostPort, config.OperationTimeout)
 
@@ -72,11 +78,35 @@ func (client *PoolClient) GetApplicationName() string {
 }
 
 func (client *PoolClient) Release() {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClient",
+		"function": "Release",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	client.PoolServiceClient.Logout(client.PoolServiceSession)
 	client.PoolServiceClient.Disconnect()
 }
 
 func (client *PoolClient) List(path string) ([]*IRODSEntry, error) {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClient",
+		"function": "List",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	entries, err := client.PoolServiceClient.List(client.PoolServiceSession, path)
 	if err != nil {
 		return nil, convPoolClientError(err)
@@ -102,6 +132,18 @@ func (client *PoolClient) List(path string) ([]*IRODSEntry, error) {
 }
 
 func (client *PoolClient) Stat(path string) (*IRODSEntry, error) {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClient",
+		"function": "Stat",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	entry, err := client.PoolServiceClient.Stat(client.PoolServiceSession, path)
 	if err != nil {
 		return nil, convPoolClientError(err)
@@ -121,10 +163,34 @@ func (client *PoolClient) Stat(path string) (*IRODSEntry, error) {
 }
 
 func (client *PoolClient) ExistsDir(path string) bool {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClient",
+		"function": "ExistsDir",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	return client.PoolServiceClient.ExistsDir(client.PoolServiceSession, path)
 }
 
 func (client *PoolClient) ListDirACLsWithGroupUsers(path string) ([]*IRODSAccess, error) {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClient",
+		"function": "ListDirACLsWithGroupUsers",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	accesses, err := client.PoolServiceClient.ListDirACLsWithGroupUsers(client.PoolServiceSession, path)
 	if err != nil {
 		return nil, convPoolClientError(err)
@@ -144,6 +210,18 @@ func (client *PoolClient) ListDirACLsWithGroupUsers(path string) ([]*IRODSAccess
 }
 
 func (client *PoolClient) ListFileACLsWithGroupUsers(path string) ([]*IRODSAccess, error) {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClient",
+		"function": "ListFileACLsWithGroupUsers",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	accesses, err := client.PoolServiceClient.ListFileACLsWithGroupUsers(client.PoolServiceSession, path)
 	if err != nil {
 		return nil, convPoolClientError(err)
@@ -162,31 +240,103 @@ func (client *PoolClient) ListFileACLsWithGroupUsers(path string) ([]*IRODSAcces
 }
 
 func (client *PoolClient) RemoveFile(path string, force bool) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClient",
+		"function": "RemoveFile",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	err := client.PoolServiceClient.RemoveFile(client.PoolServiceSession, path, force)
 	return convPoolClientError(err)
 }
 
 func (client *PoolClient) RemoveDir(path string, recurse bool, force bool) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClient",
+		"function": "RemoveDir",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	err := client.PoolServiceClient.RemoveDir(client.PoolServiceSession, path, recurse, force)
 	return convPoolClientError(err)
 }
 
 func (client *PoolClient) MakeDir(path string, recurse bool) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClient",
+		"function": "MakeDir",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	err := client.PoolServiceClient.MakeDir(client.PoolServiceSession, path, recurse)
 	return convPoolClientError(err)
 }
 
 func (client *PoolClient) RenameDirToDir(srcPath string, destPath string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClient",
+		"function": "RenameDirToDir",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	err := client.PoolServiceClient.RenameDirToDir(client.PoolServiceSession, srcPath, destPath)
 	return convPoolClientError(err)
 }
 
 func (client *PoolClient) RenameFileToFile(srcPath string, destPath string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClient",
+		"function": "RenameFileToFile",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	err := client.PoolServiceClient.RenameFileToFile(client.PoolServiceSession, srcPath, destPath)
 	return convPoolClientError(err)
 }
 
 func (client *PoolClient) CreateFile(path string, resource string) (IRODSFileHandle, error) {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClient",
+		"function": "CreateFile",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	handle, err := client.PoolServiceClient.CreateFile(client.PoolServiceSession, path, resource)
 	if err != nil {
 		return nil, convPoolClientError(err)
@@ -202,6 +352,18 @@ func (client *PoolClient) CreateFile(path string, resource string) (IRODSFileHan
 }
 
 func (client *PoolClient) OpenFile(path string, resource string, mode string) (IRODSFileHandle, error) {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClient",
+		"function": "OpenFile",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	handle, err := client.PoolServiceClient.OpenFile(client.PoolServiceSession, path, resource, mode)
 	if err != nil {
 		return nil, convPoolClientError(err)
@@ -217,6 +379,18 @@ func (client *PoolClient) OpenFile(path string, resource string, mode string) (I
 }
 
 func (client *PoolClient) TruncateFile(path string, size int64) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClient",
+		"function": "TruncateFile",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	err := client.PoolServiceClient.TruncateFile(client.PoolServiceSession, path, size)
 	return convPoolClientError(err)
 }
@@ -251,29 +425,113 @@ func (handle *PoolClientFileHandle) GetOpenMode() FileOpenMode {
 }
 
 func (handle *PoolClientFileHandle) GetOffset() int64 {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClientFileHandle",
+		"function": "GetOffset",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	return handle.PoolClient.PoolServiceClient.GetOffset(handle.Handle)
 }
 
 func (handle *PoolClientFileHandle) IsReadMode() bool {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClientFileHandle",
+		"function": "IsReadMode",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	return handle.Handle.IsReadMode()
 }
 
 func (handle *PoolClientFileHandle) IsWriteMode() bool {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClientFileHandle",
+		"function": "IsWriteMode",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	return handle.Handle.IsWriteMode()
 }
 
 func (handle *PoolClientFileHandle) ReadAt(offset int64, length int) ([]byte, error) {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClientFileHandle",
+		"function": "ReadAt",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	return handle.PoolClient.PoolServiceClient.ReadAt(handle.Handle, offset, int32(length))
 }
 
 func (handle *PoolClientFileHandle) WriteAt(offset int64, data []byte) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClientFileHandle",
+		"function": "WriteAt",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	return handle.PoolClient.PoolServiceClient.WriteAt(handle.Handle, offset, data)
 }
 
 func (handle *PoolClientFileHandle) Flush() error {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClientFileHandle",
+		"function": "Flush",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	return handle.PoolClient.PoolServiceClient.Flush(handle.Handle)
 }
 
 func (handle *PoolClientFileHandle) Close() error {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClientFileHandle",
+		"function": "Close",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	return handle.PoolClient.PoolServiceClient.Close(handle.Handle)
 }

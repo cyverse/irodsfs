@@ -46,6 +46,12 @@ func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, irodsEntry *irodsapi.IRODSEn
 		"function": "mapFileACL",
 	})
 
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	if irodsEntry.Owner == file.FS.Config.ClientUser {
 		// mine
 		if vfsEntry.ReadOnly {
@@ -56,7 +62,7 @@ func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, irodsEntry *irodsapi.IRODSEn
 	}
 
 	logger.Infof("Checking ACL information of the Entry for %s and user %s", irodsEntry.Path, file.FS.Config.ClientUser)
-	defer logger.Infof("Returned")
+	defer logger.Infof("Checked ACL information of the Entry for %s and user %s", irodsEntry.Path, file.FS.Config.ClientUser)
 
 	accesses, err := file.FS.IRODSClient.ListFileACLsWithGroupUsers(irodsEntry.Path)
 	if err != nil {
@@ -103,6 +109,12 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 		"function": "Attr",
 	})
 
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	// apply pending update if exists
 	file.FS.FileMetaUpdater.Apply(file)
 
@@ -110,7 +122,7 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 	defer file.Mutex.RUnlock()
 
 	logger.Infof("Calling Attr - %s", file.Path)
-	defer logger.Infof("Returned")
+	defer logger.Infof("Called Attr - %s", file.Path)
 
 	vfsEntry := file.FS.VFS.GetClosestEntry(file.Path)
 	if vfsEntry == nil {
@@ -169,6 +181,12 @@ func (file *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *f
 		"function": "Setattr",
 	})
 
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	// apply pending update if exists
 	file.FS.FileMetaUpdater.Apply(file)
 
@@ -176,7 +194,7 @@ func (file *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *f
 	defer file.Mutex.RUnlock()
 
 	logger.Infof("Calling Setattr - %s", file.Path)
-	defer logger.Infof("Returned")
+	defer logger.Infof("Called Setattr - %s", file.Path)
 
 	if req.Valid.Size() {
 		// size changed
@@ -198,6 +216,12 @@ func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *
 		"function": "Truncate",
 	})
 
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	// apply pending update if exists
 	file.FS.FileMetaUpdater.Apply(file)
 
@@ -205,7 +229,7 @@ func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *
 	defer file.Mutex.RUnlock()
 
 	logger.Infof("Calling Truncate - %s, %d", file.Path, req.Size)
-	defer logger.Infof("Returned")
+	defer logger.Infof("Called Truncate - %s, %d", file.Path, req.Size)
 
 	vfsEntry := file.FS.VFS.GetClosestEntry(file.Path)
 	if vfsEntry == nil {
@@ -265,6 +289,12 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		"function": "Open",
 	})
 
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	// apply pending update if exists
 	file.FS.FileMetaUpdater.Apply(file)
 
@@ -296,7 +326,7 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 	}
 
 	logger.Infof("Calling Open - %s, mode(%s)", file.Path, openMode)
-	defer logger.Infof("Returned")
+	defer logger.Infof("Called Open - %s, mode(%s)", file.Path, openMode)
 
 	vfsEntry := file.FS.VFS.GetClosestEntry(file.Path)
 	if vfsEntry == nil {
@@ -386,8 +416,14 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 		"function": "Read",
 	})
 
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	logger.Infof("Calling Read - %s, %d Offset, %d Bytes", handle.Path, req.Offset, req.Size)
-	defer logger.Infof("Returned")
+	defer logger.Infof("Called Read - %s, %d Offset, %d Bytes", handle.Path, req.Offset, req.Size)
 
 	if handle.FileHandle == nil {
 		logger.Errorf("failed to get a file handle - %s", handle.Path)
@@ -437,8 +473,14 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 		"function": "Write",
 	})
 
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	logger.Infof("Calling Write - %s, %d Bytes", handle.Path, len(req.Data))
-	defer logger.Infof("Returned")
+	defer logger.Infof("Called Write - %s, %d Bytes", handle.Path, len(req.Data))
 
 	if handle.FileHandle == nil {
 		logger.Errorf("failed to get a file handle - %s", handle.Path)
@@ -476,8 +518,14 @@ func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) err
 		"function": "Flush",
 	})
 
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	logger.Infof("Calling Flush - %s", handle.Path)
-	defer logger.Infof("Returned")
+	defer logger.Infof("Called Flush - %s", handle.Path)
 
 	if handle.FileHandle == nil {
 		logger.Errorf("failed to get a file handle - %s", handle.Path)
@@ -506,8 +554,14 @@ func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest)
 		"function": "Release",
 	})
 
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	logger.Infof("Calling Release - %s", handle.Path)
-	defer logger.Infof("Returned")
+	defer logger.Infof("Called Release - %s", handle.Path)
 
 	if handle.FileHandle == nil {
 		logger.Errorf("failed to get a file handle - %s", handle.Path)

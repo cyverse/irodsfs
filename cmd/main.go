@@ -68,6 +68,12 @@ func parentRun(irodsfsExec string, config *commons.Config) error {
 		"function": "parentRun",
 	})
 
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	err := config.Validate()
 	if err != nil {
 		logger.WithError(err).Error("invalid argument")
@@ -169,6 +175,12 @@ func parentMain() {
 		"function": "parentMain",
 	})
 
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	// parse argument
 	config, logWriter, err, exit := processArguments()
 	if err != nil {
@@ -217,6 +229,12 @@ func childMain() {
 		"package":  "main",
 		"function": "childMain",
 	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
 
 	// output to default log file for child process
 	childLogWriter := getLogWriter(commons.LogFilePathChildDefault)
@@ -285,6 +303,12 @@ func run(config *commons.Config, isChildProcess bool) error {
 		"package":  "main",
 		"function": "run",
 	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
 
 	logger.Info("Creating a File System")
 	fs, err := irodsfs.NewFileSystem(config)

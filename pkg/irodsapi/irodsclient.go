@@ -5,6 +5,7 @@ import (
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
+	log "github.com/sirupsen/logrus"
 )
 
 // direct access to iRODS server
@@ -29,6 +30,17 @@ type GoIRODSClient struct {
 }
 
 func NewGoIRODSClientDriver(account *irodsclient_types.IRODSAccount, config *irodsclient_fs.FileSystemConfig) (IRODSClient, error) {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"function": "NewGoIRODSClientDriver",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	goirodsfs, err := irodsclient_fs.NewFileSystem(account, config)
 	if err != nil {
 		return nil, err
@@ -50,6 +62,18 @@ func (client *GoIRODSClient) GetApplicationName() string {
 }
 
 func (client *GoIRODSClient) Release() {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "GoIRODSClient",
+		"function": "Release",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	if client.GoIRODSFS != nil {
 		client.GoIRODSFS.Release()
 		client.GoIRODSFS = nil
@@ -60,6 +84,18 @@ func (client *GoIRODSClient) List(path string) ([]*IRODSEntry, error) {
 	if client.GoIRODSFS == nil {
 		return nil, fmt.Errorf("FSClient is nil")
 	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "GoIRODSClient",
+		"function": "List",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
 
 	entries, err := client.GoIRODSFS.List(path)
 	if err != nil {
@@ -90,6 +126,18 @@ func (client *GoIRODSClient) Stat(path string) (*IRODSEntry, error) {
 		return nil, fmt.Errorf("FSClient is nil")
 	}
 
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "GoIRODSClient",
+		"function": "Stat",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	entry, err := client.GoIRODSFS.Stat(path)
 	if err != nil {
 		return nil, convGoIRODSClientError(err)
@@ -113,6 +161,18 @@ func (client *GoIRODSClient) ExistsDir(path string) bool {
 		return false
 	}
 
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "GoIRODSClient",
+		"function": "ExistsDir",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	return client.GoIRODSFS.ExistsDir(path)
 }
 
@@ -120,6 +180,18 @@ func (client *GoIRODSClient) ListDirACLsWithGroupUsers(path string) ([]*IRODSAcc
 	if client.GoIRODSFS == nil {
 		return nil, fmt.Errorf("FSClient is nil")
 	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "GoIRODSClient",
+		"function": "ListDirACLsWithGroupUsers",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
 
 	accesses, err := client.GoIRODSFS.ListDirACLsWithGroupUsers(path)
 	if err != nil {
@@ -144,6 +216,18 @@ func (client *GoIRODSClient) ListFileACLsWithGroupUsers(path string) ([]*IRODSAc
 		return nil, fmt.Errorf("FSClient is nil")
 	}
 
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "GoIRODSClient",
+		"function": "ListFileACLsWithGroupUsers",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	accesses, err := client.GoIRODSFS.ListFileACLsWithGroupUsers(path)
 	if err != nil {
 		return nil, convGoIRODSClientError(err)
@@ -166,6 +250,18 @@ func (client *GoIRODSClient) RemoveFile(path string, force bool) error {
 		return fmt.Errorf("FSClient is nil")
 	}
 
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "GoIRODSClient",
+		"function": "RemoveFile",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	err := client.GoIRODSFS.RemoveFile(path, force)
 	return convGoIRODSClientError(err)
 }
@@ -174,6 +270,18 @@ func (client *GoIRODSClient) RemoveDir(path string, recurse bool, force bool) er
 	if client.GoIRODSFS == nil {
 		return fmt.Errorf("FSClient is nil")
 	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "GoIRODSClient",
+		"function": "RemoveDir",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
 
 	err := client.GoIRODSFS.RemoveDir(path, recurse, force)
 	return convGoIRODSClientError(err)
@@ -184,6 +292,18 @@ func (client *GoIRODSClient) MakeDir(path string, recurse bool) error {
 		return fmt.Errorf("FSClient is nil")
 	}
 
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "GoIRODSClient",
+		"function": "MakeDir",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	err := client.GoIRODSFS.MakeDir(path, recurse)
 	return convGoIRODSClientError(err)
 }
@@ -192,6 +312,18 @@ func (client *GoIRODSClient) RenameDirToDir(srcPath string, destPath string) err
 	if client.GoIRODSFS == nil {
 		return fmt.Errorf("FSClient is nil")
 	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "GoIRODSClient",
+		"function": "RenameDirToDir",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
 
 	err := client.GoIRODSFS.RenameDirToDir(srcPath, destPath)
 	return convGoIRODSClientError(err)
@@ -202,6 +334,18 @@ func (client *GoIRODSClient) RenameFileToFile(srcPath string, destPath string) e
 		return fmt.Errorf("FSClient is nil")
 	}
 
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "GoIRODSClient",
+		"function": "RenameFileToFile",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	err := client.GoIRODSFS.RenameFileToFile(srcPath, destPath)
 	return convGoIRODSClientError(err)
 }
@@ -210,6 +354,18 @@ func (client *GoIRODSClient) CreateFile(path string, resource string) (IRODSFile
 	if client.GoIRODSFS == nil {
 		return nil, fmt.Errorf("FSClient is nil")
 	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "GoIRODSClient",
+		"function": "CreateFile",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
 
 	handle, err := client.GoIRODSFS.CreateFile(path, resource)
 	if err != nil {
@@ -230,6 +386,18 @@ func (client *GoIRODSClient) OpenFile(path string, resource string, mode string)
 		return nil, fmt.Errorf("FSClient is nil")
 	}
 
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "GoIRODSClient",
+		"function": "OpenFile",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	handle, err := client.GoIRODSFS.OpenFile(path, resource, mode)
 	if err != nil {
 		return nil, convGoIRODSClientError(err)
@@ -248,6 +416,18 @@ func (client *GoIRODSClient) TruncateFile(path string, size int64) error {
 	if client.GoIRODSFS == nil {
 		return fmt.Errorf("FSClient is nil")
 	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "GoIRODSClient",
+		"function": "TruncateFile",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
 
 	err := client.GoIRODSFS.TruncateFile(path, size)
 	return convGoIRODSClientError(err)
@@ -283,22 +463,82 @@ func (handle *GoIRODSClientFileHandle) GetOpenMode() FileOpenMode {
 }
 
 func (handle *GoIRODSClientFileHandle) GetOffset() int64 {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "GoIRODSClientFileHandle",
+		"function": "GetOffset",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	return handle.Handle.GetOffset()
 }
 
 func (handle *GoIRODSClientFileHandle) IsReadMode() bool {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "GoIRODSClientFileHandle",
+		"function": "IsReadMode",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	return handle.Handle.IsReadMode()
 }
 
 func (handle *GoIRODSClientFileHandle) IsWriteMode() bool {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "GoIRODSClientFileHandle",
+		"function": "IsWriteMode",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	return handle.Handle.IsWriteMode()
 }
 
 func (handle *GoIRODSClientFileHandle) ReadAt(offset int64, length int) ([]byte, error) {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "GoIRODSClientFileHandle",
+		"function": "ReadAt",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	return handle.Handle.ReadAt(offset, length)
 }
 
 func (handle *GoIRODSClientFileHandle) WriteAt(offset int64, data []byte) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "GoIRODSClientFileHandle",
+		"function": "WriteAt",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	return handle.Handle.WriteAt(offset, data)
 }
 
@@ -307,5 +547,17 @@ func (handle *GoIRODSClientFileHandle) Flush() error {
 }
 
 func (handle *GoIRODSClientFileHandle) Close() error {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "GoIRODSClientFileHandle",
+		"function": "Close",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	return handle.Handle.Close()
 }

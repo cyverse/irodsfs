@@ -35,6 +35,18 @@ func NewBufferedWriter(path string, writer Writer) *BufferedWriter {
 
 // Release releases all resources
 func (writer *BufferedWriter) Release() {
+	logger := log.WithFields(log.Fields{
+		"package":  "asyncwrite",
+		"struct":   "BufferedWriter",
+		"function": "Release",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
+
 	writer.Flush()
 
 	if writer.Writer != nil {
@@ -49,6 +61,12 @@ func (writer *BufferedWriter) Flush() error {
 		"struct":   "BufferedWriter",
 		"function": "Flush",
 	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
 
 	// empty buffer
 	if writer.Buffer.Len() > 0 {
@@ -71,6 +89,12 @@ func (writer *BufferedWriter) WriteAt(offset int64, data []byte) error {
 		"struct":   "BufferedWriter",
 		"function": "WriteAt",
 	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Panic(r)
+		}
+	}()
 
 	if writer.Writer == nil {
 		return fmt.Errorf("failed to write data to nil writer")
