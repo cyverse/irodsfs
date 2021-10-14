@@ -2,6 +2,7 @@ package irodsapi
 
 import (
 	"fmt"
+	"runtime/debug"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
@@ -37,6 +38,7 @@ func NewGoIRODSClientDriver(account *irodsclient_types.IRODSAccount, config *iro
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -70,6 +72,7 @@ func (client *GoIRODSClient) Release() {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -93,6 +96,7 @@ func (client *GoIRODSClient) List(path string) ([]*IRODSEntry, error) {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -134,6 +138,7 @@ func (client *GoIRODSClient) Stat(path string) (*IRODSEntry, error) {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -169,6 +174,7 @@ func (client *GoIRODSClient) ExistsDir(path string) bool {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -189,6 +195,7 @@ func (client *GoIRODSClient) ListDirACLsWithGroupUsers(path string) ([]*IRODSAcc
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -224,6 +231,7 @@ func (client *GoIRODSClient) ListFileACLsWithGroupUsers(path string) ([]*IRODSAc
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -258,6 +266,7 @@ func (client *GoIRODSClient) RemoveFile(path string, force bool) error {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -279,6 +288,7 @@ func (client *GoIRODSClient) RemoveDir(path string, recurse bool, force bool) er
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -300,6 +310,7 @@ func (client *GoIRODSClient) MakeDir(path string, recurse bool) error {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -321,6 +332,7 @@ func (client *GoIRODSClient) RenameDirToDir(srcPath string, destPath string) err
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -342,6 +354,7 @@ func (client *GoIRODSClient) RenameFileToFile(srcPath string, destPath string) e
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -363,6 +376,7 @@ func (client *GoIRODSClient) CreateFile(path string, resource string) (IRODSFile
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -394,6 +408,7 @@ func (client *GoIRODSClient) OpenFile(path string, resource string, mode string)
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -425,6 +440,7 @@ func (client *GoIRODSClient) TruncateFile(path string, size int64) error {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -471,6 +487,7 @@ func (handle *GoIRODSClientFileHandle) GetOffset() int64 {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -487,6 +504,7 @@ func (handle *GoIRODSClientFileHandle) IsReadMode() bool {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -503,6 +521,7 @@ func (handle *GoIRODSClientFileHandle) IsWriteMode() bool {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -519,6 +538,7 @@ func (handle *GoIRODSClientFileHandle) ReadAt(offset int64, length int) ([]byte,
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -535,6 +555,7 @@ func (handle *GoIRODSClientFileHandle) WriteAt(offset int64, data []byte) error 
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -555,6 +576,7 @@ func (handle *GoIRODSClientFileHandle) Close() error {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()

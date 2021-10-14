@@ -3,6 +3,7 @@ package io
 import (
 	"bytes"
 	"fmt"
+	"runtime/debug"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -43,6 +44,7 @@ func (writer *BufferedWriter) Release() {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -64,6 +66,7 @@ func (writer *BufferedWriter) Flush() error {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -92,6 +95,7 @@ func (writer *BufferedWriter) WriteAt(offset int64, data []byte) error {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()

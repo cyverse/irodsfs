@@ -3,6 +3,7 @@ package irodsfs
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 	"syscall"
 	"time"
 
@@ -69,6 +70,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -165,6 +167,7 @@ func (fs *IRODSFS) ConnectToFuse() error {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -201,6 +204,7 @@ func (fs *IRODSFS) StartFuse() error {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -307,6 +311,7 @@ func (fs *IRODSFS) Root() (fusefs.Node, error) {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()

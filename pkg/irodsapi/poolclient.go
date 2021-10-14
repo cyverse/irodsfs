@@ -2,6 +2,7 @@ package irodsapi
 
 import (
 	"fmt"
+	"runtime/debug"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
@@ -40,6 +41,7 @@ func NewPoolClientDriver(poolHost string, poolPort int, account *irodsclient_typ
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -86,6 +88,7 @@ func (client *PoolClient) Release() {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -103,6 +106,7 @@ func (client *PoolClient) List(path string) ([]*IRODSEntry, error) {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -140,6 +144,7 @@ func (client *PoolClient) Stat(path string) (*IRODSEntry, error) {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -171,6 +176,7 @@ func (client *PoolClient) ExistsDir(path string) bool {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -187,6 +193,7 @@ func (client *PoolClient) ListDirACLsWithGroupUsers(path string) ([]*IRODSAccess
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -218,6 +225,7 @@ func (client *PoolClient) ListFileACLsWithGroupUsers(path string) ([]*IRODSAcces
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -248,6 +256,7 @@ func (client *PoolClient) RemoveFile(path string, force bool) error {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -265,6 +274,7 @@ func (client *PoolClient) RemoveDir(path string, recurse bool, force bool) error
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -282,6 +292,7 @@ func (client *PoolClient) MakeDir(path string, recurse bool) error {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -299,6 +310,7 @@ func (client *PoolClient) RenameDirToDir(srcPath string, destPath string) error 
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -316,6 +328,7 @@ func (client *PoolClient) RenameFileToFile(srcPath string, destPath string) erro
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -333,6 +346,7 @@ func (client *PoolClient) CreateFile(path string, resource string) (IRODSFileHan
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -360,6 +374,7 @@ func (client *PoolClient) OpenFile(path string, resource string, mode string) (I
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -387,6 +402,7 @@ func (client *PoolClient) TruncateFile(path string, size int64) error {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -433,6 +449,7 @@ func (handle *PoolClientFileHandle) GetOffset() int64 {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -449,6 +466,7 @@ func (handle *PoolClientFileHandle) IsReadMode() bool {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -465,6 +483,7 @@ func (handle *PoolClientFileHandle) IsWriteMode() bool {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -481,6 +500,7 @@ func (handle *PoolClientFileHandle) ReadAt(offset int64, length int) ([]byte, er
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -497,6 +517,7 @@ func (handle *PoolClientFileHandle) WriteAt(offset int64, data []byte) error {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -513,6 +534,7 @@ func (handle *PoolClientFileHandle) Flush() error {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
@@ -529,6 +551,7 @@ func (handle *PoolClientFileHandle) Close() error {
 
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
 			logger.Panic(r)
 		}
 	}()
