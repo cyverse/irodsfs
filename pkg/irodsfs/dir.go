@@ -689,17 +689,15 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 					logger.WithError(err).Errorf("failed to stat - %s", irodsDestPath)
 					return syscall.EREMOTEIO
 				}
-
-				logger.WithError(err).Errorf("failed to stat - %s", irodsDestPath)
-				return syscall.EREMOTEIO
-			}
-
-			if destEntry.ID > 0 {
-				// delete first
-				err = dir.FS.IRODSClient.RemoveFile(irodsDestPath, true)
-				if err != nil {
-					logger.WithError(err).Errorf("failed to delete file - %s", irodsDestPath)
-					return syscall.EREMOTEIO
+			} else {
+				// no error
+				if destEntry.ID > 0 {
+					// delete first
+					err = dir.FS.IRODSClient.RemoveFile(irodsDestPath, true)
+					if err != nil {
+						logger.WithError(err).Errorf("failed to delete file - %s", irodsDestPath)
+						return syscall.EREMOTEIO
+					}
 				}
 			}
 
