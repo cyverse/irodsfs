@@ -173,7 +173,7 @@ func (vfs *VFS) buildOne(mapping *PathMapping) error {
 		return err
 	}
 
-	logger.Infof("Creating VFS entry mapping - irods path %s => vfs path %s (%t)", irodsEntry, mapping.MappingPath, mapping.ReadOnly)
+	logger.Infof("Creating VFS entry mapping - irods path %s => vfs path %s (%t)", irodsEntry.Path, mapping.MappingPath, mapping.ReadOnly)
 	entry := NewVFSEntryFromIRODSFSEntry(mapping.MappingPath, irodsEntry, mapping.ReadOnly)
 	vfs.Entries[mapping.MappingPath] = entry
 
