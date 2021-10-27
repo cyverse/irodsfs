@@ -238,6 +238,8 @@ func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 	flag.StringVar(&config.SystemUser, "sys_user", "", "Set System User of file/directory owner")
 	flag.StringVar(&config.PoolHost, "pool_host", "", "Set iRODS FUSE Lite Pool host")
 	flag.IntVar(&config.PoolPort, "pool_port", 12020, "Set iRODS FUSE Lite Pool port")
+	flag.BoolVar(&config.Profile, "profile", false, "Enable profiling")
+	flag.IntVar(&config.ProfileServicePort, "profile_port", commons.ProfileServicePortDefault, "Set profile service port")
 
 	flag.Parse()
 
@@ -482,7 +484,7 @@ func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 func getLogWriter(logPath string) io.WriteCloser {
 	return &lumberjack.Logger{
 		Filename:   logPath,
-		MaxSize:    100, // 100MB
+		MaxSize:    10, // 10MB
 		MaxBackups: 0,
 		MaxAge:     30, // 30 days
 		Compress:   false,

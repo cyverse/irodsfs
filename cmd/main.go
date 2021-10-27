@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/cyverse/irodsfs/pkg/commons"
 	"github.com/cyverse/irodsfs/pkg/irodsfs"
+	"github.com/pkg/profile"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
@@ -314,6 +317,17 @@ func run(config *commons.Config, isChildProcess bool) error {
 			logger.Panic(r)
 		}
 	}()
+
+	// profile
+	if config.Profile {
+		go func() {
+			profileServiceAddr := fmt.Sprintf(":%d", config.ProfileServicePort)
+			http.ListenAndServe(profileServiceAddr, nil)
+		}()
+
+		prof := profile.Start(profile.MemProfile)
+		defer prof.Stop()
+	}
 
 	logger.Info("Creating a File System")
 	fs, err := irodsfs.NewFileSystem(config)

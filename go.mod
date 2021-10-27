@@ -8,6 +8,7 @@ require (
 	github.com/cyverse/irodsfs-monitor v0.0.0-20210917223838-2f6d5cbbde0a
 	github.com/cyverse/irodsfs-pool v0.1.7
 	github.com/eapache/channels v1.1.0
+	github.com/pkg/profile v1.6.0
 	github.com/rs/xid v1.3.0
 	github.com/sirupsen/logrus v1.8.1
 	golang.org/x/sys v0.0.0-20210823070655-63515b42dcdf // indirect

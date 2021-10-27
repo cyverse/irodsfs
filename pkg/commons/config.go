@@ -29,6 +29,7 @@ const (
 	EncryptionAlgorithmDefault      string        = "AES-256-CBC"
 	SaltSizeDefault                 int           = 8
 	HashRoundsDefault               int           = 16
+	ProfileServicePortDefault       int           = 11021
 )
 
 var (
@@ -84,6 +85,9 @@ type Config struct {
 	LogPath    string `yaml:"log_path,omitempty"`
 	MonitorURL string `yaml:"monitor_url,omitempty"`
 
+	Profile            bool `yaml:"profile,omitempty"`
+	ProfileServicePort int  `yaml:"profile_service_port,omitempty"`
+
 	Foreground   bool `yaml:"foreground,omitempty"`
 	AllowOther   bool `yaml:"allow_other,omitempty"`
 	ChildProcess bool `yaml:"childprocess,omitempty"`
@@ -125,6 +129,9 @@ type configAlias struct {
 	LogPath    string `yaml:"log_path,omitempty"`
 	MonitorURL string `yaml:"monitor_url,omitempty"`
 
+	Profile            bool `yaml:"profile,omitempty"`
+	ProfileServicePort int  `yaml:"profile_service_port,omitempty"`
+
 	Foreground   bool `yaml:"foreground,omitempty"`
 	AllowOther   bool `yaml:"allow_other,omitempty"`
 	ChildProcess bool `yaml:"childprocess,omitempty"`
@@ -163,6 +170,9 @@ func NewDefaultConfig() *Config {
 		LogPath:    GetDefaultLogFilePath(),
 		MonitorURL: "",
 
+		Profile:            false,
+		ProfileServicePort: ProfileServicePortDefault,
+
 		Foreground:   false,
 		AllowOther:   false,
 		ChildProcess: false,
@@ -197,6 +207,9 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 
 		LogPath:    GetDefaultLogFilePath(),
 		MonitorURL: "",
+
+		Profile:            false,
+		ProfileServicePort: ProfileServicePortDefault,
 
 		Foreground:   false,
 		AllowOther:   false,
@@ -286,6 +299,9 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		LogPath:    alias.LogPath,
 		MonitorURL: alias.MonitorURL,
 
+		Profile:            alias.Profile,
+		ProfileServicePort: alias.ProfileServicePort,
+
 		Foreground:   alias.Foreground,
 		AllowOther:   alias.AllowOther,
 		ChildProcess: alias.ChildProcess,
@@ -315,6 +331,10 @@ func (config *Config) Validate() error {
 
 	if config.Port <= 0 {
 		return fmt.Errorf("port must be given")
+	}
+
+	if config.Profile && config.ProfileServicePort <= 0 {
+		return fmt.Errorf("profile service port must be given")
 	}
 
 	if len(config.ProxyUser) == 0 {
