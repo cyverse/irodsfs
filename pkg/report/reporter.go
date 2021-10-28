@@ -2,6 +2,7 @@ package report
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	monitor_client "github.com/cyverse/irodsfs-monitor/client"
@@ -26,6 +27,7 @@ type MonitoringReporter struct {
 	InstanceID        string
 	FileTransferMap   map[string]*monitor_types.ReportFileTransfer
 	NextFileOffsetMap map[string]int64
+	Mutex             sync.Mutex // lock for FileTransferMap and NextFileOffsetMap
 	IgnoreError       bool
 }
 
@@ -43,6 +45,7 @@ func NewMonitoringReporter(monitorURL string, ignoreError bool) *MonitoringRepor
 		InstanceID:        "",
 		FileTransferMap:   map[string]*monitor_types.ReportFileTransfer{},
 		NextFileOffsetMap: map[string]int64{},
+		Mutex:             sync.Mutex{},
 		IgnoreError:       ignoreError,
 	}
 }
@@ -151,8 +154,13 @@ func (reporter *MonitoringReporter) ReportNewFileTransferStart(path string, file
 				}
 
 				key := reporter.makeFileTransferKey(path, fileHandle)
+
+				reporter.Mutex.Lock()
+				defer reporter.Mutex.Unlock()
+
 				reporter.FileTransferMap[key] = transferReport
 				reporter.NextFileOffsetMap[key] = 0
+
 			}
 		}
 	}
@@ -169,6 +177,10 @@ func (reporter *MonitoringReporter) ReportFileTransferDone(path string, fileHand
 	if !reporter.Failed {
 		if reporter.MonitoringClient != nil {
 			key := reporter.makeFileTransferKey(path, fileHandle)
+
+			reporter.Mutex.Lock()
+			defer reporter.Mutex.Unlock()
+
 			if transfer, ok := reporter.FileTransferMap[key]; ok {
 				transfer.FileCloseTime = time.Now().UTC()
 
@@ -196,6 +208,10 @@ func (reporter *MonitoringReporter) ReportFileTransfer(path string, fileHandle i
 	if !reporter.Failed {
 		if reporter.MonitoringClient != nil {
 			key := reporter.makeFileTransferKey(path, fileHandle)
+
+			reporter.Mutex.Lock()
+			defer reporter.Mutex.Unlock()
+
 			if transfer, ok := reporter.FileTransferMap[key]; ok {
 				block := monitor_types.FileBlock{
 					Offset:     offset,
