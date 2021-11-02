@@ -81,6 +81,7 @@ type Config struct {
 	MetadataCacheTimeout     time.Duration `yaml:"metadata_cache_timeout"`
 	MetadataCacheCleanupTime time.Duration `yaml:"metadata_cache_cleanup_time"`
 	BufferSizeMax            int64         `yaml:"buffer_size_max"`
+	StartNewTransaction      bool          `yaml:"start_new_transaction"`
 
 	LogPath    string `yaml:"log_path,omitempty"`
 	MonitorURL string `yaml:"monitor_url,omitempty"`
@@ -125,6 +126,7 @@ type configAlias struct {
 	MetadataCacheTimeout     string `yaml:"metadata_cache_timeout"`
 	MetadataCacheCleanupTime string `yaml:"metadata_cache_cleanup_time"`
 	BufferSizeMax            int64  `yaml:"buffer_size_max"`
+	StartNewTransaction      bool   `yaml:"start_new_transaction"`
 
 	LogPath    string `yaml:"log_path,omitempty"`
 	MonitorURL string `yaml:"monitor_url,omitempty"`
@@ -166,6 +168,7 @@ func NewDefaultConfig() *Config {
 		MetadataCacheTimeout:     MetadataCacheTimeoutDefault,
 		MetadataCacheCleanupTime: MetadataCacheCleanupTimeDefault,
 		BufferSizeMax:            BufferSizeMaxDefault,
+		StartNewTransaction:      true,
 
 		LogPath:    GetDefaultLogFilePath(),
 		MonitorURL: "",
@@ -201,9 +204,10 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		SaltSize:            SaltSizeDefault,
 		HashRounds:          HashRoundsDefault,
 
-		ReadAheadMax:  ReadAheadMaxDefault,
-		ConnectionMax: ConnectionMaxDefault,
-		BufferSizeMax: BufferSizeMaxDefault,
+		ReadAheadMax:        ReadAheadMaxDefault,
+		ConnectionMax:       ConnectionMaxDefault,
+		BufferSizeMax:       BufferSizeMaxDefault,
+		StartNewTransaction: true,
 
 		LogPath:    GetDefaultLogFilePath(),
 		MonitorURL: "",
@@ -295,6 +299,7 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		MetadataCacheTimeout:     metadataCacheTimeout,
 		MetadataCacheCleanupTime: metadataCacheCleanupTime,
 		BufferSizeMax:            alias.BufferSizeMax,
+		StartNewTransaction:      alias.StartNewTransaction,
 
 		LogPath:    alias.LogPath,
 		MonitorURL: alias.MonitorURL,

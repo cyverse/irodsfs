@@ -196,6 +196,7 @@ func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 	var connectionIdleTimeout string
 	var metadataCacheTimeout string
 	var metadataCacheCleanupTime string
+	var notransaction bool
 
 	config := commons.NewDefaultConfig()
 
@@ -224,6 +225,7 @@ func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 	flag.StringVar(&metadataCacheTimeout, "metadata_cache_timeout", "", "Set filesystem metadata cache timeout")
 	flag.StringVar(&metadataCacheCleanupTime, "metadata_cache_cleanup_time", "", "Set filesystem metadata cache cleanup time")
 	flag.Int64Var(&config.BufferSizeMax, "buffer_size_max", commons.BufferSizeMaxDefault, "Set file buffer max size")
+	flag.BoolVar(&notransaction, "notransaction", false, "No transaction")
 	flag.Var(&fuseOptions, "o", "Other fuse options")
 	flag.StringVar(&config.LogPath, "log", commons.GetDefaultLogFilePath(), "Set log file path")
 	flag.StringVar(&config.MonitorURL, "monitor", "", "Set monitoring service URL")
@@ -401,6 +403,8 @@ func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 		logger.WithError(err).Error("failed to correct system user configuration")
 		return nil, logWriter, err, true
 	}
+
+	config.StartNewTransaction = !notransaction
 
 	// positional arguments
 	mountPath := ""

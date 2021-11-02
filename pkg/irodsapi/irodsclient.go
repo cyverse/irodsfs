@@ -182,7 +182,7 @@ func (client *GoIRODSClient) ExistsDir(path string) bool {
 	return client.GoIRODSFS.ExistsDir(path)
 }
 
-func (client *GoIRODSClient) ListDirACLsWithGroupUsers(path string) ([]*IRODSAccess, error) {
+func (client *GoIRODSClient) ListUserGroups(user string) ([]*IRODSUser, error) {
 	if client.GoIRODSFS == nil {
 		return nil, fmt.Errorf("FSClient is nil")
 	}
@@ -190,7 +190,7 @@ func (client *GoIRODSClient) ListDirACLsWithGroupUsers(path string) ([]*IRODSAcc
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsapi",
 		"struct":   "GoIRODSClient",
-		"function": "ListDirACLsWithGroupUsers",
+		"function": "ListUserGroups",
 	})
 
 	defer func() {
@@ -200,16 +200,52 @@ func (client *GoIRODSClient) ListDirACLsWithGroupUsers(path string) ([]*IRODSAcc
 		}
 	}()
 
-	accesses, err := client.GoIRODSFS.ListDirACLsWithGroupUsers(path)
+	groups, err := client.GoIRODSFS.ListUserGroups(user)
+	if err != nil {
+		return nil, convGoIRODSClientError(err)
+	}
+
+	resultGroups := []*IRODSUser{}
+	for _, group := range groups {
+		resultGroup := &IRODSUser{
+			Name: group.Name,
+			Zone: group.Zone,
+			Type: IRODSUserType(group.Type),
+		}
+		resultGroups = append(resultGroups, resultGroup)
+	}
+
+	return resultGroups, nil
+}
+
+func (client *GoIRODSClient) ListDirACLs(path string) ([]*IRODSAccess, error) {
+	if client.GoIRODSFS == nil {
+		return nil, fmt.Errorf("FSClient is nil")
+	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "GoIRODSClient",
+		"function": "ListDirACLs",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
+			logger.Panic(r)
+		}
+	}()
+
+	accesses, err := client.GoIRODSFS.ListDirACLs(path)
 	if err != nil {
 		return nil, convGoIRODSClientError(err)
 	}
 
 	resultAccesses := []*IRODSAccess{}
-
 	for _, access := range accesses {
 		resultAccess := &IRODSAccess{
 			UserName:    access.UserName,
+			UserType:    IRODSUserType(access.UserType),
 			AccessLevel: IRODSAccessLevelType(access.AccessLevel),
 		}
 		resultAccesses = append(resultAccesses, resultAccess)
@@ -218,7 +254,7 @@ func (client *GoIRODSClient) ListDirACLsWithGroupUsers(path string) ([]*IRODSAcc
 	return resultAccesses, nil
 }
 
-func (client *GoIRODSClient) ListFileACLsWithGroupUsers(path string) ([]*IRODSAccess, error) {
+func (client *GoIRODSClient) ListFileACLs(path string) ([]*IRODSAccess, error) {
 	if client.GoIRODSFS == nil {
 		return nil, fmt.Errorf("FSClient is nil")
 	}
@@ -226,7 +262,7 @@ func (client *GoIRODSClient) ListFileACLsWithGroupUsers(path string) ([]*IRODSAc
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsapi",
 		"struct":   "GoIRODSClient",
-		"function": "ListFileACLsWithGroupUsers",
+		"function": "ListFileACLs",
 	})
 
 	defer func() {
@@ -236,7 +272,7 @@ func (client *GoIRODSClient) ListFileACLsWithGroupUsers(path string) ([]*IRODSAc
 		}
 	}()
 
-	accesses, err := client.GoIRODSFS.ListFileACLsWithGroupUsers(path)
+	accesses, err := client.GoIRODSFS.ListFileACLs(path)
 	if err != nil {
 		return nil, convGoIRODSClientError(err)
 	}
@@ -245,6 +281,7 @@ func (client *GoIRODSClient) ListFileACLsWithGroupUsers(path string) ([]*IRODSAc
 	for _, access := range accesses {
 		resultAccess := &IRODSAccess{
 			UserName:    access.UserName,
+			UserType:    IRODSUserType(access.UserType),
 			AccessLevel: IRODSAccessLevelType(access.AccessLevel),
 		}
 		resultAccesses = append(resultAccesses, resultAccess)

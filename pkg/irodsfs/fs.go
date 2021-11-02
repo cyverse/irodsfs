@@ -51,6 +51,7 @@ type IRODSFS struct {
 	FileMetaUpdater *FileMetaUpdater
 	IRODSClient     irodsapi.IRODSClient
 	Buffer          io.Buffer
+	UserGroupsMap   map[string]*irodsapi.IRODSUser
 
 	UID uint32
 	GID uint32
@@ -99,7 +100,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		config.OperationTimeout, config.ConnectionIdleTimeout,
 		config.ConnectionMax, config.MetadataCacheTimeout,
 		config.MetadataCacheCleanupTime,
-		true,
+		config.StartNewTransaction,
 	)
 
 	logger.Info("Initializing a client driver")
@@ -141,6 +142,17 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	logger.Info("Initializing Monitoring Reporter")
 	reporter := report.NewMonitoringReporter(config.MonitorURL, true)
 
+	userGroups, err := irodsClient.ListUserGroups(account.ClientUser)
+	if err != nil {
+		logger.WithError(err).Errorf("failed to list groups for a user - %s", account.ClientUser)
+		return nil, fmt.Errorf("failed to list groups for a user - %s", account.ClientUser)
+	}
+
+	userGroupsMap := map[string]*irodsapi.IRODSUser{}
+	for _, userGroup := range userGroups {
+		userGroupsMap[userGroup.Name] = userGroup
+	}
+
 	return &IRODSFS{
 		Config:          config,
 		Fuse:            nil,
@@ -148,6 +160,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		FileMetaUpdater: fileMetaUpdater,
 		IRODSClient:     irodsClient,
 		Buffer:          ramBuffer,
+		UserGroupsMap:   userGroupsMap,
 
 		UID: uint32(config.UID),
 		GID: uint32(config.GID),

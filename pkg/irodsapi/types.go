@@ -40,9 +40,30 @@ const (
 	IRODSAccessLevelNone IRODSAccessLevelType = ""
 )
 
+// IRODSUserType is a type of iRODS User
+type IRODSUserType string
+
+const (
+	// IRODSUserRodsGroup is for a group
+	IRODSUserRodsGroup IRODSUserType = "rodsgroup"
+	// IRODSUserRodsUser is for a user
+	IRODSUserRodsUser IRODSUserType = "rodsuser"
+	// IRODSUserRodsAdmin is for an admin user
+	IRODSUserRodsAdmin IRODSUserType = "rodsadmin"
+	// IRODSUserGroupAdmin is for an admin group
+	IRODSUserGroupAdmin IRODSUserType = "groupadmin"
+)
+
 type IRODSAccess struct {
 	UserName    string
+	UserType    IRODSUserType
 	AccessLevel IRODSAccessLevelType
+}
+
+type IRODSUser struct {
+	Name string
+	Zone string
+	Type IRODSUserType
 }
 
 // FileOpenMode determines file open mode

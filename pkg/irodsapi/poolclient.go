@@ -184,11 +184,11 @@ func (client *PoolClient) ExistsDir(path string) bool {
 	return client.PoolServiceClient.ExistsDir(client.PoolServiceSession, path)
 }
 
-func (client *PoolClient) ListDirACLsWithGroupUsers(path string) ([]*IRODSAccess, error) {
+func (client *PoolClient) ListUserGroups(user string) ([]*IRODSUser, error) {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsapi",
 		"struct":   "PoolClient",
-		"function": "ListDirACLsWithGroupUsers",
+		"function": "ListUserGroups",
 	})
 
 	defer func() {
@@ -198,7 +198,39 @@ func (client *PoolClient) ListDirACLsWithGroupUsers(path string) ([]*IRODSAccess
 		}
 	}()
 
-	accesses, err := client.PoolServiceClient.ListDirACLsWithGroupUsers(client.PoolServiceSession, path)
+	groups, err := client.PoolServiceClient.ListUserGroups(client.PoolServiceSession, user)
+	if err != nil {
+		return nil, convPoolClientError(err)
+	}
+
+	resultGroups := []*IRODSUser{}
+	for _, group := range groups {
+		resultGroup := &IRODSUser{
+			Name: group.Name,
+			Zone: group.Zone,
+			Type: IRODSUserType(group.Type),
+		}
+		resultGroups = append(resultGroups, resultGroup)
+	}
+
+	return resultGroups, nil
+}
+
+func (client *PoolClient) ListDirACLs(path string) ([]*IRODSAccess, error) {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsapi",
+		"struct":   "PoolClient",
+		"function": "ListDirACLs",
+	})
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
+			logger.Panic(r)
+		}
+	}()
+
+	accesses, err := client.PoolServiceClient.ListDirACLs(client.PoolServiceSession, path)
 	if err != nil {
 		return nil, convPoolClientError(err)
 	}
@@ -208,6 +240,7 @@ func (client *PoolClient) ListDirACLsWithGroupUsers(path string) ([]*IRODSAccess
 	for _, access := range accesses {
 		resultAccess := &IRODSAccess{
 			UserName:    access.UserName,
+			UserType:    IRODSUserType(access.UserType),
 			AccessLevel: IRODSAccessLevelType(access.AccessLevel),
 		}
 		resultAccesses = append(resultAccesses, resultAccess)
@@ -216,11 +249,11 @@ func (client *PoolClient) ListDirACLsWithGroupUsers(path string) ([]*IRODSAccess
 	return resultAccesses, nil
 }
 
-func (client *PoolClient) ListFileACLsWithGroupUsers(path string) ([]*IRODSAccess, error) {
+func (client *PoolClient) ListFileACLs(path string) ([]*IRODSAccess, error) {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsapi",
 		"struct":   "PoolClient",
-		"function": "ListFileACLsWithGroupUsers",
+		"function": "ListFileACLs",
 	})
 
 	defer func() {
@@ -230,7 +263,7 @@ func (client *PoolClient) ListFileACLsWithGroupUsers(path string) ([]*IRODSAcces
 		}
 	}()
 
-	accesses, err := client.PoolServiceClient.ListFileACLsWithGroupUsers(client.PoolServiceSession, path)
+	accesses, err := client.PoolServiceClient.ListFileACLs(client.PoolServiceSession, path)
 	if err != nil {
 		return nil, convPoolClientError(err)
 	}
@@ -239,6 +272,7 @@ func (client *PoolClient) ListFileACLsWithGroupUsers(path string) ([]*IRODSAcces
 	for _, access := range accesses {
 		resultAccess := &IRODSAccess{
 			UserName:    access.UserName,
+			UserType:    IRODSUserType(access.UserType),
 			AccessLevel: IRODSAccessLevelType(access.AccessLevel),
 		}
 		resultAccesses = append(resultAccesses, resultAccess)

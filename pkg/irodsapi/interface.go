@@ -14,8 +14,9 @@ type IRODSClient interface {
 	List(path string) ([]*IRODSEntry, error)
 	Stat(path string) (*IRODSEntry, error)
 	ExistsDir(path string) bool
-	ListDirACLsWithGroupUsers(path string) ([]*IRODSAccess, error)
-	ListFileACLsWithGroupUsers(path string) ([]*IRODSAccess, error)
+	ListUserGroups(user string) ([]*IRODSUser, error)
+	ListDirACLs(path string) ([]*IRODSAccess, error)
+	ListFileACLs(path string) ([]*IRODSAccess, error)
 	RemoveFile(path string, force bool) error
 	RemoveDir(path string, recurse bool, force bool) error
 	MakeDir(path string, recurse bool) error

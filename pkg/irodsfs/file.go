@@ -66,13 +66,13 @@ func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, irodsEntry *irodsapi.IRODSEn
 	logger.Infof("Checking ACL information of the Entry for %s and user %s", irodsEntry.Path, file.FS.Config.ClientUser)
 	defer logger.Infof("Checked ACL information of the Entry for %s and user %s", irodsEntry.Path, file.FS.Config.ClientUser)
 
-	accesses, err := file.FS.IRODSClient.ListFileACLsWithGroupUsers(irodsEntry.Path)
+	accesses, err := file.FS.IRODSClient.ListFileACLs(irodsEntry.Path)
 	if err != nil {
 		logger.Errorf("failed to get ACL information of the Entry for %s", irodsEntry.Path)
 	}
 
 	for _, access := range accesses {
-		if access.UserName == file.FS.Config.ClientUser {
+		if access.UserType == irodsapi.IRODSUserRodsUser && access.UserName == file.FS.Config.ClientUser {
 			// found
 			switch access.AccessLevel {
 			case irodsapi.IRODSAccessLevelOwner:
@@ -90,13 +90,33 @@ func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, irodsEntry *irodsapi.IRODSEn
 			case irodsapi.IRODSAccessLevelNone:
 				return 0o000
 			}
+		} else if access.UserType == irodsapi.IRODSUserRodsGroup {
+			if _, ok := file.FS.UserGroupsMap[access.UserName]; ok {
+				// my group
+				switch access.AccessLevel {
+				case irodsapi.IRODSAccessLevelOwner:
+					if vfsEntry.ReadOnly {
+						return 0o400
+					}
+					return 0o700
+				case irodsapi.IRODSAccessLevelWrite:
+					if vfsEntry.ReadOnly {
+						return 0o400
+					}
+					return 0o600
+				case irodsapi.IRODSAccessLevelRead:
+					return 0o400
+				case irodsapi.IRODSAccessLevelNone:
+					return 0o000
+				}
+			}
 		}
 	}
 
 	logger.Errorf("failed to find ACL information of the Entry for %s and user %s", irodsEntry.Path, file.FS.Config.ClientUser)
 
 	// others - no permission
-	return 0o000
+	return 0o400
 }
 
 // Attr returns stat of file entry
