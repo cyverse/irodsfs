@@ -14,3 +14,16 @@ build:
 	mkdir -p bin
 	CGO_ENABLED=0 GOOS=linux go build -ldflags=${LDFLAGS} -o bin/irodsfs ./cmd/
 
+.PHONY: build-release
+build-release:
+	mkdir -p release
+	CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -ldflags=${LDFLAGS} -o release/irodsfs ./cmd/
+	cd release && tar cvf irodsfs_i386_linux_${VERSION}.tar irodsfs && cd ..
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags=${LDFLAGS} -o release/irodsfs ./cmd/
+	cd release && tar cvf irodsfs_amd64_linux_${VERSION}.tar irodsfs && cd ..
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm go build -ldflags=${LDFLAGS} -o release/irodsfs ./cmd/
+	cd release && tar cvf irodsfs_arm_linux_${VERSION}.tar irodsfs && cd ..
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags=${LDFLAGS} -o release/irodsfs ./cmd/
+	cd release && tar cvf irodsfs_arm64_linux_${VERSION}.tar irodsfs && cd ..
+	rm release/irodsfs
+
