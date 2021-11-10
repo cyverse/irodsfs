@@ -8,7 +8,7 @@ import (
 	"sync"
 	"syscall"
 
-	"bazil.org/fuse"
+	fuse "bazil.org/fuse"
 	fusefs "bazil.org/fuse/fs"
 	"github.com/cyverse/irodsfs/pkg/io"
 	"github.com/cyverse/irodsfs/pkg/irodsapi"
@@ -54,12 +54,14 @@ func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, irodsEntry *irodsapi.IRODSEn
 		}
 	}()
 
+	// we don't actually check permissions for reading file when vfsEntry is read only
+	// because files with no-access for the user will not be visible
+	if vfsEntry.ReadOnly {
+		return 0o400
+	}
+
 	if irodsEntry.Owner == file.FS.Config.ClientUser {
 		// mine
-		if vfsEntry.ReadOnly {
-			return 0o400
-		}
-
 		return 0o700
 	}
 
@@ -71,52 +73,49 @@ func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, irodsEntry *irodsapi.IRODSEn
 		logger.Errorf("failed to get ACL information of the Entry for %s", irodsEntry.Path)
 	}
 
+	var highestPermission os.FileMode = 0o400
 	for _, access := range accesses {
 		if access.UserType == irodsapi.IRODSUserRodsUser && access.UserName == file.FS.Config.ClientUser {
 			// found
 			switch access.AccessLevel {
 			case irodsapi.IRODSAccessLevelOwner:
-				if vfsEntry.ReadOnly {
-					return 0o400
-				}
+				// highest, don't need to continue
 				return 0o700
 			case irodsapi.IRODSAccessLevelWrite:
-				if vfsEntry.ReadOnly {
-					return 0o400
+				if highestPermission < 0o600 {
+					highestPermission = 0o600
 				}
-				return 0o600
 			case irodsapi.IRODSAccessLevelRead:
-				return 0o400
+				if highestPermission < 0o400 {
+					highestPermission = 0o400
+				}
 			case irodsapi.IRODSAccessLevelNone:
-				return 0o000
+				// nothing
 			}
 		} else if access.UserType == irodsapi.IRODSUserRodsGroup {
 			if _, ok := file.FS.UserGroupsMap[access.UserName]; ok {
 				// my group
 				switch access.AccessLevel {
 				case irodsapi.IRODSAccessLevelOwner:
-					if vfsEntry.ReadOnly {
-						return 0o400
-					}
+					// highest, don't need to continue
 					return 0o700
 				case irodsapi.IRODSAccessLevelWrite:
-					if vfsEntry.ReadOnly {
-						return 0o400
+					if highestPermission < 0o600 {
+						highestPermission = 0o600
 					}
-					return 0o600
 				case irodsapi.IRODSAccessLevelRead:
-					return 0o400
+					if highestPermission < 0o400 {
+						highestPermission = 0o400
+					}
 				case irodsapi.IRODSAccessLevelNone:
-					return 0o000
+					// nothing
 				}
 			}
 		}
 	}
 
 	logger.Errorf("failed to find ACL information of the Entry for %s and user %s", irodsEntry.Path, file.FS.Config.ClientUser)
-
-	// others - no permission
-	return 0o400
+	return highestPermission
 }
 
 // Attr returns stat of file entry
