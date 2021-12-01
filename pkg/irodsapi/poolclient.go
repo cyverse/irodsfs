@@ -20,6 +20,8 @@ func convPoolClientError(err error) error {
 
 	if irodsclient_types.IsFileNotFoundError(err) {
 		return NewFileNotFoundError(err.Error())
+	} else if irodsclient_types.IsCollectionNotEmptyError(err) {
+		return NewCollectionNotEmptyError(err.Error())
 	}
 	return err
 }
