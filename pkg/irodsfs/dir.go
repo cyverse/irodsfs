@@ -473,14 +473,27 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 		case irodsapi.FileEntry:
 			err = dir.FS.IRODSClient.RemoveFile(irodsPath, true)
 			if err != nil {
-				logger.WithError(err).Errorf("failed to remove file - %s", irodsPath)
+				if irodsapi.IsFileNotFoundError(err) {
+					logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
+					return syscall.ENOENT
+				}
+
+				logger.WithError(err).Errorf("failed to remove a file - %s", irodsPath)
 				return syscall.EREMOTEIO
 			}
 			return nil
 		case irodsapi.DirectoryEntry:
 			err = dir.FS.IRODSClient.RemoveDir(irodsPath, false, true)
 			if err != nil {
-				logger.WithError(err).Errorf("failed to remove dir - %s", irodsPath)
+				if irodsapi.IsFileNotFoundError(err) {
+					logger.WithError(err).Errorf("failed to find a dir - %s", irodsPath)
+					return syscall.ENOENT
+				} else if irodsapi.IsCollectionNotEmptyError(err) {
+					logger.WithError(err).Errorf("the dir is not empty - %s", irodsPath)
+					return syscall.ENOTEMPTY
+				}
+
+				logger.WithError(err).Errorf("failed to remove a dir - %s", irodsPath)
 				return syscall.EREMOTEIO
 			}
 			return nil
