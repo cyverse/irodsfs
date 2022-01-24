@@ -15,3 +15,10 @@ path_mappings:
   - irods_path: /iplant/home/iychoi/datasets/MSSA_MRSA
     mapping_path: /mssa_mrsa
     resource_type: dir
+
+metadata_cache_timeout_path_map:
+  "/": -1
+  "/iplant": -1
+  "/iplant/home": -1
+  "/iplant/home/shared": -1
+  "/iplant/home/shared/*": 3600

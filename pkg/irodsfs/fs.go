@@ -97,9 +97,11 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 
 	fsconfig := irodsclient_fs.NewFileSystemConfig(
 		FSName,
+		config.ConnectionLifespan,
 		config.OperationTimeout, config.ConnectionIdleTimeout,
 		config.ConnectionMax, config.MetadataCacheTimeout,
 		config.MetadataCacheCleanupTime,
+		config.MetadataCacheTimeoutPathMap,
 		config.StartNewTransaction,
 	)
 

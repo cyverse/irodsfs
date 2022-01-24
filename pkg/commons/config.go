@@ -16,20 +16,22 @@ const (
 	ReadAheadMaxDefault             int           = 1024 * 64 // 64KB
 	ConnectionMaxDefault            int           = 10
 	OperationTimeoutDefault         time.Duration = 5 * time.Minute
+	ConnectionLifespanDefault       time.Duration = 1 * time.Hour
 	ConnectionIdleTimeoutDefault    time.Duration = 5 * time.Minute
 	MetadataCacheTimeoutDefault     time.Duration = 5 * time.Minute
 	MetadataCacheCleanupTimeDefault time.Duration = 5 * time.Minute
-	LogFilePathPrefixDefault        string        = "/tmp/irodsfs"
-	LogFilePathChildDefault         string        = "/tmp/irodsfs_child.log"
-	BufferSizeMaxDefault            int64         = 1024 * 1024 * 64 // 64MB
-	AuthSchemePAM                   string        = "pam"
-	AuthSchemeNative                string        = "native"
-	AuthSchemeDefault               string        = AuthSchemeNative
-	EncryptionKeySizeDefault        int           = 32
-	EncryptionAlgorithmDefault      string        = "AES-256-CBC"
-	SaltSizeDefault                 int           = 8
-	HashRoundsDefault               int           = 16
-	ProfileServicePortDefault       int           = 11021
+
+	LogFilePathPrefixDefault   string = "/tmp/irodsfs"
+	LogFilePathChildDefault    string = "/tmp/irodsfs_child.log"
+	BufferSizeMaxDefault       int64  = 1024 * 1024 * 64 // 64MB
+	AuthSchemePAM              string = "pam"
+	AuthSchemeNative           string = "native"
+	AuthSchemeDefault          string = AuthSchemeNative
+	EncryptionKeySizeDefault   int    = 32
+	EncryptionAlgorithmDefault string = "AES-256-CBC"
+	SaltSizeDefault            int    = 8
+	HashRoundsDefault          int    = 16
+	ProfileServicePortDefault  int    = 11021
 )
 
 var (
@@ -74,14 +76,16 @@ type Config struct {
 	SaltSize            int    `yaml:"ssl_encryption_salt_size"`
 	HashRounds          int    `yaml:"ssl_encryption_hash_rounds"`
 
-	ReadAheadMax             int           `yaml:"read_ahead_max"`
-	OperationTimeout         time.Duration `yaml:"operation_timeout"`
-	ConnectionIdleTimeout    time.Duration `yaml:"connection_idle_timeout"`
-	ConnectionMax            int           `yaml:"connection_max"`
-	MetadataCacheTimeout     time.Duration `yaml:"metadata_cache_timeout"`
-	MetadataCacheCleanupTime time.Duration `yaml:"metadata_cache_cleanup_time"`
-	BufferSizeMax            int64         `yaml:"buffer_size_max"`
-	StartNewTransaction      bool          `yaml:"start_new_transaction"`
+	ReadAheadMax                int                      `yaml:"read_ahead_max"`
+	OperationTimeout            time.Duration            `yaml:"operation_timeout"`
+	ConnectionLifespan          time.Duration            `yaml:"connection_lifespan"`
+	ConnectionIdleTimeout       time.Duration            `yaml:"connection_idle_timeout"`
+	ConnectionMax               int                      `yaml:"connection_max"`
+	MetadataCacheTimeout        time.Duration            `yaml:"metadata_cache_timeout"`
+	MetadataCacheCleanupTime    time.Duration            `yaml:"metadata_cache_cleanup_time"`
+	MetadataCacheTimeoutPathMap map[string]time.Duration `yaml:"metadata_cache_timeout_path_map"`
+	BufferSizeMax               int64                    `yaml:"buffer_size_max"`
+	StartNewTransaction         bool                     `yaml:"start_new_transaction"`
 
 	LogPath    string `yaml:"log_path,omitempty"`
 	MonitorURL string `yaml:"monitor_url,omitempty"`
@@ -119,14 +123,16 @@ type configAlias struct {
 	SaltSize            int    `yaml:"ssl_encryption_salt_size"`
 	HashRounds          int    `yaml:"ssl_encryption_hash_rounds"`
 
-	ReadAheadMax             int    `yaml:"read_ahead_max"`
-	OperationTimeout         string `yaml:"operation_timeout"`
-	ConnectionIdleTimeout    string `yaml:"connection_idle_timeout"`
-	ConnectionMax            int    `yaml:"connection_max"`
-	MetadataCacheTimeout     string `yaml:"metadata_cache_timeout"`
-	MetadataCacheCleanupTime string `yaml:"metadata_cache_cleanup_time"`
-	BufferSizeMax            int64  `yaml:"buffer_size_max"`
-	StartNewTransaction      bool   `yaml:"start_new_transaction"`
+	ReadAheadMax                int               `yaml:"read_ahead_max"`
+	OperationTimeout            string            `yaml:"operation_timeout"`
+	ConnectionLifespan          string            `yaml:"connection_lifespan"`
+	ConnectionIdleTimeout       string            `yaml:"connection_idle_timeout"`
+	ConnectionMax               int               `yaml:"connection_max"`
+	MetadataCacheTimeout        string            `yaml:"metadata_cache_timeout"`
+	MetadataCacheCleanupTime    string            `yaml:"metadata_cache_cleanup_time"`
+	MetadataCacheTimeoutPathMap map[string]string `yaml:"metadata_cache_timeout_path_map"`
+	BufferSizeMax               int64             `yaml:"buffer_size_max"`
+	StartNewTransaction         bool              `yaml:"start_new_transaction"`
 
 	LogPath    string `yaml:"log_path,omitempty"`
 	MonitorURL string `yaml:"monitor_url,omitempty"`
@@ -161,14 +167,16 @@ func NewDefaultConfig() *Config {
 		SaltSize:            SaltSizeDefault,
 		HashRounds:          HashRoundsDefault,
 
-		ReadAheadMax:             ReadAheadMaxDefault,
-		OperationTimeout:         OperationTimeoutDefault,
-		ConnectionIdleTimeout:    ConnectionIdleTimeoutDefault,
-		ConnectionMax:            ConnectionMaxDefault,
-		MetadataCacheTimeout:     MetadataCacheTimeoutDefault,
-		MetadataCacheCleanupTime: MetadataCacheCleanupTimeDefault,
-		BufferSizeMax:            BufferSizeMaxDefault,
-		StartNewTransaction:      true,
+		ReadAheadMax:                ReadAheadMaxDefault,
+		OperationTimeout:            OperationTimeoutDefault,
+		ConnectionLifespan:          ConnectionLifespanDefault,
+		ConnectionIdleTimeout:       ConnectionIdleTimeoutDefault,
+		ConnectionMax:               ConnectionMaxDefault,
+		MetadataCacheTimeout:        MetadataCacheTimeoutDefault,
+		MetadataCacheCleanupTime:    MetadataCacheCleanupTimeDefault,
+		MetadataCacheTimeoutPathMap: map[string]time.Duration{},
+		BufferSizeMax:               BufferSizeMaxDefault,
+		StartNewTransaction:         true,
 
 		LogPath:    GetDefaultLogFilePath(),
 		MonitorURL: "",
@@ -237,6 +245,16 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		operationTimeout = OperationTimeoutDefault
 	}
 
+	var connectionLifespan time.Duration
+	if len(alias.ConnectionLifespan) > 0 {
+		connectionLifespan, err = time.ParseDuration(alias.ConnectionLifespan)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal YAML - %v", err)
+		}
+	} else {
+		connectionLifespan = ConnectionLifespanDefault
+	}
+
 	var connectionIdleTimeout time.Duration
 	if len(alias.ConnectionIdleTimeout) > 0 {
 		connectionIdleTimeout, err = time.ParseDuration(alias.ConnectionIdleTimeout)
@@ -267,6 +285,18 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		metadataCacheCleanupTime = MetadataCacheCleanupTimeDefault
 	}
 
+	var metadataCacheTimeoutPathMap map[string]time.Duration = map[string]time.Duration{}
+	for path, timeout := range alias.MetadataCacheTimeoutPathMap {
+		if len(path) > 0 {
+			metadataCacheTimeoutForPath, err := time.ParseDuration(timeout)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal YAML - %v", err)
+			}
+
+			metadataCacheTimeoutPathMap[path] = metadataCacheTimeoutForPath
+		}
+	}
+
 	systemUser, uid, gid, _ = utils.CorrectSystemUser(alias.SystemUser, alias.UID, alias.GID)
 
 	return &Config{
@@ -292,14 +322,16 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		SaltSize:            alias.SaltSize,
 		HashRounds:          alias.HashRounds,
 
-		ReadAheadMax:             alias.ReadAheadMax,
-		OperationTimeout:         operationTimeout,
-		ConnectionIdleTimeout:    connectionIdleTimeout,
-		ConnectionMax:            alias.ConnectionMax,
-		MetadataCacheTimeout:     metadataCacheTimeout,
-		MetadataCacheCleanupTime: metadataCacheCleanupTime,
-		BufferSizeMax:            alias.BufferSizeMax,
-		StartNewTransaction:      alias.StartNewTransaction,
+		ReadAheadMax:                alias.ReadAheadMax,
+		OperationTimeout:            operationTimeout,
+		ConnectionLifespan:          connectionLifespan,
+		ConnectionIdleTimeout:       connectionIdleTimeout,
+		ConnectionMax:               alias.ConnectionMax,
+		MetadataCacheTimeout:        metadataCacheTimeout,
+		MetadataCacheCleanupTime:    metadataCacheCleanupTime,
+		MetadataCacheTimeoutPathMap: metadataCacheTimeoutPathMap,
+		BufferSizeMax:               alias.BufferSizeMax,
+		StartNewTransaction:         alias.StartNewTransaction,
 
 		LogPath:    alias.LogPath,
 		MonitorURL: alias.MonitorURL,
