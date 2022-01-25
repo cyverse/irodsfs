@@ -52,6 +52,13 @@ func GetDefaultLogFilePath() string {
 	return fmt.Sprintf("%s_%s.log", LogFilePathPrefixDefault, getInstanceID())
 }
 
+// MetadataCacheTimeoutSetting defines cache timeout for path
+type MetadataCacheTimeoutSetting struct {
+	Path    string   `yaml:"path"`
+	Timeout Duration `yaml:"timeout"`
+	Inherit bool     `yaml:"inherit,omitempty"`
+}
+
 // Config holds the parameters list which can be configured
 type Config struct {
 	Host         string            `yaml:"host"`
@@ -76,63 +83,16 @@ type Config struct {
 	SaltSize            int    `yaml:"ssl_encryption_salt_size"`
 	HashRounds          int    `yaml:"ssl_encryption_hash_rounds"`
 
-	ReadAheadMax                int                      `yaml:"read_ahead_max"`
-	OperationTimeout            time.Duration            `yaml:"operation_timeout"`
-	ConnectionLifespan          time.Duration            `yaml:"connection_lifespan"`
-	ConnectionIdleTimeout       time.Duration            `yaml:"connection_idle_timeout"`
-	ConnectionMax               int                      `yaml:"connection_max"`
-	MetadataCacheTimeout        time.Duration            `yaml:"metadata_cache_timeout"`
-	MetadataCacheCleanupTime    time.Duration            `yaml:"metadata_cache_cleanup_time"`
-	MetadataCacheTimeoutPathMap map[string]time.Duration `yaml:"metadata_cache_timeout_path_map"`
-	BufferSizeMax               int64                    `yaml:"buffer_size_max"`
-	StartNewTransaction         bool                     `yaml:"start_new_transaction"`
-
-	LogPath    string `yaml:"log_path,omitempty"`
-	MonitorURL string `yaml:"monitor_url,omitempty"`
-
-	Profile            bool `yaml:"profile,omitempty"`
-	ProfileServicePort int  `yaml:"profile_service_port,omitempty"`
-
-	Foreground   bool `yaml:"foreground,omitempty"`
-	AllowOther   bool `yaml:"allow_other,omitempty"`
-	ChildProcess bool `yaml:"childprocess,omitempty"`
-
-	InstanceID string `yaml:"instanceid,omitempty"`
-}
-
-type configAlias struct {
-	Host         string            `yaml:"host"`
-	Port         int               `yaml:"port"`
-	ProxyUser    string            `yaml:"proxy_user,omitempty"`
-	ClientUser   string            `yaml:"client_user"`
-	Zone         string            `yaml:"zone"`
-	Password     string            `yaml:"password,omitempty"`
-	PathMappings []vfs.PathMapping `yaml:"path_mappings"`
-	UID          int               `yaml:"uid"`
-	GID          int               `yaml:"gid"`
-	SystemUser   string            `yaml:"system_user"`
-	MountPath    string            `yaml:"mount_path,omitempty"`
-
-	PoolHost string `yaml:"pool_host,omitempty"`
-	PoolPort int    `yaml:"pool_port,omitempty"`
-
-	AuthScheme          string `yaml:"authscheme"`
-	CACertificateFile   string `yaml:"ssl_ca_cert_file"`
-	EncryptionKeySize   int    `yaml:"ssl_encryption_key_size"`
-	EncryptionAlgorithm string `yaml:"ssl_encryption_algorithm"`
-	SaltSize            int    `yaml:"ssl_encryption_salt_size"`
-	HashRounds          int    `yaml:"ssl_encryption_hash_rounds"`
-
-	ReadAheadMax                int               `yaml:"read_ahead_max"`
-	OperationTimeout            string            `yaml:"operation_timeout"`
-	ConnectionLifespan          string            `yaml:"connection_lifespan"`
-	ConnectionIdleTimeout       string            `yaml:"connection_idle_timeout"`
-	ConnectionMax               int               `yaml:"connection_max"`
-	MetadataCacheTimeout        string            `yaml:"metadata_cache_timeout"`
-	MetadataCacheCleanupTime    string            `yaml:"metadata_cache_cleanup_time"`
-	MetadataCacheTimeoutPathMap map[string]string `yaml:"metadata_cache_timeout_path_map"`
-	BufferSizeMax               int64             `yaml:"buffer_size_max"`
-	StartNewTransaction         bool              `yaml:"start_new_transaction"`
+	ReadAheadMax                 int                           `yaml:"read_ahead_max"`
+	OperationTimeout             Duration                      `yaml:"operation_timeout"`
+	ConnectionLifespan           Duration                      `yaml:"connection_lifespan"`
+	ConnectionIdleTimeout        Duration                      `yaml:"connection_idle_timeout"`
+	ConnectionMax                int                           `yaml:"connection_max"`
+	MetadataCacheTimeout         Duration                      `yaml:"metadata_cache_timeout"`
+	MetadataCacheCleanupTime     Duration                      `yaml:"metadata_cache_cleanup_time"`
+	MetadataCacheTimeoutSettings []MetadataCacheTimeoutSetting `yaml:"metadata_cache_timeout_settings"`
+	BufferSizeMax                int64                         `yaml:"buffer_size_max"`
+	StartNewTransaction          bool                          `yaml:"start_new_transaction"`
 
 	LogPath    string `yaml:"log_path,omitempty"`
 	MonitorURL string `yaml:"monitor_url,omitempty"`
@@ -167,16 +127,16 @@ func NewDefaultConfig() *Config {
 		SaltSize:            SaltSizeDefault,
 		HashRounds:          HashRoundsDefault,
 
-		ReadAheadMax:                ReadAheadMaxDefault,
-		OperationTimeout:            OperationTimeoutDefault,
-		ConnectionLifespan:          ConnectionLifespanDefault,
-		ConnectionIdleTimeout:       ConnectionIdleTimeoutDefault,
-		ConnectionMax:               ConnectionMaxDefault,
-		MetadataCacheTimeout:        MetadataCacheTimeoutDefault,
-		MetadataCacheCleanupTime:    MetadataCacheCleanupTimeDefault,
-		MetadataCacheTimeoutPathMap: map[string]time.Duration{},
-		BufferSizeMax:               BufferSizeMaxDefault,
-		StartNewTransaction:         true,
+		ReadAheadMax:                 ReadAheadMaxDefault,
+		OperationTimeout:             Duration(OperationTimeoutDefault),
+		ConnectionLifespan:           Duration(ConnectionLifespanDefault),
+		ConnectionIdleTimeout:        Duration(ConnectionIdleTimeoutDefault),
+		ConnectionMax:                ConnectionMaxDefault,
+		MetadataCacheTimeout:         Duration(MetadataCacheTimeoutDefault),
+		MetadataCacheCleanupTime:     Duration(MetadataCacheCleanupTimeDefault),
+		MetadataCacheTimeoutSettings: []MetadataCacheTimeoutSetting{},
+		BufferSizeMax:                BufferSizeMaxDefault,
+		StartNewTransaction:          true,
 
 		LogPath:    GetDefaultLogFilePath(),
 		MonitorURL: "",
@@ -196,7 +156,7 @@ func NewDefaultConfig() *Config {
 func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 	systemUser, uid, gid, _ := utils.GetCurrentSystemUser()
 
-	alias := configAlias{
+	config := Config{
 		Port:         PortDefault,
 		PathMappings: []vfs.PathMapping{},
 		UID:          uid,
@@ -212,10 +172,16 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		SaltSize:            SaltSizeDefault,
 		HashRounds:          HashRoundsDefault,
 
-		ReadAheadMax:        ReadAheadMaxDefault,
-		ConnectionMax:       ConnectionMaxDefault,
-		BufferSizeMax:       BufferSizeMaxDefault,
-		StartNewTransaction: true,
+		ReadAheadMax:                 ReadAheadMaxDefault,
+		OperationTimeout:             Duration(OperationTimeoutDefault),
+		ConnectionLifespan:           Duration(ConnectionLifespanDefault),
+		ConnectionIdleTimeout:        Duration(ConnectionIdleTimeoutDefault),
+		ConnectionMax:                ConnectionMaxDefault,
+		MetadataCacheTimeout:         Duration(MetadataCacheTimeoutDefault),
+		MetadataCacheCleanupTime:     Duration(MetadataCacheCleanupTimeDefault),
+		MetadataCacheTimeoutSettings: []MetadataCacheTimeoutSetting{},
+		BufferSizeMax:                BufferSizeMaxDefault,
+		StartNewTransaction:          true,
 
 		LogPath:    GetDefaultLogFilePath(),
 		MonitorURL: "",
@@ -230,121 +196,17 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		InstanceID: getInstanceID(),
 	}
 
-	err := yaml.Unmarshal(yamlBytes, &alias)
+	err := yaml.Unmarshal(yamlBytes, &config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal YAML - %v", err)
 	}
 
-	var operationTimeout time.Duration
-	if len(alias.OperationTimeout) > 0 {
-		operationTimeout, err = time.ParseDuration(alias.OperationTimeout)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal YAML - %v", err)
-		}
-	} else {
-		operationTimeout = OperationTimeoutDefault
+	err = config.CorrectSystemUser()
+	if err != nil {
+		return nil, fmt.Errorf("failed to correct System User - %v", err)
 	}
 
-	var connectionLifespan time.Duration
-	if len(alias.ConnectionLifespan) > 0 {
-		connectionLifespan, err = time.ParseDuration(alias.ConnectionLifespan)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal YAML - %v", err)
-		}
-	} else {
-		connectionLifespan = ConnectionLifespanDefault
-	}
-
-	var connectionIdleTimeout time.Duration
-	if len(alias.ConnectionIdleTimeout) > 0 {
-		connectionIdleTimeout, err = time.ParseDuration(alias.ConnectionIdleTimeout)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal YAML - %v", err)
-		}
-	} else {
-		connectionIdleTimeout = ConnectionIdleTimeoutDefault
-	}
-
-	var metadataCacheTimeout time.Duration
-	if len(alias.MetadataCacheTimeout) > 0 {
-		metadataCacheTimeout, err = time.ParseDuration(alias.MetadataCacheTimeout)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal YAML - %v", err)
-		}
-	} else {
-		metadataCacheTimeout = MetadataCacheTimeoutDefault
-	}
-
-	var metadataCacheCleanupTime time.Duration
-	if len(alias.MetadataCacheCleanupTime) > 0 {
-		metadataCacheCleanupTime, err = time.ParseDuration(alias.MetadataCacheCleanupTime)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal YAML - %v", err)
-		}
-	} else {
-		metadataCacheCleanupTime = MetadataCacheCleanupTimeDefault
-	}
-
-	var metadataCacheTimeoutPathMap map[string]time.Duration = map[string]time.Duration{}
-	for path, timeout := range alias.MetadataCacheTimeoutPathMap {
-		if len(path) > 0 {
-			metadataCacheTimeoutForPath, err := time.ParseDuration(timeout)
-			if err != nil {
-				return nil, fmt.Errorf("failed to unmarshal YAML - %v", err)
-			}
-
-			metadataCacheTimeoutPathMap[path] = metadataCacheTimeoutForPath
-		}
-	}
-
-	systemUser, uid, gid, _ = utils.CorrectSystemUser(alias.SystemUser, alias.UID, alias.GID)
-
-	return &Config{
-		Host:         alias.Host,
-		Port:         alias.Port,
-		ProxyUser:    alias.ProxyUser,
-		ClientUser:   alias.ClientUser,
-		Zone:         alias.Zone,
-		Password:     alias.Password,
-		PathMappings: alias.PathMappings,
-		UID:          uid,
-		GID:          gid,
-		SystemUser:   systemUser,
-		MountPath:    alias.MountPath,
-
-		PoolHost: alias.PoolHost,
-		PoolPort: alias.PoolPort,
-
-		AuthScheme:          alias.AuthScheme,
-		CACertificateFile:   alias.CACertificateFile,
-		EncryptionKeySize:   alias.EncryptionKeySize,
-		EncryptionAlgorithm: alias.EncryptionAlgorithm,
-		SaltSize:            alias.SaltSize,
-		HashRounds:          alias.HashRounds,
-
-		ReadAheadMax:                alias.ReadAheadMax,
-		OperationTimeout:            operationTimeout,
-		ConnectionLifespan:          connectionLifespan,
-		ConnectionIdleTimeout:       connectionIdleTimeout,
-		ConnectionMax:               alias.ConnectionMax,
-		MetadataCacheTimeout:        metadataCacheTimeout,
-		MetadataCacheCleanupTime:    metadataCacheCleanupTime,
-		MetadataCacheTimeoutPathMap: metadataCacheTimeoutPathMap,
-		BufferSizeMax:               alias.BufferSizeMax,
-		StartNewTransaction:         alias.StartNewTransaction,
-
-		LogPath:    alias.LogPath,
-		MonitorURL: alias.MonitorURL,
-
-		Profile:            alias.Profile,
-		ProfileServicePort: alias.ProfileServicePort,
-
-		Foreground:   alias.Foreground,
-		AllowOther:   alias.AllowOther,
-		ChildProcess: alias.ChildProcess,
-
-		InstanceID: alias.InstanceID,
-	}, nil
+	return &config, nil
 }
 
 // CorrectSystemUser corrects system user configuration

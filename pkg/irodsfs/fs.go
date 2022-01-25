@@ -95,13 +95,25 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		account.SetSSLConfiguration(sslConfig)
 	}
 
+	cacheTimeoutSettings := []irodsclient_fs.MetadataCacheTimeoutSetting{}
+	for _, metadataCacheTimeoutSetting := range config.MetadataCacheTimeoutSettings {
+		if len(metadataCacheTimeoutSetting.Path) > 0 {
+			cacheTimeoutSetting := irodsclient_fs.MetadataCacheTimeoutSetting{
+				Path:    metadataCacheTimeoutSetting.Path,
+				Timeout: time.Duration(metadataCacheTimeoutSetting.Timeout),
+				Inherit: metadataCacheTimeoutSetting.Inherit,
+			}
+			cacheTimeoutSettings = append(cacheTimeoutSettings, cacheTimeoutSetting)
+		}
+	}
+
 	fsconfig := irodsclient_fs.NewFileSystemConfig(
 		FSName,
-		config.ConnectionLifespan,
-		config.OperationTimeout, config.ConnectionIdleTimeout,
-		config.ConnectionMax, config.MetadataCacheTimeout,
-		config.MetadataCacheCleanupTime,
-		config.MetadataCacheTimeoutPathMap,
+		time.Duration(config.ConnectionLifespan),
+		time.Duration(config.OperationTimeout), time.Duration(config.ConnectionIdleTimeout),
+		config.ConnectionMax, time.Duration(config.MetadataCacheTimeout),
+		time.Duration(config.MetadataCacheCleanupTime),
+		cacheTimeoutSettings,
 		config.StartNewTransaction,
 	)
 

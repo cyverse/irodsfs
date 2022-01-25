@@ -365,7 +365,7 @@ func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 			return nil, logWriter, err, true
 		}
 
-		config.OperationTimeout = timeout
+		config.OperationTimeout = commons.Duration(timeout)
 	}
 
 	if len(connectionIdleTimeout) > 0 {
@@ -375,7 +375,7 @@ func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 			return nil, logWriter, err, true
 		}
 
-		config.ConnectionIdleTimeout = timeout
+		config.ConnectionIdleTimeout = commons.Duration(timeout)
 	}
 
 	if len(metadataCacheTimeout) > 0 {
@@ -385,7 +385,7 @@ func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 			return nil, logWriter, err, true
 		}
 
-		config.MetadataCacheTimeout = timeout
+		config.MetadataCacheTimeout = commons.Duration(timeout)
 	}
 
 	if len(metadataCacheCleanupTime) > 0 {
@@ -395,7 +395,7 @@ func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 			return nil, logWriter, err, true
 		}
 
-		config.MetadataCacheCleanupTime = timeout
+		config.MetadataCacheCleanupTime = commons.Duration(timeout)
 	}
 
 	err := config.CorrectSystemUser()
