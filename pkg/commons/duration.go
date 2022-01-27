@@ -36,11 +36,23 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	}
 }
 
+// bug in YAMLv2, fixed in YAMLv3
+// // MarshalYAML ...
+// func (d *Duration) MarshalYAML() (interface{}, error) {
+// 	return time.Duration(*d).String(), nil
+// }
+
 // UnmarshalYAML ...
 func (d *Duration) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var tm string
 	if err := unmarshal(&tm); err != nil {
 		return err
+	}
+
+	lastChar := byte(tm[len(tm)-1])
+	if lastChar >= '0' && lastChar <= '9' {
+		// ends with number, no units
+		tm = tm + "ns"
 	}
 
 	td, err := time.ParseDuration(tm)
