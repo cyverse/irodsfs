@@ -396,10 +396,11 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		var writer io.Writer
 		if req.Flags.IsWriteOnly() && len(file.FS.Config.PoolHost) == 0 {
 			asyncWriter := io.NewAsyncWriter(irodsPath, handle, handleMutex, file.FS.Buffer, file.FS.MonitoringReporter)
-			//syncWriter := asyncwrite.NewSyncWriter(irodsPath, handle, handleMutex, file.FS.MonitoringReporter)
 			writer = io.NewBufferedWriter(irodsPath, asyncWriter)
-		} else {
+		} else if req.Flags.IsReadWrite() {
 			writer = io.NewSyncWriter(irodsPath, handle, handleMutex, file.FS.MonitoringReporter)
+		} else {
+			writer = nil
 		}
 
 		fileHandle := &FileHandle{
@@ -519,6 +520,11 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 		return syscall.EBADFD
 	}
 
+	if handle.Writer == nil {
+		logger.Errorf("failed to write file opened with readonly mode - %s", handle.Path)
+		return syscall.EBADFD
+	}
+
 	if len(req.Data) == 0 || req.Offset < 0 {
 		return nil
 	}
@@ -560,11 +566,13 @@ func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) err
 		return syscall.EREMOTEIO
 	}
 
-	// Flush
-	err := handle.Writer.Flush()
-	if err != nil {
-		logger.WithError(err).Errorf("failed to flush - %s", handle.Path)
-		return syscall.EREMOTEIO
+	if handle.Writer != nil {
+		// Flush
+		err := handle.Writer.Flush()
+		if err != nil {
+			logger.WithError(err).Errorf("failed to flush - %s", handle.Path)
+			return syscall.EREMOTEIO
+		}
 	}
 
 	return nil
