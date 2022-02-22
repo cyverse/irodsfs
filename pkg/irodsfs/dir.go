@@ -216,7 +216,7 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 	targetPath := utils.JoinPath(dir.Path, name)
 
 	logger.Infof("Calling Lookup - %s", targetPath)
-	defer logger.Infof("Calling Lookup - %s", targetPath)
+	defer logger.Infof("Called Lookup - %s", targetPath)
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(targetPath)
 	if vfsEntry == nil {
