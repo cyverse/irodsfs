@@ -11,6 +11,7 @@ require (
 	github.com/pkg/profile v1.6.0
 	github.com/rs/xid v1.3.0
 	github.com/sirupsen/logrus v1.8.1
+	github.com/stretchr/testify v1.7.0
 	golang.org/x/sys v0.0.0-20210823070655-63515b42dcdf // indirect
 	golang.org/x/term v0.0.0-20210503060354-a79de5458b56
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
