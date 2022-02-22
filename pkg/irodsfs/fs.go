@@ -60,6 +60,8 @@ type IRODSFS struct {
 
 	Terminated bool
 	KillFUSE   bool
+
+	OperationIDCurrent uint64
 }
 
 // NewFileSystem creates a new file system
@@ -181,6 +183,8 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 
 		MonitoringReporter: reporter,
 		Terminated:         false,
+
+		OperationIDCurrent: 0,
 	}, nil
 }
 
@@ -370,4 +374,10 @@ func (fs *IRODSFS) Root() (fusefs.Node, error) {
 		logger.Errorf("unknown VFS Entry type : %s", vfsEntry.Type)
 		return nil, syscall.EREMOTEIO
 	}
+}
+
+// GetNextOperationID returns next operation ID
+func (fs *IRODSFS) GetNextOperationID() uint64 {
+	fs.OperationIDCurrent++
+	return fs.OperationIDCurrent
 }

@@ -127,8 +127,9 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 	dir.Mutex.RLock()
 	defer dir.Mutex.RUnlock()
 
-	logger.Infof("Calling Attr - %s", dir.Path)
-	defer logger.Infof("Called Attr - %s", dir.Path)
+	operID := dir.FS.GetNextOperationID()
+	logger.Infof("Calling Attr (%d) - %s", operID, dir.Path)
+	defer logger.Infof("Called Attr (%d) - %s", operID, dir.Path)
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(dir.Path)
 	if vfsEntry == nil {
@@ -215,8 +216,9 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 
 	targetPath := utils.JoinPath(dir.Path, name)
 
-	logger.Infof("Calling Lookup - %s", targetPath)
-	defer logger.Infof("Called Lookup - %s", targetPath)
+	operID := dir.FS.GetNextOperationID()
+	logger.Infof("Calling Lookup (%d) - %s", operID, targetPath)
+	defer logger.Infof("Called Lookup (%d) - %s", operID, targetPath)
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(targetPath)
 	if vfsEntry == nil {
@@ -300,8 +302,9 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	dir.Mutex.RLock()
 	defer dir.Mutex.RUnlock()
 
-	logger.Infof("Calling ReadDirAll - %s", dir.Path)
-	defer logger.Infof("Called ReadDirAll - %s", dir.Path)
+	operID := dir.FS.GetNextOperationID()
+	logger.Infof("Calling ReadDirAll (%d) - %s", operID, dir.Path)
+	defer logger.Infof("Called ReadDirAll (%d) - %s", operID, dir.Path)
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(dir.Path)
 	if vfsEntry == nil {
@@ -423,8 +426,9 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 
 	targetPath := utils.JoinPath(dir.Path, req.Name)
 
-	logger.Infof("Calling Remove - %s", targetPath)
-	defer logger.Infof("Called Remove - %s", targetPath)
+	operID := dir.FS.GetNextOperationID()
+	logger.Infof("Calling Remove (%d) - %s", operID, targetPath)
+	defer logger.Infof("Called Remove (%d) - %s", operID, targetPath)
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(targetPath)
 	if vfsEntry == nil {
@@ -534,8 +538,9 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 
 	targetPath := utils.JoinPath(dir.Path, req.Name)
 
-	logger.Infof("Calling Mkdir - %s", targetPath)
-	defer logger.Infof("Called Mkdir - %s", targetPath)
+	operID := dir.FS.GetNextOperationID()
+	logger.Infof("Calling Mkdir (%d) - %s", operID, targetPath)
+	defer logger.Infof("Called Mkdir (%d) - %s", operID, targetPath)
 
 	vfsEntry := dir.FS.VFS.GetClosestEntry(targetPath)
 	if vfsEntry == nil {
@@ -625,7 +630,9 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 
 	targetDestPath := utils.JoinPath(newdir.Path, req.NewName)
 
-	logger.Infof("Calling Rename - %s to %s", targetSrcPath, targetDestPath)
+	operID := dir.FS.GetNextOperationID()
+	logger.Infof("Calling Rename (%d) - %s to %s", operID, targetSrcPath, targetDestPath)
+	defer logger.Infof("Called Rename (%d) - %s to %s", operID, targetSrcPath, targetDestPath)
 
 	vfsSrcEntry := dir.FS.VFS.GetClosestEntry(targetSrcPath)
 	if vfsSrcEntry == nil {
@@ -781,8 +788,9 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 
 	targetPath := utils.JoinPath(dir.Path, req.Name)
 
-	logger.Infof("Calling Create - %s", targetPath)
-	defer logger.Infof("Called Create - %s", targetPath)
+	operID := dir.FS.GetNextOperationID()
+	logger.Infof("Calling Create (%d) - %s", operID, targetPath)
+	defer logger.Infof("Called Create (%d) - %s", operID, targetPath)
 
 	openMode := string(irodsapi.FileOpenModeReadOnly)
 
@@ -857,7 +865,7 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 		file := fileNode.(*File)
 
 		// reopen - to open file with openmode
-		logger.Infof("Calling Open - %s, mode(%s)", irodsPath, openMode)
+		logger.Infof("Openning - %s, mode(%s)", irodsPath, openMode)
 		handle, err = file.FS.IRODSClient.OpenFile(irodsPath, "", openMode)
 		if err != nil {
 			if irodsapi.IsFileNotFoundError(err) {
