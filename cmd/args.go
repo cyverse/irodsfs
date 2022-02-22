@@ -151,7 +151,7 @@ func inputMissingParams(config *commons.Config, stdinClosed bool) error {
 
 	if len(config.ClientUser) == 0 {
 		if stdinClosed {
-			err := fmt.Errorf("ClientUser is not set")
+			err := fmt.Errorf("parameter ClientUser is not set")
 			logger.Error(err)
 			return err
 		}
@@ -161,7 +161,7 @@ func inputMissingParams(config *commons.Config, stdinClosed bool) error {
 
 	if len(config.Password) == 0 {
 		if stdinClosed {
-			err := fmt.Errorf("Password is not set")
+			err := fmt.Errorf("parameter Password is not set")
 			logger.Error(err)
 			return err
 		}
@@ -181,7 +181,7 @@ func inputMissingParams(config *commons.Config, stdinClosed bool) error {
 }
 
 // processArguments processes command-line parameters
-func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
+func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "processArguments",
@@ -249,16 +249,16 @@ func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 		info, err := commons.GetVersionJSON()
 		if err != nil {
 			logger.WithError(err).Error("failed to get client version info")
-			return nil, nil, err, true
+			return nil, nil, true, err
 		}
 
 		fmt.Println(info)
-		return nil, nil, nil, true
+		return nil, nil, true, nil
 	}
 
 	if help {
 		flag.Usage()
-		return nil, nil, nil, true
+		return nil, nil, true, nil
 	}
 
 	var logWriter io.WriteCloser
@@ -282,12 +282,12 @@ func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 			yamlBytes, err := ioutil.ReadAll(stdinReader)
 			if err != nil {
 				logger.WithError(err).Error("failed to read STDIN")
-				return nil, logWriter, err, true
+				return nil, logWriter, true, err
 			}
 
 			err = yaml.Unmarshal(yamlBytes, &config)
 			if err != nil {
-				return nil, logWriter, fmt.Errorf("failed to unmarshal YAML - %v", err), true
+				return nil, logWriter, true, fmt.Errorf("failed to unmarshal YAML - %v", err)
 			}
 
 			stdinClosed = true
@@ -296,29 +296,29 @@ func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 			configFileAbsPath, err := filepath.Abs(configFilePath)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to access the local yaml file %s", configFilePath)
-				return nil, logWriter, err, true
+				return nil, logWriter, true, err
 			}
 
 			fileinfo, err := os.Stat(configFileAbsPath)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to access the local yaml file %s", configFileAbsPath)
-				return nil, logWriter, err, true
+				return nil, logWriter, true, err
 			}
 
 			if fileinfo.IsDir() {
 				logger.WithError(err).Errorf("local yaml file %s is not a file", configFileAbsPath)
-				return nil, logWriter, fmt.Errorf("local yaml file %s is not a file", configFileAbsPath), true
+				return nil, logWriter, true, fmt.Errorf("local yaml file %s is not a file", configFileAbsPath)
 			}
 
 			yamlBytes, err := ioutil.ReadFile(configFileAbsPath)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to read the local yaml file %s", configFileAbsPath)
-				return nil, logWriter, err, true
+				return nil, logWriter, true, err
 			}
 
 			err = yaml.Unmarshal(yamlBytes, &config)
 			if err != nil {
-				return nil, logWriter, fmt.Errorf("failed to unmarshal YAML - %v", err), true
+				return nil, logWriter, true, fmt.Errorf("failed to unmarshal YAML - %v", err)
 			}
 		}
 	}
@@ -328,30 +328,30 @@ func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 		mappingFileAbsPath, err := filepath.Abs(mappingFilePath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to access the local yaml file %s", mappingFilePath)
-			return nil, logWriter, err, true
+			return nil, logWriter, true, err
 		}
 
 		fileinfo, err := os.Stat(mappingFileAbsPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to access the local yaml file %s", mappingFileAbsPath)
-			return nil, logWriter, err, true
+			return nil, logWriter, true, err
 		}
 
 		if fileinfo.IsDir() {
 			logger.WithError(err).Errorf("local yaml file %s is not a file", mappingFileAbsPath)
-			return nil, logWriter, fmt.Errorf("local yaml file %s is not a file", mappingFileAbsPath), true
+			return nil, logWriter, true, fmt.Errorf("local yaml file %s is not a file", mappingFileAbsPath)
 		}
 
 		yamlBytes, err := ioutil.ReadFile(mappingFileAbsPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to read the local yaml file %s", mappingFileAbsPath)
-			return nil, logWriter, err, true
+			return nil, logWriter, true, err
 		}
 
 		pathMappings := []vfs.PathMapping{}
 		err = yaml.Unmarshal(yamlBytes, &pathMappings)
 		if err != nil {
-			return nil, logWriter, fmt.Errorf("failed to unmarshal YAML - %v", err), true
+			return nil, logWriter, true, fmt.Errorf("failed to unmarshal YAML - %v", err)
 		}
 
 		config.PathMappings = pathMappings
@@ -362,7 +362,7 @@ func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 		timeout, err := time.ParseDuration(operationTimeout)
 		if err != nil {
 			logger.WithError(err).Error("failed to parse Operation Timeout parameter into time.duration")
-			return nil, logWriter, err, true
+			return nil, logWriter, true, err
 		}
 
 		config.OperationTimeout = commons.Duration(timeout)
@@ -372,7 +372,7 @@ func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 		timeout, err := time.ParseDuration(connectionIdleTimeout)
 		if err != nil {
 			logger.WithError(err).Error("failed to parse Connection Idle Timeout parameter into time.duration")
-			return nil, logWriter, err, true
+			return nil, logWriter, true, err
 		}
 
 		config.ConnectionIdleTimeout = commons.Duration(timeout)
@@ -382,7 +382,7 @@ func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 		timeout, err := time.ParseDuration(metadataCacheTimeout)
 		if err != nil {
 			logger.WithError(err).Error("failed to parse Metadata Cache Timeout parameter into time.duration")
-			return nil, logWriter, err, true
+			return nil, logWriter, true, err
 		}
 
 		config.MetadataCacheTimeout = commons.Duration(timeout)
@@ -392,7 +392,7 @@ func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 		timeout, err := time.ParseDuration(metadataCacheCleanupTime)
 		if err != nil {
 			logger.WithError(err).Error("failed to parse Metadata Cache Cleanup Time parameter into time.duration")
-			return nil, logWriter, err, true
+			return nil, logWriter, true, err
 		}
 
 		config.MetadataCacheCleanupTime = commons.Duration(timeout)
@@ -401,7 +401,7 @@ func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 	err := config.CorrectSystemUser()
 	if err != nil {
 		logger.WithError(err).Error("failed to correct system user configuration")
-		return nil, logWriter, err, true
+		return nil, logWriter, true, err
 	}
 
 	config.StartNewTransaction = !notransaction
@@ -410,7 +410,7 @@ func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 	mountPath := ""
 	if flag.NArg() == 0 {
 		flag.Usage()
-		return nil, logWriter, nil, true
+		return nil, logWriter, true, nil
 	}
 
 	lastArgIdx := flag.NArg() - 1
@@ -425,7 +425,7 @@ func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 			access, err := parseIRODSURL(inputPath)
 			if err != nil {
 				logger.WithError(err).Error("failed to parse iRODS source path")
-				return nil, logWriter, err, true
+				return nil, logWriter, true, err
 			}
 
 			if len(access.Host) > 0 {
@@ -470,19 +470,19 @@ func processArguments() (*commons.Config, io.WriteCloser, error, bool) {
 	err = inputMissingParams(config, stdinClosed)
 	if err != nil {
 		logger.WithError(err).Error("failed to input missing parameters")
-		return nil, logWriter, err, true
+		return nil, logWriter, true, err
 	}
 
 	// the second argument is local directory that irodsfs will be mounted
 	mountpoint, err := filepath.Abs(mountPath)
 	if err != nil {
 		logger.WithError(err).Errorf("failed to access the mount point %s", mountPath)
-		return nil, logWriter, err, true
+		return nil, logWriter, true, err
 	}
 
 	config.MountPath = mountpoint
 
-	return config, logWriter, nil, false
+	return config, logWriter, false, nil
 }
 
 func getLogWriter(logPath string) io.WriteCloser {
