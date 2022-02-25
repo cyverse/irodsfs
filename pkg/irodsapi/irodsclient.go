@@ -403,7 +403,7 @@ func (client *GoIRODSClient) RenameFileToFile(srcPath string, destPath string) e
 	return convGoIRODSClientError(err)
 }
 
-func (client *GoIRODSClient) CreateFile(path string, resource string) (IRODSFileHandle, error) {
+func (client *GoIRODSClient) CreateFile(path string, resource string, mode string) (IRODSFileHandle, error) {
 	if client.GoIRODSFS == nil {
 		return nil, fmt.Errorf("FSClient is nil")
 	}
@@ -421,7 +421,7 @@ func (client *GoIRODSClient) CreateFile(path string, resource string) (IRODSFile
 		}
 	}()
 
-	handle, err := client.GoIRODSFS.CreateFile(path, resource)
+	handle, err := client.GoIRODSFS.CreateFile(path, resource, mode)
 	if err != nil {
 		return nil, convGoIRODSClientError(err)
 	}

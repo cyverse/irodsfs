@@ -373,7 +373,7 @@ func (client *PoolClient) RenameFileToFile(srcPath string, destPath string) erro
 	return convPoolClientError(err)
 }
 
-func (client *PoolClient) CreateFile(path string, resource string) (IRODSFileHandle, error) {
+func (client *PoolClient) CreateFile(path string, resource string, mode string) (IRODSFileHandle, error) {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsapi",
 		"struct":   "PoolClient",
@@ -387,7 +387,7 @@ func (client *PoolClient) CreateFile(path string, resource string) (IRODSFileHan
 		}
 	}()
 
-	handle, err := client.PoolServiceClient.CreateFile(client.PoolServiceSession, path, resource)
+	handle, err := client.PoolServiceClient.CreateFile(client.PoolServiceSession, path, resource, mode)
 	if err != nil {
 		return nil, convPoolClientError(err)
 	}

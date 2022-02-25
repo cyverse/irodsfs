@@ -22,7 +22,7 @@ type IRODSClient interface {
 	MakeDir(path string, recurse bool) error
 	RenameDirToDir(srcPath string, destPath string) error
 	RenameFileToFile(srcPath string, destPath string) error
-	CreateFile(path string, resource string) (IRODSFileHandle, error)
+	CreateFile(path string, resource string, mode string) (IRODSFileHandle, error)
 	OpenFile(path string, resource string, mode string) (IRODSFileHandle, error)
 	TruncateFile(path string, size int64) error
 }

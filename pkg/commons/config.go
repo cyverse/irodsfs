@@ -83,16 +83,17 @@ type Config struct {
 	SaltSize            int    `yaml:"ssl_encryption_salt_size"`
 	HashRounds          int    `yaml:"ssl_encryption_hash_rounds"`
 
-	ReadAheadMax                 int                           `yaml:"read_ahead_max"`
-	OperationTimeout             Duration                      `yaml:"operation_timeout"`
-	ConnectionLifespan           Duration                      `yaml:"connection_lifespan"`
-	ConnectionIdleTimeout        Duration                      `yaml:"connection_idle_timeout"`
-	ConnectionMax                int                           `yaml:"connection_max"`
-	MetadataCacheTimeout         Duration                      `yaml:"metadata_cache_timeout"`
-	MetadataCacheCleanupTime     Duration                      `yaml:"metadata_cache_cleanup_time"`
-	MetadataCacheTimeoutSettings []MetadataCacheTimeoutSetting `yaml:"metadata_cache_timeout_settings"`
-	BufferSizeMax                int64                         `yaml:"buffer_size_max"`
-	StartNewTransaction          bool                          `yaml:"start_new_transaction"`
+	ReadAheadMax                          int                           `yaml:"read_ahead_max"`
+	OperationTimeout                      Duration                      `yaml:"operation_timeout"`
+	ConnectionLifespan                    Duration                      `yaml:"connection_lifespan"`
+	ConnectionIdleTimeout                 Duration                      `yaml:"connection_idle_timeout"`
+	ConnectionMax                         int                           `yaml:"connection_max"`
+	MetadataCacheTimeout                  Duration                      `yaml:"metadata_cache_timeout"`
+	MetadataCacheCleanupTime              Duration                      `yaml:"metadata_cache_cleanup_time"`
+	MetadataCacheTimeoutSettings          []MetadataCacheTimeoutSetting `yaml:"metadata_cache_timeout_settings"`
+	BufferSizeMax                         int64                         `yaml:"buffer_size_max"`
+	StartNewTransaction                   bool                          `yaml:"start_new_transaction"`
+	InvalidateParentEntryCacheImmediately bool                          `yaml:"invalidate_parent_entry_cache_immediately"`
 
 	LogPath    string `yaml:"log_path,omitempty"`
 	MonitorURL string `yaml:"monitor_url,omitempty"`
@@ -127,16 +128,17 @@ func NewDefaultConfig() *Config {
 		SaltSize:            SaltSizeDefault,
 		HashRounds:          HashRoundsDefault,
 
-		ReadAheadMax:                 ReadAheadMaxDefault,
-		OperationTimeout:             Duration(OperationTimeoutDefault),
-		ConnectionLifespan:           Duration(ConnectionLifespanDefault),
-		ConnectionIdleTimeout:        Duration(ConnectionIdleTimeoutDefault),
-		ConnectionMax:                ConnectionMaxDefault,
-		MetadataCacheTimeout:         Duration(MetadataCacheTimeoutDefault),
-		MetadataCacheCleanupTime:     Duration(MetadataCacheCleanupTimeDefault),
-		MetadataCacheTimeoutSettings: []MetadataCacheTimeoutSetting{},
-		BufferSizeMax:                BufferSizeMaxDefault,
-		StartNewTransaction:          true,
+		ReadAheadMax:                          ReadAheadMaxDefault,
+		OperationTimeout:                      Duration(OperationTimeoutDefault),
+		ConnectionLifespan:                    Duration(ConnectionLifespanDefault),
+		ConnectionIdleTimeout:                 Duration(ConnectionIdleTimeoutDefault),
+		ConnectionMax:                         ConnectionMaxDefault,
+		MetadataCacheTimeout:                  Duration(MetadataCacheTimeoutDefault),
+		MetadataCacheCleanupTime:              Duration(MetadataCacheCleanupTimeDefault),
+		MetadataCacheTimeoutSettings:          []MetadataCacheTimeoutSetting{},
+		BufferSizeMax:                         BufferSizeMaxDefault,
+		StartNewTransaction:                   true,
+		InvalidateParentEntryCacheImmediately: false,
 
 		LogPath:    GetDefaultLogFilePath(),
 		MonitorURL: "",
@@ -172,16 +174,17 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		SaltSize:            SaltSizeDefault,
 		HashRounds:          HashRoundsDefault,
 
-		ReadAheadMax:                 ReadAheadMaxDefault,
-		OperationTimeout:             Duration(OperationTimeoutDefault),
-		ConnectionLifespan:           Duration(ConnectionLifespanDefault),
-		ConnectionIdleTimeout:        Duration(ConnectionIdleTimeoutDefault),
-		ConnectionMax:                ConnectionMaxDefault,
-		MetadataCacheTimeout:         Duration(MetadataCacheTimeoutDefault),
-		MetadataCacheCleanupTime:     Duration(MetadataCacheCleanupTimeDefault),
-		MetadataCacheTimeoutSettings: []MetadataCacheTimeoutSetting{},
-		BufferSizeMax:                BufferSizeMaxDefault,
-		StartNewTransaction:          true,
+		ReadAheadMax:                          ReadAheadMaxDefault,
+		OperationTimeout:                      Duration(OperationTimeoutDefault),
+		ConnectionLifespan:                    Duration(ConnectionLifespanDefault),
+		ConnectionIdleTimeout:                 Duration(ConnectionIdleTimeoutDefault),
+		ConnectionMax:                         ConnectionMaxDefault,
+		MetadataCacheTimeout:                  Duration(MetadataCacheTimeoutDefault),
+		MetadataCacheCleanupTime:              Duration(MetadataCacheCleanupTimeDefault),
+		MetadataCacheTimeoutSettings:          []MetadataCacheTimeoutSetting{},
+		BufferSizeMax:                         BufferSizeMaxDefault,
+		StartNewTransaction:                   true,
+		InvalidateParentEntryCacheImmediately: false,
 
 		LogPath:    GetDefaultLogFilePath(),
 		MonitorURL: "",

@@ -245,7 +245,7 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 		irodsEntry, err := dir.FS.IRODSClient.Stat(irodsPath)
 		if err != nil {
 			if irodsapi.IsFileNotFoundError(err) {
-				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
+				logger.WithError(err).Infof("failed to find a file - %s", irodsPath)
 				return nil, syscall.ENOENT
 			}
 
@@ -389,7 +389,7 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 			}
 
 			dirEntries = append(dirEntries, dirEntry)
-			logger.Infof("Entry - %s %s", irodsPath, irodsEntry.Name)
+			logger.Debugf("Entry - %s %s", irodsPath, irodsEntry.Name)
 		}
 
 		return dirEntries, nil
@@ -844,37 +844,28 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 			return nil, nil, syscall.EREMOTEIO
 		}
 
-		handle, err := dir.FS.IRODSClient.CreateFile(irodsPath, "")
+		handle, err := dir.FS.IRODSClient.CreateFile(irodsPath, "", openMode)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to create a file - %s", irodsPath)
 			return nil, nil, syscall.EREMOTEIO
 		}
 
-		err = handle.Close()
-		if err != nil {
-			logger.WithError(err).Errorf("failed to close - %s", irodsPath)
-			return nil, nil, syscall.EREMOTEIO
-		}
-
-		fileNode, err := dir.Lookup(ctx, req.Name)
-		if err != nil {
-			logger.WithError(err).Errorf("failed to lookup - %s", irodsPath)
-			return nil, nil, syscall.EREMOTEIO
-		}
-
-		file := fileNode.(*File)
-
-		// reopen - to open file with openmode
-		logger.Infof("Openning - %s, mode(%s)", irodsPath, openMode)
-		handle, err = file.FS.IRODSClient.OpenFile(irodsPath, "", openMode)
+		irodsEntry, err := dir.FS.IRODSClient.Stat(irodsPath)
 		if err != nil {
 			if irodsapi.IsFileNotFoundError(err) {
-				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
-				return nil, nil, syscall.ENOENT
+				logger.WithError(err).Infof("failed to find a file - %s", irodsPath)
+				return nil, nil, syscall.EREMOTEIO
 			}
 
-			logger.WithError(err).Errorf("failed to open a file - %s", irodsPath)
+			logger.WithError(err).Errorf("failed to stat - %s", irodsPath)
 			return nil, nil, syscall.EREMOTEIO
+		}
+
+		file := &File{
+			FS:      dir.FS,
+			InodeID: irodsEntry.ID,
+			Path:    targetPath,
+			Entry:   vfs.NewVFSEntryFromIRODSFSEntry(targetPath, irodsEntry, vfsEntry.ReadOnly),
 		}
 
 		if file.FS.MonitoringReporter != nil {

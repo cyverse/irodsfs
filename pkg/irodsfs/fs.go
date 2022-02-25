@@ -117,6 +117,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		time.Duration(config.MetadataCacheCleanupTime),
 		cacheTimeoutSettings,
 		config.StartNewTransaction,
+		config.InvalidateParentEntryCacheImmediately,
 	)
 
 	logger.Info("Initializing a client driver")
