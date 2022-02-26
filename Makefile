@@ -1,5 +1,5 @@
 PKG=github.com/cyverse/irodsfs
-VERSION=v0.5.0
+VERSION=v0.5.1
 GIT_COMMIT?=$(shell git rev-parse HEAD)
 BUILD_DATE?=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS?="-X '${PKG}/pkg/commons.clientVersion=${VERSION}' -X '${PKG}/pkg/commons.gitCommit=${GIT_COMMIT}' -X '${PKG}/pkg/commons.buildDate=${BUILD_DATE}'"

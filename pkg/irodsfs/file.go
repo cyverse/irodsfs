@@ -198,8 +198,9 @@ func (file *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *f
 	// apply pending update if exists
 	file.FS.FileMetaUpdater.Apply(file)
 
-	file.Mutex.RLock()
-	defer file.Mutex.RUnlock()
+	// don't lock here
+	//file.Mutex.RLock()
+	//defer file.Mutex.RUnlock()
 
 	operID := file.FS.GetNextOperationID()
 	logger.Infof("Calling Setattr (%d) - %s", operID, file.Path)
@@ -259,7 +260,7 @@ func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *
 		}
 
 		// redo to get fresh info
-		_, err = file.FS.IRODSClient.Stat(irodsPath)
+		irodsEntry, err := file.FS.IRODSClient.Stat(irodsPath)
 		if err != nil {
 			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
@@ -270,15 +271,17 @@ func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *
 			return syscall.EREMOTEIO
 		}
 
-		err = file.FS.IRODSClient.TruncateFile(irodsPath, int64(req.Size))
-		if err != nil {
-			if irodsapi.IsFileNotFoundError(err) {
-				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
-				return syscall.ENOENT
-			}
+		if irodsEntry.Size != int64(req.Size) {
+			err = file.FS.IRODSClient.TruncateFile(irodsPath, int64(req.Size))
+			if err != nil {
+				if irodsapi.IsFileNotFoundError(err) {
+					logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
+					return syscall.ENOENT
+				}
 
-			logger.WithError(err).Errorf("failed to truncate a file - %s, %d", irodsPath, req.Size)
-			return syscall.EREMOTEIO
+				logger.WithError(err).Errorf("failed to truncate a file - %s, %d", irodsPath, req.Size)
+				return syscall.EREMOTEIO
+			}
 		}
 
 		return nil
