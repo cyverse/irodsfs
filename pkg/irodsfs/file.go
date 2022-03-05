@@ -388,10 +388,10 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		if req.Flags.IsWriteOnly() && len(file.FS.Config.PoolHost) == 0 {
 			asyncWriter := io.NewAsyncWriter(irodsPath, handle, handleMutex, file.FS.Buffer, file.FS.MonitoringReporter)
 			writer = io.NewBufferedWriter(irodsPath, asyncWriter)
-		} else if req.Flags.IsReadWrite() {
-			writer = io.NewSyncWriter(irodsPath, handle, handleMutex, file.FS.MonitoringReporter)
-		} else {
+		} else if req.Flags.IsReadOnly() {
 			writer = nil
+		} else {
+			writer = io.NewSyncWriter(irodsPath, handle, handleMutex, file.FS.MonitoringReporter)
 		}
 
 		fileHandle := &FileHandle{
