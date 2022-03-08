@@ -332,6 +332,9 @@ func run(config *commons.Config, isChildProcess bool) error {
 		defer prof.Stop()
 	}
 
+	versionInfo := commons.GetVersion()
+	logger.Infof("iRODS FUSE Lite version - %s, commit - %s", versionInfo.ClientVersion, versionInfo.GitCommit)
+
 	logger.Info("Creating a File System")
 	fs, err := irodsfs.NewFileSystem(config)
 	if err != nil {
