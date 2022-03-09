@@ -427,7 +427,7 @@ func (client *GoIRODSClient) CreateFile(path string, resource string, mode strin
 	}
 
 	fileHandle := &GoIRODSClientFileHandle{
-		ID:     handle.ID,
+		ID:     handle.GetID(),
 		Client: client,
 		Handle: handle,
 	}
@@ -459,7 +459,7 @@ func (client *GoIRODSClient) OpenFile(path string, resource string, mode string)
 	}
 
 	fileHandle := &GoIRODSClientFileHandle{
-		ID:     handle.ID,
+		ID:     handle.GetID(),
 		Client: client,
 		Handle: handle,
 	}
@@ -501,21 +501,24 @@ func (handle *GoIRODSClientFileHandle) GetID() string {
 }
 
 func (handle *GoIRODSClientFileHandle) GetEntry() *IRODSEntry {
+
+	entry := handle.Handle.GetEntry()
+
 	return &IRODSEntry{
-		ID:         handle.Handle.Entry.ID,
-		Type:       EntryType(handle.Handle.Entry.Type),
-		Name:       handle.Handle.Entry.Name,
-		Path:       handle.Handle.Entry.Path,
-		Owner:      handle.Handle.Entry.Owner,
-		Size:       handle.Handle.Entry.Size,
-		CreateTime: handle.Handle.Entry.CreateTime,
-		ModifyTime: handle.Handle.Entry.ModifyTime,
-		CheckSum:   handle.Handle.Entry.CheckSum,
+		ID:         entry.ID,
+		Type:       EntryType(entry.Type),
+		Name:       entry.Name,
+		Path:       entry.Path,
+		Owner:      entry.Owner,
+		Size:       entry.Size,
+		CreateTime: entry.CreateTime,
+		ModifyTime: entry.ModifyTime,
+		CheckSum:   entry.CheckSum,
 	}
 }
 
 func (handle *GoIRODSClientFileHandle) GetOpenMode() FileOpenMode {
-	return FileOpenMode(handle.Handle.OpenMode)
+	return FileOpenMode(handle.Handle.GetOpenMode())
 }
 
 func (handle *GoIRODSClientFileHandle) GetOffset() int64 {
