@@ -21,14 +21,14 @@ const (
 
 // MonitoringReporter reports metrics to monitoring service
 type MonitoringReporter struct {
-	MonitorURL        string
-	MonitoringClient  *monitor_client.APIClient
-	Failed            bool
-	InstanceID        string
-	FileTransferMap   map[string]*monitor_types.ReportFileTransfer
-	NextFileOffsetMap map[string]int64
-	Mutex             sync.Mutex // lock for FileTransferMap and NextFileOffsetMap
-	IgnoreError       bool
+	monitorURL        string
+	client            *monitor_client.APIClient
+	failed            bool
+	instanceID        string
+	fileTransferMap   map[string]*monitor_types.ReportFileTransfer
+	nextFileOffsetMap map[string]int64
+	mutex             sync.Mutex // lock for FileTransferMap and NextFileOffsetMap
+	ignoreError       bool
 }
 
 // NewMonitoringReporter creates a new monitoring reporter
@@ -39,14 +39,14 @@ func NewMonitoringReporter(monitorURL string, ignoreError bool) *MonitoringRepor
 	}
 
 	return &MonitoringReporter{
-		MonitorURL:        monitorURL,
-		Failed:            false,
-		MonitoringClient:  monitoringClient,
-		InstanceID:        "",
-		FileTransferMap:   map[string]*monitor_types.ReportFileTransfer{},
-		NextFileOffsetMap: map[string]int64{},
-		Mutex:             sync.Mutex{},
-		IgnoreError:       ignoreError,
+		monitorURL:        monitorURL,
+		failed:            false,
+		client:            monitoringClient,
+		instanceID:        "",
+		fileTransferMap:   map[string]*monitor_types.ReportFileTransfer{},
+		nextFileOffsetMap: map[string]int64{},
+		mutex:             sync.Mutex{},
+		ignoreError:       ignoreError,
 	}
 }
 
@@ -58,7 +58,7 @@ func (reporter *MonitoringReporter) ReportNewInstance(fsConfig *commons.Config) 
 		"function": "ReportNewInstance",
 	})
 
-	if reporter.MonitoringClient != nil {
+	if reporter.client != nil {
 		instance := monitor_types.ReportInstance{
 			InstanceID: fsConfig.InstanceID,
 
@@ -82,18 +82,18 @@ func (reporter *MonitoringReporter) ReportNewInstance(fsConfig *commons.Config) 
 			CreationTime: time.Now().UTC(),
 		}
 
-		if !reporter.Failed {
-			instanceID, err := reporter.MonitoringClient.AddInstance(&instance)
+		if !reporter.failed {
+			instanceID, err := reporter.client.AddInstance(&instance)
 			if err != nil {
 				logger.WithError(err).Error("failed to report the instance to monitoring service")
-				reporter.Failed = true
+				reporter.failed = true
 
-				if !reporter.IgnoreError {
+				if !reporter.ignoreError {
 					return err
 				}
 			}
 
-			reporter.InstanceID = instanceID
+			reporter.instanceID = instanceID
 		}
 	}
 
@@ -108,15 +108,15 @@ func (reporter *MonitoringReporter) ReportInstanceTermination() error {
 		"function": "ReportInstanceTermination",
 	})
 
-	if !reporter.Failed {
-		if reporter.MonitoringClient != nil {
-			if len(reporter.InstanceID) > 0 {
-				err := reporter.MonitoringClient.TerminateInstance(reporter.InstanceID)
+	if !reporter.failed {
+		if reporter.client != nil {
+			if len(reporter.instanceID) > 0 {
+				err := reporter.client.TerminateInstance(reporter.instanceID)
 				if err != nil {
 					logger.WithError(err).Error("failed to report termination of the instance to monitoring service")
-					reporter.Failed = true
+					reporter.failed = true
 
-					if !reporter.IgnoreError {
+					if !reporter.ignoreError {
 						return err
 					}
 				}
@@ -133,11 +133,11 @@ func (reporter *MonitoringReporter) makeFileTransferKey(path string, fileHandle 
 
 // ReportNewFileTransferStart reports a new file transfer start
 func (reporter *MonitoringReporter) ReportNewFileTransferStart(path string, fileHandle irodsapi.IRODSFileHandle, size int64) {
-	if !reporter.Failed {
-		if reporter.MonitoringClient != nil {
-			if len(reporter.InstanceID) > 0 {
+	if !reporter.failed {
+		if reporter.client != nil {
+			if len(reporter.instanceID) > 0 {
 				transferReport := &monitor_types.ReportFileTransfer{
-					InstanceID: reporter.InstanceID,
+					InstanceID: reporter.instanceID,
 
 					FilePath:     path,
 					FileSize:     size,
@@ -155,11 +155,11 @@ func (reporter *MonitoringReporter) ReportNewFileTransferStart(path string, file
 
 				key := reporter.makeFileTransferKey(path, fileHandle)
 
-				reporter.Mutex.Lock()
-				defer reporter.Mutex.Unlock()
+				reporter.mutex.Lock()
+				defer reporter.mutex.Unlock()
 
-				reporter.FileTransferMap[key] = transferReport
-				reporter.NextFileOffsetMap[key] = 0
+				reporter.fileTransferMap[key] = transferReport
+				reporter.nextFileOffsetMap[key] = 0
 
 			}
 		}
@@ -174,28 +174,28 @@ func (reporter *MonitoringReporter) ReportFileTransferDone(path string, fileHand
 		"function": "ReportFileTransferDone",
 	})
 
-	if !reporter.Failed {
-		if reporter.MonitoringClient != nil {
+	if !reporter.failed {
+		if reporter.client != nil {
 			key := reporter.makeFileTransferKey(path, fileHandle)
 
-			reporter.Mutex.Lock()
-			defer reporter.Mutex.Unlock()
+			reporter.mutex.Lock()
+			defer reporter.mutex.Unlock()
 
-			if transfer, ok := reporter.FileTransferMap[key]; ok {
+			if transfer, ok := reporter.fileTransferMap[key]; ok {
 				transfer.FileCloseTime = time.Now().UTC()
 
-				err := reporter.MonitoringClient.AddFileTransfer(transfer)
+				err := reporter.client.AddFileTransfer(transfer)
 				if err != nil {
 					logger.WithError(err).Error("failed to report file transfer to monitoring service")
-					reporter.Failed = true
+					reporter.failed = true
 
-					if !reporter.IgnoreError {
+					if !reporter.ignoreError {
 						return err
 					}
 				}
 
-				delete(reporter.FileTransferMap, key)
-				delete(reporter.NextFileOffsetMap, key)
+				delete(reporter.fileTransferMap, key)
+				delete(reporter.nextFileOffsetMap, key)
 			}
 		}
 	}
@@ -205,14 +205,14 @@ func (reporter *MonitoringReporter) ReportFileTransferDone(path string, fileHand
 
 // ReportFileTransfer reports a new file transfer
 func (reporter *MonitoringReporter) ReportFileTransfer(path string, fileHandle irodsapi.IRODSFileHandle, offset int64, length int64) {
-	if !reporter.Failed {
-		if reporter.MonitoringClient != nil {
+	if !reporter.failed {
+		if reporter.client != nil {
 			key := reporter.makeFileTransferKey(path, fileHandle)
 
-			reporter.Mutex.Lock()
-			defer reporter.Mutex.Unlock()
+			reporter.mutex.Lock()
+			defer reporter.mutex.Unlock()
 
-			if transfer, ok := reporter.FileTransferMap[key]; ok {
+			if transfer, ok := reporter.fileTransferMap[key]; ok {
 				block := monitor_types.FileBlock{
 					Offset:     offset,
 					Length:     length,
@@ -233,11 +233,11 @@ func (reporter *MonitoringReporter) ReportFileTransfer(path string, fileHandle i
 
 				strictSequential := false
 				mostlySequential := false
-				if nextOffset, ok2 := reporter.NextFileOffsetMap[key]; ok2 {
+				if nextOffset, ok2 := reporter.nextFileOffsetMap[key]; ok2 {
 					strictSequential, mostlySequential = reporter.checkSequentialTransfer(nextOffset, offset, length)
 				}
 
-				reporter.NextFileOffsetMap[key] = offset + length
+				reporter.nextFileOffsetMap[key] = offset + length
 
 				if !mostlySequential {
 					transfer.SequentialAccess = false

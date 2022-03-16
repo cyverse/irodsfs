@@ -11,21 +11,21 @@ import (
 
 // SyncWriter helps sync write
 type SyncWriter struct {
-	Path            string
-	IRODSFileHandle irodsapi.IRODSFileHandle
-	FileHandleLock  *sync.Mutex
+	path            string
+	fileHandle      irodsapi.IRODSFileHandle
+	fileHandleMutex *sync.Mutex
 
-	MonitoringReporter *report.MonitoringReporter
+	monitoringReporter *report.MonitoringReporter
 }
 
 // NewSyncWriter create a new SyncWriter
 func NewSyncWriter(path string, fileHandle irodsapi.IRODSFileHandle, fileHandleLock *sync.Mutex, monitoringReporter *report.MonitoringReporter) *SyncWriter {
 	syncWriter := &SyncWriter{
-		Path:            path,
-		IRODSFileHandle: fileHandle,
-		FileHandleLock:  fileHandleLock,
+		path:            path,
+		fileHandle:      fileHandle,
+		fileHandleMutex: fileHandleLock,
 
-		MonitoringReporter: monitoringReporter,
+		monitoringReporter: monitoringReporter,
 	}
 
 	return syncWriter
@@ -68,22 +68,22 @@ func (writer *SyncWriter) WriteAt(offset int64, data []byte) error {
 		return nil
 	}
 
-	logger.Infof("Sync Writing - %s, offset %d, length %d", writer.Path, offset, len(data))
+	logger.Infof("Sync Writing - %s, offset %d, length %d", writer.path, offset, len(data))
 
-	writer.FileHandleLock.Lock()
+	writer.fileHandleMutex.Lock()
 
-	err := writer.IRODSFileHandle.WriteAt(offset, data)
+	err := writer.fileHandle.WriteAt(offset, data)
 	if err != nil {
-		writer.FileHandleLock.Unlock()
-		logger.WithError(err).Errorf("failed to write data - %s, offset %d, length %d", writer.Path, offset, len(data))
+		writer.fileHandleMutex.Unlock()
+		logger.WithError(err).Errorf("failed to write data - %s, offset %d, length %d", writer.path, offset, len(data))
 		return err
 	}
 
-	writer.FileHandleLock.Unlock()
+	writer.fileHandleMutex.Unlock()
 
 	// Report
-	if writer.MonitoringReporter != nil {
-		writer.MonitoringReporter.ReportFileTransfer(writer.Path, writer.IRODSFileHandle, offset, int64(len(data)))
+	if writer.monitoringReporter != nil {
+		writer.monitoringReporter.ReportFileTransfer(writer.path, writer.fileHandle, offset, int64(len(data)))
 	}
 
 	return nil
@@ -103,10 +103,10 @@ func (writer *SyncWriter) Flush() error {
 		}
 	}()
 
-	writer.FileHandleLock.Lock()
-	defer writer.FileHandleLock.Unlock()
+	writer.fileHandleMutex.Lock()
+	defer writer.fileHandleMutex.Unlock()
 
-	return writer.IRODSFileHandle.Flush()
+	return writer.fileHandle.Flush()
 }
 
 func (writer *SyncWriter) GetPendingError() error {

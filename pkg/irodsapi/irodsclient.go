@@ -28,9 +28,9 @@ func convGoIRODSClientError(err error) error {
 
 // GoIRODSClient implements IRODSClient interface with go-irodsclient
 type GoIRODSClient struct {
-	Config    *irodsclient_fs.FileSystemConfig
-	Account   *irodsclient_types.IRODSAccount
-	GoIRODSFS *irodsclient_fs.FileSystem
+	config  *irodsclient_fs.FileSystemConfig
+	account *irodsclient_types.IRODSAccount
+	fs      *irodsclient_fs.FileSystem
 }
 
 func NewGoIRODSClientDriver(account *irodsclient_types.IRODSAccount, config *irodsclient_fs.FileSystemConfig) (IRODSClient, error) {
@@ -52,18 +52,18 @@ func NewGoIRODSClientDriver(account *irodsclient_types.IRODSAccount, config *iro
 	}
 
 	return &GoIRODSClient{
-		Config:    config,
-		Account:   account,
-		GoIRODSFS: goirodsfs,
+		config:  config,
+		account: account,
+		fs:      goirodsfs,
 	}, nil
 }
 
 func (client *GoIRODSClient) GetAccount() *irodsclient_types.IRODSAccount {
-	return client.Account
+	return client.account
 }
 
 func (client *GoIRODSClient) GetApplicationName() string {
-	return client.Config.ApplicationName
+	return client.config.ApplicationName
 }
 
 func (client *GoIRODSClient) Release() {
@@ -80,14 +80,14 @@ func (client *GoIRODSClient) Release() {
 		}
 	}()
 
-	if client.GoIRODSFS != nil {
-		client.GoIRODSFS.Release()
-		client.GoIRODSFS = nil
+	if client.fs != nil {
+		client.fs.Release()
+		client.fs = nil
 	}
 }
 
 func (client *GoIRODSClient) List(path string) ([]*IRODSEntry, error) {
-	if client.GoIRODSFS == nil {
+	if client.fs == nil {
 		return nil, fmt.Errorf("FSClient is nil")
 	}
 
@@ -104,7 +104,7 @@ func (client *GoIRODSClient) List(path string) ([]*IRODSEntry, error) {
 		}
 	}()
 
-	entries, err := client.GoIRODSFS.List(path)
+	entries, err := client.fs.List(path)
 	if err != nil {
 		return nil, convGoIRODSClientError(err)
 	}
@@ -129,7 +129,7 @@ func (client *GoIRODSClient) List(path string) ([]*IRODSEntry, error) {
 }
 
 func (client *GoIRODSClient) Stat(path string) (*IRODSEntry, error) {
-	if client.GoIRODSFS == nil {
+	if client.fs == nil {
 		return nil, fmt.Errorf("FSClient is nil")
 	}
 
@@ -146,7 +146,7 @@ func (client *GoIRODSClient) Stat(path string) (*IRODSEntry, error) {
 		}
 	}()
 
-	entry, err := client.GoIRODSFS.Stat(path)
+	entry, err := client.fs.Stat(path)
 	if err != nil {
 		return nil, convGoIRODSClientError(err)
 	}
@@ -165,7 +165,7 @@ func (client *GoIRODSClient) Stat(path string) (*IRODSEntry, error) {
 }
 
 func (client *GoIRODSClient) ExistsDir(path string) bool {
-	if client.GoIRODSFS == nil {
+	if client.fs == nil {
 		return false
 	}
 
@@ -182,11 +182,11 @@ func (client *GoIRODSClient) ExistsDir(path string) bool {
 		}
 	}()
 
-	return client.GoIRODSFS.ExistsDir(path)
+	return client.fs.ExistsDir(path)
 }
 
 func (client *GoIRODSClient) ListUserGroups(user string) ([]*IRODSUser, error) {
-	if client.GoIRODSFS == nil {
+	if client.fs == nil {
 		return nil, fmt.Errorf("FSClient is nil")
 	}
 
@@ -203,7 +203,7 @@ func (client *GoIRODSClient) ListUserGroups(user string) ([]*IRODSUser, error) {
 		}
 	}()
 
-	groups, err := client.GoIRODSFS.ListUserGroups(user)
+	groups, err := client.fs.ListUserGroups(user)
 	if err != nil {
 		return nil, convGoIRODSClientError(err)
 	}
@@ -222,7 +222,7 @@ func (client *GoIRODSClient) ListUserGroups(user string) ([]*IRODSUser, error) {
 }
 
 func (client *GoIRODSClient) ListDirACLs(path string) ([]*IRODSAccess, error) {
-	if client.GoIRODSFS == nil {
+	if client.fs == nil {
 		return nil, fmt.Errorf("FSClient is nil")
 	}
 
@@ -239,7 +239,7 @@ func (client *GoIRODSClient) ListDirACLs(path string) ([]*IRODSAccess, error) {
 		}
 	}()
 
-	accesses, err := client.GoIRODSFS.ListDirACLs(path)
+	accesses, err := client.fs.ListDirACLs(path)
 	if err != nil {
 		return nil, convGoIRODSClientError(err)
 	}
@@ -258,7 +258,7 @@ func (client *GoIRODSClient) ListDirACLs(path string) ([]*IRODSAccess, error) {
 }
 
 func (client *GoIRODSClient) ListFileACLs(path string) ([]*IRODSAccess, error) {
-	if client.GoIRODSFS == nil {
+	if client.fs == nil {
 		return nil, fmt.Errorf("FSClient is nil")
 	}
 
@@ -275,7 +275,7 @@ func (client *GoIRODSClient) ListFileACLs(path string) ([]*IRODSAccess, error) {
 		}
 	}()
 
-	accesses, err := client.GoIRODSFS.ListFileACLs(path)
+	accesses, err := client.fs.ListFileACLs(path)
 	if err != nil {
 		return nil, convGoIRODSClientError(err)
 	}
@@ -294,7 +294,7 @@ func (client *GoIRODSClient) ListFileACLs(path string) ([]*IRODSAccess, error) {
 }
 
 func (client *GoIRODSClient) RemoveFile(path string, force bool) error {
-	if client.GoIRODSFS == nil {
+	if client.fs == nil {
 		return fmt.Errorf("FSClient is nil")
 	}
 
@@ -311,12 +311,12 @@ func (client *GoIRODSClient) RemoveFile(path string, force bool) error {
 		}
 	}()
 
-	err := client.GoIRODSFS.RemoveFile(path, force)
+	err := client.fs.RemoveFile(path, force)
 	return convGoIRODSClientError(err)
 }
 
 func (client *GoIRODSClient) RemoveDir(path string, recurse bool, force bool) error {
-	if client.GoIRODSFS == nil {
+	if client.fs == nil {
 		return fmt.Errorf("FSClient is nil")
 	}
 
@@ -333,12 +333,12 @@ func (client *GoIRODSClient) RemoveDir(path string, recurse bool, force bool) er
 		}
 	}()
 
-	err := client.GoIRODSFS.RemoveDir(path, recurse, force)
+	err := client.fs.RemoveDir(path, recurse, force)
 	return convGoIRODSClientError(err)
 }
 
 func (client *GoIRODSClient) MakeDir(path string, recurse bool) error {
-	if client.GoIRODSFS == nil {
+	if client.fs == nil {
 		return fmt.Errorf("FSClient is nil")
 	}
 
@@ -355,12 +355,12 @@ func (client *GoIRODSClient) MakeDir(path string, recurse bool) error {
 		}
 	}()
 
-	err := client.GoIRODSFS.MakeDir(path, recurse)
+	err := client.fs.MakeDir(path, recurse)
 	return convGoIRODSClientError(err)
 }
 
 func (client *GoIRODSClient) RenameDirToDir(srcPath string, destPath string) error {
-	if client.GoIRODSFS == nil {
+	if client.fs == nil {
 		return fmt.Errorf("FSClient is nil")
 	}
 
@@ -377,12 +377,12 @@ func (client *GoIRODSClient) RenameDirToDir(srcPath string, destPath string) err
 		}
 	}()
 
-	err := client.GoIRODSFS.RenameDirToDir(srcPath, destPath)
+	err := client.fs.RenameDirToDir(srcPath, destPath)
 	return convGoIRODSClientError(err)
 }
 
 func (client *GoIRODSClient) RenameFileToFile(srcPath string, destPath string) error {
-	if client.GoIRODSFS == nil {
+	if client.fs == nil {
 		return fmt.Errorf("FSClient is nil")
 	}
 
@@ -399,12 +399,12 @@ func (client *GoIRODSClient) RenameFileToFile(srcPath string, destPath string) e
 		}
 	}()
 
-	err := client.GoIRODSFS.RenameFileToFile(srcPath, destPath)
+	err := client.fs.RenameFileToFile(srcPath, destPath)
 	return convGoIRODSClientError(err)
 }
 
 func (client *GoIRODSClient) CreateFile(path string, resource string, mode string) (IRODSFileHandle, error) {
-	if client.GoIRODSFS == nil {
+	if client.fs == nil {
 		return nil, fmt.Errorf("FSClient is nil")
 	}
 
@@ -421,7 +421,7 @@ func (client *GoIRODSClient) CreateFile(path string, resource string, mode strin
 		}
 	}()
 
-	handle, err := client.GoIRODSFS.CreateFile(path, resource, mode)
+	handle, err := client.fs.CreateFile(path, resource, mode)
 	if err != nil {
 		return nil, convGoIRODSClientError(err)
 	}
@@ -436,7 +436,7 @@ func (client *GoIRODSClient) CreateFile(path string, resource string, mode strin
 }
 
 func (client *GoIRODSClient) OpenFile(path string, resource string, mode string) (IRODSFileHandle, error) {
-	if client.GoIRODSFS == nil {
+	if client.fs == nil {
 		return nil, fmt.Errorf("FSClient is nil")
 	}
 
@@ -453,7 +453,7 @@ func (client *GoIRODSClient) OpenFile(path string, resource string, mode string)
 		}
 	}()
 
-	handle, err := client.GoIRODSFS.OpenFile(path, resource, mode)
+	handle, err := client.fs.OpenFile(path, resource, mode)
 	if err != nil {
 		return nil, convGoIRODSClientError(err)
 	}
@@ -468,7 +468,7 @@ func (client *GoIRODSClient) OpenFile(path string, resource string, mode string)
 }
 
 func (client *GoIRODSClient) TruncateFile(path string, size int64) error {
-	if client.GoIRODSFS == nil {
+	if client.fs == nil {
 		return fmt.Errorf("FSClient is nil")
 	}
 
@@ -485,7 +485,7 @@ func (client *GoIRODSClient) TruncateFile(path string, size int64) error {
 		}
 	}()
 
-	err := client.GoIRODSFS.TruncateFile(path, size)
+	err := client.fs.TruncateFile(path, size)
 	return convGoIRODSClientError(err)
 }
 

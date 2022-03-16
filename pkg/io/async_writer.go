@@ -14,40 +14,40 @@ import (
 
 // AsyncWriter helps async write
 type AsyncWriter struct {
-	Path            string
-	IRODSFileHandle irodsapi.IRODSFileHandle
-	FileHandleLock  *sync.Mutex
+	path            string
+	fileHandle      irodsapi.IRODSFileHandle
+	fileHandleMutex *sync.Mutex
 
-	Buffer               Buffer
-	BufferEntryGroupName string
+	buffer               Buffer
+	bufferEntryGroupName string
 
-	WriteWaitTasks sync.WaitGroup
-	WriteQueue     channels.Channel
+	writeWaitTasks sync.WaitGroup
+	writeQueue     channels.Channel
 
-	PendingErrors []error
-	Mutex         sync.Mutex // for WriteIOErrors
+	pendingErrors      []error
+	pendingErrorsMutex sync.Mutex
 
-	MonitoringReporter *report.MonitoringReporter
+	monitoringReporter *report.MonitoringReporter
 }
 
 // NewAsyncWriter create a new AsyncWriter
 func NewAsyncWriter(path string, fileHandle irodsapi.IRODSFileHandle, fileHandleLock *sync.Mutex, writeBuffer Buffer, monitoringReporter *report.MonitoringReporter) *AsyncWriter {
 	asyncWriter := &AsyncWriter{
-		Path:            path,
-		IRODSFileHandle: fileHandle,
-		FileHandleLock:  fileHandleLock,
+		path:            path,
+		fileHandle:      fileHandle,
+		fileHandleMutex: fileHandleLock,
 
-		Buffer:               writeBuffer,
-		BufferEntryGroupName: fmt.Sprintf("write:%s", path),
+		buffer:               writeBuffer,
+		bufferEntryGroupName: fmt.Sprintf("write:%s", path),
 
-		WriteWaitTasks: sync.WaitGroup{},
-		WriteQueue:     channels.NewInfiniteChannel(),
-		PendingErrors:  []error{},
+		writeWaitTasks: sync.WaitGroup{},
+		writeQueue:     channels.NewInfiniteChannel(),
+		pendingErrors:  []error{},
 
-		MonitoringReporter: monitoringReporter,
+		monitoringReporter: monitoringReporter,
 	}
 
-	writeBuffer.CreateEntryGroup(asyncWriter.BufferEntryGroupName)
+	writeBuffer.CreateEntryGroup(asyncWriter.bufferEntryGroupName)
 
 	go asyncWriter.backgroundWriteTask()
 
@@ -71,15 +71,15 @@ func (writer *AsyncWriter) Release() {
 
 	writer.Flush()
 
-	if writer.Buffer != nil {
-		writer.Buffer.DeleteEntryGroup(writer.BufferEntryGroupName)
+	if writer.buffer != nil {
+		writer.buffer.DeleteEntryGroup(writer.bufferEntryGroupName)
 	}
 
-	writer.WriteQueue.Close()
+	writer.writeQueue.Close()
 }
 
 func (writer *AsyncWriter) getBufferEntryGroup() BufferEntryGroup {
-	return writer.Buffer.GetEntryGroup(writer.BufferEntryGroupName)
+	return writer.buffer.GetEntryGroup(writer.bufferEntryGroupName)
 }
 
 func (writer *AsyncWriter) getBufferEntryKey(offset int64) string {
@@ -114,18 +114,18 @@ func (writer *AsyncWriter) WriteAt(offset int64, data []byte) error {
 
 	_, err := entryGroup.CreateEntry(entryKey, data)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to put an entry to buffer - %s, %s", writer.BufferEntryGroupName, entryKey)
+		logger.WithError(err).Errorf("failed to put an entry to buffer - %s, %s", writer.bufferEntryGroupName, entryKey)
 		return err
 	}
 
 	// schedule background write
-	writer.WriteWaitTasks.Add(1)
-	writer.WriteQueue.In() <- entryKey
+	writer.writeWaitTasks.Add(1)
+	writer.writeQueue.In() <- entryKey
 
 	// any pending
 	err = writer.GetPendingError()
 	if err != nil {
-		logger.WithError(err).Errorf("failed to write - %s, %v", writer.BufferEntryGroupName, err)
+		logger.WithError(err).Errorf("failed to write - %s, %v", writer.bufferEntryGroupName, err)
 		return err
 	}
 
@@ -152,36 +152,36 @@ func (writer *AsyncWriter) Flush() error {
 	// any pending
 	err := writer.GetPendingError()
 	if err != nil {
-		logger.WithError(err).Errorf("failed to write - %s, %v", writer.BufferEntryGroupName, err)
+		logger.WithError(err).Errorf("failed to write - %s, %v", writer.bufferEntryGroupName, err)
 		return err
 	}
 
-	writer.FileHandleLock.Lock()
-	defer writer.FileHandleLock.Unlock()
+	writer.fileHandleMutex.Lock()
+	defer writer.fileHandleMutex.Unlock()
 
-	return writer.IRODSFileHandle.Flush()
+	return writer.fileHandle.Flush()
 
 }
 
 func (writer *AsyncWriter) GetPendingError() error {
-	writer.Mutex.Lock()
-	defer writer.Mutex.Unlock()
+	writer.pendingErrorsMutex.Lock()
+	defer writer.pendingErrorsMutex.Unlock()
 
-	if len(writer.PendingErrors) > 0 {
-		return writer.PendingErrors[0]
+	if len(writer.pendingErrors) > 0 {
+		return writer.pendingErrors[0]
 	}
 	return nil
 }
 
 func (writer *AsyncWriter) addAsyncError(err error) {
-	writer.Mutex.Lock()
-	defer writer.Mutex.Unlock()
+	writer.pendingErrorsMutex.Lock()
+	defer writer.pendingErrorsMutex.Unlock()
 
-	writer.PendingErrors = append(writer.PendingErrors, err)
+	writer.pendingErrors = append(writer.pendingErrors, err)
 }
 
 func (writer *AsyncWriter) waitForBackgroundWrites() {
-	writer.WriteWaitTasks.Wait()
+	writer.writeWaitTasks.Wait()
 }
 
 func (writer *AsyncWriter) backgroundWriteTask() {
@@ -201,7 +201,7 @@ func (writer *AsyncWriter) backgroundWriteTask() {
 	entryGroup := writer.getBufferEntryGroup()
 
 	for {
-		outData, channelOpened := <-writer.WriteQueue.Out()
+		outData, channelOpened := <-writer.writeQueue.Out()
 		if !channelOpened {
 			// channel is closed
 			return
@@ -212,14 +212,14 @@ func (writer *AsyncWriter) backgroundWriteTask() {
 
 			offset, err := writer.getBufferEntryOffset(key)
 			if err != nil {
-				logger.WithError(err).Errorf("failed to get entry offset - %s, %s", writer.BufferEntryGroupName, key)
+				logger.WithError(err).Errorf("failed to get entry offset - %s, %s", writer.bufferEntryGroupName, key)
 				writer.addAsyncError(err)
 				continue
 			}
 
 			entry := entryGroup.PopEntry(key)
 			if entry == nil {
-				err = fmt.Errorf("failed to get an entry - %s, %s", writer.BufferEntryGroupName, key)
+				err = fmt.Errorf("failed to get an entry - %s, %s", writer.bufferEntryGroupName, key)
 				logger.Error(err)
 				writer.addAsyncError(err)
 				continue
@@ -227,31 +227,31 @@ func (writer *AsyncWriter) backgroundWriteTask() {
 
 			data := entry.GetData()
 			if len(data) != entry.GetSize() && len(data) <= 0 {
-				err = fmt.Errorf("failed to get data - %s, %s", writer.BufferEntryGroupName, key)
+				err = fmt.Errorf("failed to get data - %s, %s", writer.bufferEntryGroupName, key)
 				logger.Error(err)
 				writer.addAsyncError(err)
 				continue
 			}
 
-			logger.Infof("Async Writing - %s, Offset %d, length %d", writer.Path, offset, len(data))
-			writer.FileHandleLock.Lock()
+			logger.Infof("Async Writing - %s, Offset %d, length %d", writer.path, offset, len(data))
+			writer.fileHandleMutex.Lock()
 
-			err = writer.IRODSFileHandle.WriteAt(offset, data)
+			err = writer.fileHandle.WriteAt(offset, data)
 			if err != nil {
-				writer.FileHandleLock.Unlock()
-				logger.WithError(err).Errorf("failed to write data - %s, %d, %d", writer.Path, offset, len(data))
+				writer.fileHandleMutex.Unlock()
+				logger.WithError(err).Errorf("failed to write data - %s, %d, %d", writer.path, offset, len(data))
 				writer.addAsyncError(err)
 				continue
 			}
 
-			writer.FileHandleLock.Unlock()
+			writer.fileHandleMutex.Unlock()
 
 			// Report
-			if writer.MonitoringReporter != nil {
-				writer.MonitoringReporter.ReportFileTransfer(writer.Path, writer.IRODSFileHandle, offset, int64(len(data)))
+			if writer.monitoringReporter != nil {
+				writer.monitoringReporter.ReportFileTransfer(writer.path, writer.fileHandle, offset, int64(len(data)))
 			}
 
-			writer.WriteWaitTasks.Done()
+			writer.writeWaitTasks.Done()
 		}
 	}
 }

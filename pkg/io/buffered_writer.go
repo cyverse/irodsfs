@@ -9,28 +9,28 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type BufferedWriter struct {
-	Path string
-
-	Buffer            bytes.Buffer
-	BufferStartOffset int64
-	Mutex             sync.Mutex // lock for WriteBuffer
-
-	Writer Writer
-}
-
 const (
 	BufferSizeMax int = 1024 * 1024 * 8 // 8MB
 )
 
+type BufferedWriter struct {
+	path string
+
+	buffer            bytes.Buffer
+	bufferStartOffset int64
+	bufferMutex       sync.Mutex
+
+	writer Writer
+}
+
 func NewBufferedWriter(path string, writer Writer) *BufferedWriter {
 	return &BufferedWriter{
-		Path: path,
+		path: path,
 
-		Buffer:            bytes.Buffer{},
-		BufferStartOffset: 0,
+		buffer:            bytes.Buffer{},
+		bufferStartOffset: 0,
 
-		Writer: writer,
+		writer: writer,
 	}
 }
 
@@ -51,9 +51,9 @@ func (writer *BufferedWriter) Release() {
 
 	writer.Flush()
 
-	if writer.Writer != nil {
-		writer.Writer.Release()
-		writer.Writer = nil
+	if writer.writer != nil {
+		writer.writer.Release()
+		writer.writer = nil
 	}
 }
 
@@ -72,18 +72,18 @@ func (writer *BufferedWriter) Flush() error {
 	}()
 
 	// empty buffer
-	if writer.Buffer.Len() > 0 {
-		err := writer.Writer.WriteAt(writer.BufferStartOffset, writer.Buffer.Bytes())
+	if writer.buffer.Len() > 0 {
+		err := writer.writer.WriteAt(writer.bufferStartOffset, writer.buffer.Bytes())
 		if err != nil {
 			logger.Error(err)
 			return err
 		}
 	}
 
-	writer.BufferStartOffset = 0
-	writer.Buffer.Reset()
+	writer.bufferStartOffset = 0
+	writer.buffer.Reset()
 
-	return writer.Writer.Flush()
+	return writer.writer.Flush()
 }
 
 func (writer *BufferedWriter) WriteAt(offset int64, data []byte) error {
@@ -100,7 +100,7 @@ func (writer *BufferedWriter) WriteAt(offset int64, data []byte) error {
 		}
 	}()
 
-	if writer.Writer == nil {
+	if writer.writer == nil {
 		return fmt.Errorf("failed to write data to nil writer")
 	}
 
@@ -108,70 +108,70 @@ func (writer *BufferedWriter) WriteAt(offset int64, data []byte) error {
 		return nil
 	}
 
-	writer.Mutex.Lock()
-	defer writer.Mutex.Unlock()
+	writer.bufferMutex.Lock()
+	defer writer.bufferMutex.Unlock()
 
 	// check if data is continuous from prior write
-	if writer.Buffer.Len() > 0 {
+	if writer.buffer.Len() > 0 {
 		// has data
-		if writer.BufferStartOffset+int64(writer.Buffer.Len()) != offset {
+		if writer.bufferStartOffset+int64(writer.buffer.Len()) != offset {
 			// not continuous
 			// send out
-			err := writer.Writer.WriteAt(writer.BufferStartOffset, writer.Buffer.Bytes())
+			err := writer.writer.WriteAt(writer.bufferStartOffset, writer.buffer.Bytes())
 			if err != nil {
 				logger.Error(err)
 				return err
 			}
 
-			writer.BufferStartOffset = 0
-			writer.Buffer.Reset()
+			writer.bufferStartOffset = 0
+			writer.buffer.Reset()
 
 			// write to buffer
-			_, err = writer.Buffer.Write(data)
+			_, err = writer.buffer.Write(data)
 			if err != nil {
-				logger.WithError(err).Errorf("failed to buffer data for file %s, offset %d, length %d", writer.Path, offset, len(data))
+				logger.WithError(err).Errorf("failed to buffer data for file %s, offset %d, length %d", writer.path, offset, len(data))
 				return err
 			}
 
-			writer.BufferStartOffset = offset
+			writer.bufferStartOffset = offset
 		} else {
 			// continuous
 			// write to buffer
-			_, err := writer.Buffer.Write(data)
+			_, err := writer.buffer.Write(data)
 			if err != nil {
-				logger.WithError(err).Errorf("failed to buffer data for file %s, offset %d, length %d", writer.Path, offset, len(data))
+				logger.WithError(err).Errorf("failed to buffer data for file %s, offset %d, length %d", writer.path, offset, len(data))
 				return err
 			}
 		}
 	} else {
 		// write to buffer
-		_, err := writer.Buffer.Write(data)
+		_, err := writer.buffer.Write(data)
 		if err != nil {
-			logger.WithError(err).Errorf("failed to buffer data for file %s, offset %d, length %d", writer.Path, offset, len(data))
+			logger.WithError(err).Errorf("failed to buffer data for file %s, offset %d, length %d", writer.path, offset, len(data))
 			return err
 		}
 
-		writer.BufferStartOffset = offset
+		writer.bufferStartOffset = offset
 	}
 
-	if writer.Buffer.Len() >= BufferSizeMax {
+	if writer.buffer.Len() >= BufferSizeMax {
 		// Spill to disk cache
-		err := writer.Writer.WriteAt(writer.BufferStartOffset, writer.Buffer.Bytes())
+		err := writer.writer.WriteAt(writer.bufferStartOffset, writer.buffer.Bytes())
 		if err != nil {
 			logger.Error(err)
 			return err
 		}
 
-		writer.BufferStartOffset = 0
-		writer.Buffer.Reset()
+		writer.bufferStartOffset = 0
+		writer.buffer.Reset()
 	}
 
 	return nil
 }
 
 func (writer *BufferedWriter) GetPendingError() error {
-	if writer.Writer != nil {
-		return writer.Writer.GetPendingError()
+	if writer.writer != nil {
+		return writer.writer.GetPendingError()
 	}
 	return nil
 }

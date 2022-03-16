@@ -28,11 +28,11 @@ func convPoolClientError(err error) error {
 
 // PoolClient implements IRODSClient interface with iRODS FUSE Lite Pool
 type PoolClient struct {
-	Config             *irodsclient_fs.FileSystemConfig
-	PoolHost           string
-	Account            *irodsclient_types.IRODSAccount
-	PoolServiceClient  *irodsfs_pool_client.PoolServiceClient
-	PoolServiceSession *irodsfs_pool_client.PoolServiceSession
+	config      *irodsclient_fs.FileSystemConfig
+	host        string
+	account     *irodsclient_types.IRODSAccount
+	poolClient  *irodsfs_pool_client.PoolServiceClient
+	poolSession *irodsfs_pool_client.PoolServiceSession
 }
 
 func NewPoolClientDriver(poolHost string, poolPort int, account *irodsclient_types.IRODSAccount, config *irodsclient_fs.FileSystemConfig, clientID string) (IRODSClient, error) {
@@ -65,20 +65,20 @@ func NewPoolClientDriver(poolHost string, poolPort int, account *irodsclient_typ
 
 	logger.Info("Logged in to pool service")
 	return &PoolClient{
-		Config:             config,
-		PoolHost:           poolHostPort,
-		Account:            account,
-		PoolServiceClient:  poolServiceClient,
-		PoolServiceSession: poolServiceSession,
+		config:      config,
+		host:        poolHostPort,
+		account:     account,
+		poolClient:  poolServiceClient,
+		poolSession: poolServiceSession,
 	}, nil
 }
 
 func (client *PoolClient) GetAccount() *irodsclient_types.IRODSAccount {
-	return client.Account
+	return client.account
 }
 
 func (client *PoolClient) GetApplicationName() string {
-	return client.Config.ApplicationName
+	return client.config.ApplicationName
 }
 
 func (client *PoolClient) Release() {
@@ -95,8 +95,8 @@ func (client *PoolClient) Release() {
 		}
 	}()
 
-	client.PoolServiceClient.Logout(client.PoolServiceSession)
-	client.PoolServiceClient.Disconnect()
+	client.poolClient.Logout(client.poolSession)
+	client.poolClient.Disconnect()
 }
 
 func (client *PoolClient) List(path string) ([]*IRODSEntry, error) {
@@ -113,7 +113,7 @@ func (client *PoolClient) List(path string) ([]*IRODSEntry, error) {
 		}
 	}()
 
-	entries, err := client.PoolServiceClient.List(client.PoolServiceSession, path)
+	entries, err := client.poolClient.List(client.poolSession, path)
 	if err != nil {
 		return nil, convPoolClientError(err)
 	}
@@ -151,7 +151,7 @@ func (client *PoolClient) Stat(path string) (*IRODSEntry, error) {
 		}
 	}()
 
-	entry, err := client.PoolServiceClient.Stat(client.PoolServiceSession, path)
+	entry, err := client.poolClient.Stat(client.poolSession, path)
 	if err != nil {
 		return nil, convPoolClientError(err)
 	}
@@ -183,7 +183,7 @@ func (client *PoolClient) ExistsDir(path string) bool {
 		}
 	}()
 
-	return client.PoolServiceClient.ExistsDir(client.PoolServiceSession, path)
+	return client.poolClient.ExistsDir(client.poolSession, path)
 }
 
 func (client *PoolClient) ListUserGroups(user string) ([]*IRODSUser, error) {
@@ -200,7 +200,7 @@ func (client *PoolClient) ListUserGroups(user string) ([]*IRODSUser, error) {
 		}
 	}()
 
-	groups, err := client.PoolServiceClient.ListUserGroups(client.PoolServiceSession, user)
+	groups, err := client.poolClient.ListUserGroups(client.poolSession, user)
 	if err != nil {
 		return nil, convPoolClientError(err)
 	}
@@ -232,7 +232,7 @@ func (client *PoolClient) ListDirACLs(path string) ([]*IRODSAccess, error) {
 		}
 	}()
 
-	accesses, err := client.PoolServiceClient.ListDirACLs(client.PoolServiceSession, path)
+	accesses, err := client.poolClient.ListDirACLs(client.poolSession, path)
 	if err != nil {
 		return nil, convPoolClientError(err)
 	}
@@ -265,7 +265,7 @@ func (client *PoolClient) ListFileACLs(path string) ([]*IRODSAccess, error) {
 		}
 	}()
 
-	accesses, err := client.PoolServiceClient.ListFileACLs(client.PoolServiceSession, path)
+	accesses, err := client.poolClient.ListFileACLs(client.poolSession, path)
 	if err != nil {
 		return nil, convPoolClientError(err)
 	}
@@ -297,7 +297,7 @@ func (client *PoolClient) RemoveFile(path string, force bool) error {
 		}
 	}()
 
-	err := client.PoolServiceClient.RemoveFile(client.PoolServiceSession, path, force)
+	err := client.poolClient.RemoveFile(client.poolSession, path, force)
 	return convPoolClientError(err)
 }
 
@@ -315,7 +315,7 @@ func (client *PoolClient) RemoveDir(path string, recurse bool, force bool) error
 		}
 	}()
 
-	err := client.PoolServiceClient.RemoveDir(client.PoolServiceSession, path, recurse, force)
+	err := client.poolClient.RemoveDir(client.poolSession, path, recurse, force)
 	return convPoolClientError(err)
 }
 
@@ -333,7 +333,7 @@ func (client *PoolClient) MakeDir(path string, recurse bool) error {
 		}
 	}()
 
-	err := client.PoolServiceClient.MakeDir(client.PoolServiceSession, path, recurse)
+	err := client.poolClient.MakeDir(client.poolSession, path, recurse)
 	return convPoolClientError(err)
 }
 
@@ -351,7 +351,7 @@ func (client *PoolClient) RenameDirToDir(srcPath string, destPath string) error 
 		}
 	}()
 
-	err := client.PoolServiceClient.RenameDirToDir(client.PoolServiceSession, srcPath, destPath)
+	err := client.poolClient.RenameDirToDir(client.poolSession, srcPath, destPath)
 	return convPoolClientError(err)
 }
 
@@ -369,7 +369,7 @@ func (client *PoolClient) RenameFileToFile(srcPath string, destPath string) erro
 		}
 	}()
 
-	err := client.PoolServiceClient.RenameFileToFile(client.PoolServiceSession, srcPath, destPath)
+	err := client.poolClient.RenameFileToFile(client.poolSession, srcPath, destPath)
 	return convPoolClientError(err)
 }
 
@@ -387,13 +387,13 @@ func (client *PoolClient) CreateFile(path string, resource string, mode string) 
 		}
 	}()
 
-	handle, err := client.PoolServiceClient.CreateFile(client.PoolServiceSession, path, resource, mode)
+	handle, err := client.poolClient.CreateFile(client.poolSession, path, resource, mode)
 	if err != nil {
 		return nil, convPoolClientError(err)
 	}
 
 	fileHandle := &PoolClientFileHandle{
-		ID:         handle.FileHandleID,
+		ID:         handle.GetFileHandleID(),
 		PoolClient: client,
 		Handle:     handle,
 	}
@@ -415,13 +415,13 @@ func (client *PoolClient) OpenFile(path string, resource string, mode string) (I
 		}
 	}()
 
-	handle, err := client.PoolServiceClient.OpenFile(client.PoolServiceSession, path, resource, mode)
+	handle, err := client.poolClient.OpenFile(client.poolSession, path, resource, mode)
 	if err != nil {
 		return nil, convPoolClientError(err)
 	}
 
 	fileHandle := &PoolClientFileHandle{
-		ID:         handle.FileHandleID,
+		ID:         handle.GetFileHandleID(),
 		PoolClient: client,
 		Handle:     handle,
 	}
@@ -443,7 +443,7 @@ func (client *PoolClient) TruncateFile(path string, size int64) error {
 		}
 	}()
 
-	err := client.PoolServiceClient.TruncateFile(client.PoolServiceSession, path, size)
+	err := client.poolClient.TruncateFile(client.poolSession, path, size)
 	return convPoolClientError(err)
 }
 
@@ -459,21 +459,23 @@ func (handle *PoolClientFileHandle) GetID() string {
 }
 
 func (handle *PoolClientFileHandle) GetEntry() *IRODSEntry {
+	entry := handle.Handle.GetEntry()
+
 	return &IRODSEntry{
-		ID:         handle.Handle.Entry.ID,
-		Type:       EntryType(handle.Handle.Entry.Type),
-		Name:       handle.Handle.Entry.Name,
-		Path:       handle.Handle.Entry.Path,
-		Owner:      handle.Handle.Entry.Owner,
-		Size:       handle.Handle.Entry.Size,
-		CreateTime: handle.Handle.Entry.CreateTime,
-		ModifyTime: handle.Handle.Entry.ModifyTime,
-		CheckSum:   handle.Handle.Entry.CheckSum,
+		ID:         entry.ID,
+		Type:       EntryType(entry.Type),
+		Name:       entry.Name,
+		Path:       entry.Path,
+		Owner:      entry.Owner,
+		Size:       entry.Size,
+		CreateTime: entry.CreateTime,
+		ModifyTime: entry.ModifyTime,
+		CheckSum:   entry.CheckSum,
 	}
 }
 
 func (handle *PoolClientFileHandle) GetOpenMode() FileOpenMode {
-	return FileOpenMode(handle.Handle.OpenMode)
+	return FileOpenMode(handle.Handle.GetOpenMode())
 }
 
 func (handle *PoolClientFileHandle) GetOffset() int64 {
@@ -490,7 +492,7 @@ func (handle *PoolClientFileHandle) GetOffset() int64 {
 		}
 	}()
 
-	return handle.PoolClient.PoolServiceClient.GetOffset(handle.Handle)
+	return handle.PoolClient.poolClient.GetOffset(handle.Handle)
 }
 
 func (handle *PoolClientFileHandle) IsReadMode() bool {
@@ -541,7 +543,7 @@ func (handle *PoolClientFileHandle) ReadAt(offset int64, length int) ([]byte, er
 		}
 	}()
 
-	return handle.PoolClient.PoolServiceClient.ReadAt(handle.Handle, offset, int32(length))
+	return handle.PoolClient.poolClient.ReadAt(handle.Handle, offset, int32(length))
 }
 
 func (handle *PoolClientFileHandle) WriteAt(offset int64, data []byte) error {
@@ -558,7 +560,7 @@ func (handle *PoolClientFileHandle) WriteAt(offset int64, data []byte) error {
 		}
 	}()
 
-	return handle.PoolClient.PoolServiceClient.WriteAt(handle.Handle, offset, data)
+	return handle.PoolClient.poolClient.WriteAt(handle.Handle, offset, data)
 }
 
 func (handle *PoolClientFileHandle) Flush() error {
@@ -575,7 +577,7 @@ func (handle *PoolClientFileHandle) Flush() error {
 		}
 	}()
 
-	return handle.PoolClient.PoolServiceClient.Flush(handle.Handle)
+	return handle.PoolClient.poolClient.Flush(handle.Handle)
 }
 
 func (handle *PoolClientFileHandle) Close() error {
@@ -592,5 +594,5 @@ func (handle *PoolClientFileHandle) Close() error {
 		}
 	}()
 
-	return handle.PoolClient.PoolServiceClient.Close(handle.Handle)
+	return handle.PoolClient.poolClient.Close(handle.Handle)
 }

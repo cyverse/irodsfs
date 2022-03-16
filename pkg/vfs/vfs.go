@@ -13,11 +13,11 @@ import (
 // iRODS FUSE Lite uses VFS to map iRODS data objects and collections to VFS entries.
 // Custom path mapping can change the mapping.
 type VFS struct {
-	PathMappings []PathMapping
-	// Entries is a map holding VFS Entries.
+	pathMappings []PathMapping
+	// entries is a map holding VFS entries.
 	// Key is absolute path in VFS, value is entry object
-	Entries     map[string]*VFSEntry
-	IRODSClient irodsapi.IRODSClient
+	entries     map[string]*VFSEntry
+	irodsclient irodsapi.IRODSClient
 }
 
 // NewVFS creates a new VFS
@@ -28,9 +28,9 @@ func NewVFS(client irodsapi.IRODSClient, mappings []PathMapping) (*VFS, error) {
 	})
 
 	vfs := &VFS{
-		PathMappings: mappings,
-		Entries:      map[string]*VFSEntry{},
-		IRODSClient:  client,
+		pathMappings: mappings,
+		entries:      map[string]*VFSEntry{},
+		irodsclient:  client,
 	}
 
 	logger.Info("Building VFS")
@@ -51,10 +51,10 @@ func (vfs *VFS) Build() error {
 		"function": "Build",
 	})
 
-	vfs.Entries = map[string]*VFSEntry{}
+	vfs.entries = map[string]*VFSEntry{}
 
 	// build
-	for _, mapping := range vfs.PathMappings {
+	for _, mapping := range vfs.pathMappings {
 		err := vfs.buildOne(&mapping)
 		if err != nil {
 			logger.Error(err)
@@ -66,13 +66,13 @@ func (vfs *VFS) Build() error {
 
 // HasEntry returns true if it has VFS Entry for the path
 func (vfs *VFS) HasEntry(vpath string) bool {
-	_, ok := vfs.Entries[vpath]
+	_, ok := vfs.entries[vpath]
 	return ok
 }
 
 // GetEntry returns VFS Entry for the Path
 func (vfs *VFS) GetEntry(vpath string) *VFSEntry {
-	if entry, ok := vfs.Entries[vpath]; ok {
+	if entry, ok := vfs.entries[vpath]; ok {
 		return entry
 	}
 
@@ -89,7 +89,7 @@ func (vfs *VFS) GetClosestEntry(vpath string) *VFSEntry {
 	parentDirs := utils.GetParentDirs(vpath)
 	var closestEntry *VFSEntry
 	for _, parentDir := range parentDirs {
-		if entry, ok := vfs.Entries[parentDir]; ok {
+		if entry, ok := vfs.entries[parentDir]; ok {
 			closestEntry = entry
 		}
 	}
@@ -112,7 +112,7 @@ func (vfs *VFS) buildOne(mapping *PathMapping) error {
 	parentDirs := utils.GetParentDirs(mapping.MappingPath)
 	for idx, parentDir := range parentDirs {
 		// add parentDir if not exists
-		if parentDirEntry, ok := vfs.Entries[parentDir]; ok {
+		if parentDirEntry, ok := vfs.entries[parentDir]; ok {
 			// exists, check if it is VFSVirtualDirEntryType
 			if parentDirEntry.Type != VFSVirtualDirEntryType {
 				err := fmt.Errorf("failed to create a virtual dir entry %s, iRODS dir entry already exists", parentDir)
@@ -128,7 +128,7 @@ func (vfs *VFS) buildOne(mapping *PathMapping) error {
 					ID:         0,
 					Name:       utils.GetFileName(parentDir),
 					Path:       parentDir,
-					Owner:      vfs.IRODSClient.GetAccount().ClientUser,
+					Owner:      vfs.irodsclient.GetAccount().ClientUser,
 					Size:       0,
 					CreateTime: now,
 					ModifyTime: now,
@@ -136,12 +136,12 @@ func (vfs *VFS) buildOne(mapping *PathMapping) error {
 				},
 				IRODSEntry: nil,
 			}
-			vfs.Entries[parentDir] = dirEntry
+			vfs.entries[parentDir] = dirEntry
 
 			// add entry to its parent
 			if idx != 0 {
 				parentPath := parentDirs[idx-1]
-				if parentEntry, ok := vfs.Entries[parentPath]; ok {
+				if parentEntry, ok := vfs.entries[parentPath]; ok {
 					parentEntry.VirtualDirEntry.DirEntries = append(parentEntry.VirtualDirEntry.DirEntries, dirEntry)
 				}
 			}
@@ -150,9 +150,9 @@ func (vfs *VFS) buildOne(mapping *PathMapping) error {
 
 	if mapping.ResourceType == PathMappingDirectory && mapping.CreateDir {
 		logger.Infof("Checking if path exists - %s", mapping.IRODSPath)
-		if !vfs.IRODSClient.ExistsDir(mapping.IRODSPath) {
+		if !vfs.irodsclient.ExistsDir(mapping.IRODSPath) {
 			logger.Infof("Creating path - %s", mapping.IRODSPath)
-			err := vfs.IRODSClient.MakeDir(mapping.IRODSPath, true)
+			err := vfs.irodsclient.MakeDir(mapping.IRODSPath, true)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to make a dir - %s", mapping.IRODSPath)
 				// fall below
@@ -162,7 +162,7 @@ func (vfs *VFS) buildOne(mapping *PathMapping) error {
 
 	// add leaf
 	logger.Infof("Checking path - %s", mapping.IRODSPath)
-	irodsEntry, err := vfs.IRODSClient.Stat(mapping.IRODSPath)
+	irodsEntry, err := vfs.irodsclient.Stat(mapping.IRODSPath)
 	if err != nil {
 		if mapping.IgnoreNotExist {
 			// ignore
@@ -175,12 +175,12 @@ func (vfs *VFS) buildOne(mapping *PathMapping) error {
 
 	logger.Infof("Creating VFS entry mapping - irods path %s => vfs path %s (%t)", irodsEntry.Path, mapping.MappingPath, mapping.ReadOnly)
 	entry := NewVFSEntryFromIRODSFSEntry(mapping.MappingPath, irodsEntry, mapping.ReadOnly)
-	vfs.Entries[mapping.MappingPath] = entry
+	vfs.entries[mapping.MappingPath] = entry
 
 	// add to parent
 	if len(parentDirs) > 0 {
 		parentPath := parentDirs[len(parentDirs)-1]
-		if parentEntry, ok := vfs.Entries[parentPath]; ok {
+		if parentEntry, ok := vfs.entries[parentPath]; ok {
 			parentEntry.VirtualDirEntry.DirEntries = append(parentEntry.VirtualDirEntry.DirEntries, entry)
 		}
 	}
