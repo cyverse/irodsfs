@@ -19,19 +19,18 @@ const (
 
 // FileHandle is a file handle
 type FileHandle struct {
-	FS             *IRODSFS
-	Path           string
-	Entry          *vfs.VFSEntry
-	IRODSFSEntry   *irodsapi.IRODSEntry
-	FileHandle     irodsapi.IRODSFileHandle
-	FileHandleLock *sync.Mutex
-
-	Writer io.Writer
+	fs          *IRODSFS
+	path        string
+	entry       *vfs.VFSEntry
+	irodsEntry  *irodsapi.IRODSEntry
+	irodsHandle irodsapi.IRODSFileHandle
+	mutex       *sync.Mutex
+	writer      io.Writer
 }
 
 // Read reads file content
 func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
-	if handle.FS.Terminated {
+	if handle.fs.terminated {
 		return syscall.ECONNABORTED
 	}
 
@@ -48,31 +47,31 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 		}
 	}()
 
-	logger.Infof("Calling Read - %s, %d Offset, %d Bytes", handle.Path, req.Offset, req.Size)
-	defer logger.Infof("Called Read - %s, %d Offset, %d Bytes", handle.Path, req.Offset, req.Size)
+	logger.Infof("Calling Read - %s, %d Offset, %d Bytes", handle.path, req.Offset, req.Size)
+	defer logger.Infof("Called Read - %s, %d Offset, %d Bytes", handle.path, req.Offset, req.Size)
 
-	if handle.FileHandle == nil {
-		logger.Errorf("failed to get a file handle - %s", handle.Path)
+	// Lock
+	handle.mutex.Lock()
+	defer handle.mutex.Unlock()
+
+	if handle.irodsHandle == nil {
+		logger.Errorf("failed to get a file handle - %s", handle.path)
 		return syscall.EBADFD
 	}
 
-	if !handle.FileHandle.IsReadMode() {
-		logger.Errorf("failed to read file opened with write mode - %s", handle.Path)
+	if !handle.irodsHandle.IsReadMode() {
+		logger.Errorf("failed to read file opened with write mode - %s", handle.path)
 		return syscall.EBADFD
 	}
 
-	if req.Offset > handle.FileHandle.GetEntry().Size {
+	if req.Offset > handle.irodsHandle.GetEntry().Size {
 		resp.Data = resp.Data[:0]
 		return nil
 	}
 
-	// Lock
-	handle.FileHandleLock.Lock()
-	defer handle.FileHandleLock.Unlock()
-
-	data, err := handle.FileHandle.ReadAt(req.Offset, req.Size)
+	data, err := handle.irodsHandle.ReadAt(req.Offset, req.Size)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to read - %s, %d", handle.Path, req.Size)
+		logger.WithError(err).Errorf("failed to read - %s, %d", handle.path, req.Size)
 		return syscall.EREMOTEIO
 	}
 
@@ -80,8 +79,8 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 	resp.Data = resp.Data[:copiedLen]
 
 	// Report
-	if handle.FS.MonitoringReporter != nil {
-		handle.FS.MonitoringReporter.ReportFileTransfer(handle.IRODSFSEntry.Path, handle.FileHandle, req.Offset, int64(copiedLen))
+	if handle.fs.monitoringReporter != nil {
+		handle.fs.monitoringReporter.ReportFileTransfer(handle.irodsEntry.Path, handle.irodsHandle, req.Offset, int64(copiedLen))
 	}
 
 	return nil
@@ -89,7 +88,7 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 
 // Write writes file content
 func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
-	if handle.FS.Terminated {
+	if handle.fs.terminated {
 		return syscall.ECONNABORTED
 	}
 
@@ -106,21 +105,21 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 		}
 	}()
 
-	logger.Infof("Calling Write - %s, %d Bytes", handle.Path, len(req.Data))
-	defer logger.Infof("Called Write - %s, %d Bytes", handle.Path, len(req.Data))
+	logger.Infof("Calling Write - %s, %d Bytes", handle.path, len(req.Data))
+	defer logger.Infof("Called Write - %s, %d Bytes", handle.path, len(req.Data))
 
-	if handle.FileHandle == nil {
-		logger.Errorf("failed to get a file handle - %s", handle.Path)
+	if handle.irodsHandle == nil {
+		logger.Errorf("failed to get a file handle - %s", handle.path)
 		return syscall.EBADFD
 	}
 
-	if !handle.FileHandle.IsWriteMode() {
-		logger.Errorf("failed to write file opened with readonly mode - %s", handle.Path)
+	if !handle.irodsHandle.IsWriteMode() {
+		logger.Errorf("failed to write file opened with readonly mode - %s", handle.path)
 		return syscall.EBADFD
 	}
 
-	if handle.Writer == nil {
-		logger.Errorf("failed to write file opened with readonly mode - %s", handle.Path)
+	if handle.writer == nil {
+		logger.Errorf("failed to write file opened with readonly mode - %s", handle.path)
 		return syscall.EBADFD
 	}
 
@@ -128,9 +127,9 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 		return nil
 	}
 
-	err := handle.Writer.WriteAt(req.Offset, req.Data)
+	err := handle.writer.WriteAt(req.Offset, req.Data)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to write data for file %s, offset %d, length %d", handle.Path, req.Offset, len(req.Data))
+		logger.WithError(err).Errorf("failed to write data for file %s, offset %d, length %d", handle.path, req.Offset, len(req.Data))
 		return syscall.EREMOTEIO
 	}
 
@@ -140,7 +139,7 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 
 // Flush flushes content changes
 func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) error {
-	if handle.FS.Terminated {
+	if handle.fs.terminated {
 		return syscall.ECONNABORTED
 	}
 
@@ -157,19 +156,19 @@ func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) err
 		}
 	}()
 
-	logger.Infof("Calling Flush - %s", handle.Path)
-	defer logger.Infof("Called Flush - %s", handle.Path)
+	logger.Infof("Calling Flush - %s", handle.path)
+	defer logger.Infof("Called Flush - %s", handle.path)
 
-	if handle.FileHandle == nil {
-		logger.Errorf("failed to get a file handle - %s", handle.Path)
+	if handle.irodsHandle == nil {
+		logger.Errorf("failed to get a file handle - %s", handle.path)
 		return syscall.EREMOTEIO
 	}
 
-	if handle.Writer != nil {
+	if handle.writer != nil {
 		// Flush
-		err := handle.Writer.Flush()
+		err := handle.writer.Flush()
 		if err != nil {
-			logger.WithError(err).Errorf("failed to flush - %s", handle.Path)
+			logger.WithError(err).Errorf("failed to flush - %s", handle.path)
 			return syscall.EREMOTEIO
 		}
 	}
@@ -179,7 +178,7 @@ func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) err
 
 // Release closes file handle
 func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest) error {
-	if handle.FS.Terminated {
+	if handle.fs.terminated {
 		return syscall.ECONNABORTED
 	}
 
@@ -196,37 +195,41 @@ func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest)
 		}
 	}()
 
-	logger.Infof("Calling Release - %s", handle.Path)
-	defer logger.Infof("Called Release - %s", handle.Path)
+	logger.Infof("Calling Release - %s", handle.path)
+	defer logger.Infof("Called Release - %s", handle.path)
 
-	if handle.FileHandle == nil {
-		logger.Errorf("failed to get a file handle - %s", handle.Path)
+	if handle.irodsHandle == nil {
+		logger.Errorf("failed to get a file handle - %s", handle.path)
 		return syscall.EREMOTEIO
 	}
 
 	// Flush
-	if handle.Writer != nil {
+	if handle.writer != nil {
 		// wait until all queued tasks complete
-		handle.Writer.Release()
+		handle.writer.Release()
 
-		err := handle.Writer.GetPendingError()
+		err := handle.writer.GetPendingError()
 		if err != nil {
-			logger.WithError(err).Errorf("got a write failure - %s, %v", handle.Path, err)
+			logger.WithError(err).Errorf("got a write failure - %s, %v", handle.path, err)
 			return syscall.EREMOTEIO
 		}
 	}
 
-	handle.FileHandleLock.Lock()
-	defer handle.FileHandleLock.Unlock()
+	// Lock
+	handle.mutex.Lock()
+	defer handle.mutex.Unlock()
 
-	err := handle.FileHandle.Close()
+	err := handle.irodsHandle.Close()
 	if err != nil {
-		logger.Errorf("failed to close - %s", handle.Path)
+		logger.Errorf("failed to close - %s", handle.path)
 		return syscall.EREMOTEIO
 	}
 
+	// remove the handle from file handle map
+	handle.fs.fileHandleMap.Remove(handle.irodsHandle.GetID())
+
 	// Report
-	err = handle.FS.MonitoringReporter.ReportFileTransferDone(handle.IRODSFSEntry.Path, handle.FileHandle)
+	err = handle.fs.monitoringReporter.ReportFileTransferDone(handle.irodsEntry.Path, handle.irodsHandle)
 	if err != nil {
 		logger.WithError(err).Error("failed to report the file transfer to monitoring service")
 		return err

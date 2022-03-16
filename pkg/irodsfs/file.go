@@ -18,11 +18,11 @@ import (
 
 // File is a file node
 type File struct {
-	FS      *IRODSFS
-	InodeID int64
-	Path    string
-	Entry   *vfs.VFSEntry
-	Mutex   sync.RWMutex // for accessing Path
+	fs      *IRODSFS
+	inodeID int64
+	path    string
+	entry   *vfs.VFSEntry
+	mutex   sync.RWMutex // for accessing Path
 }
 
 func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, irodsEntry *irodsapi.IRODSEntry) os.FileMode {
@@ -44,22 +44,22 @@ func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, irodsEntry *irodsapi.IRODSEn
 		return 0o400
 	}
 
-	if irodsEntry.Owner == file.FS.Config.ClientUser {
+	if irodsEntry.Owner == file.fs.config.ClientUser {
 		// mine
 		return 0o700
 	}
 
-	logger.Infof("Checking ACL information of the Entry for %s and user %s", irodsEntry.Path, file.FS.Config.ClientUser)
-	defer logger.Infof("Checked ACL information of the Entry for %s and user %s", irodsEntry.Path, file.FS.Config.ClientUser)
+	logger.Infof("Checking ACL information of the Entry for %s and user %s", irodsEntry.Path, file.fs.config.ClientUser)
+	defer logger.Infof("Checked ACL information of the Entry for %s and user %s", irodsEntry.Path, file.fs.config.ClientUser)
 
-	accesses, err := file.FS.IRODSClient.ListFileACLs(irodsEntry.Path)
+	accesses, err := file.fs.irodsClient.ListFileACLs(irodsEntry.Path)
 	if err != nil {
 		logger.Errorf("failed to get ACL information of the Entry for %s", irodsEntry.Path)
 	}
 
 	var highestPermission os.FileMode = 0o400
 	for _, access := range accesses {
-		if access.UserType == irodsapi.IRODSUserRodsUser && access.UserName == file.FS.Config.ClientUser {
+		if access.UserType == irodsapi.IRODSUserRodsUser && access.UserName == file.fs.config.ClientUser {
 			// found
 			switch access.AccessLevel {
 			case irodsapi.IRODSAccessLevelOwner:
@@ -77,7 +77,7 @@ func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, irodsEntry *irodsapi.IRODSEn
 				// nothing
 			}
 		} else if access.UserType == irodsapi.IRODSUserRodsGroup {
-			if _, ok := file.FS.UserGroupsMap[access.UserName]; ok {
+			if _, ok := file.fs.userGroupsMap[access.UserName]; ok {
 				// my group
 				switch access.AccessLevel {
 				case irodsapi.IRODSAccessLevelOwner:
@@ -98,13 +98,13 @@ func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, irodsEntry *irodsapi.IRODSEn
 		}
 	}
 
-	logger.Errorf("failed to find ACL information of the Entry for %s and user %s", irodsEntry.Path, file.FS.Config.ClientUser)
+	logger.Errorf("failed to find ACL information of the Entry for %s and user %s", irodsEntry.Path, file.fs.config.ClientUser)
 	return highestPermission
 }
 
 // Attr returns stat of file entry
 func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
-	if file.FS.Terminated {
+	if file.fs.terminated {
 		return syscall.ECONNABORTED
 	}
 
@@ -122,18 +122,18 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 	}()
 
 	// apply pending update if exists
-	file.FS.FileMetaUpdater.Apply(file)
+	file.fs.fileMetaUpdater.Apply(file)
 
-	file.Mutex.RLock()
-	defer file.Mutex.RUnlock()
+	file.mutex.RLock()
+	defer file.mutex.RUnlock()
 
-	operID := file.FS.GetNextOperationID()
-	logger.Infof("Calling Attr (%d) - %s", operID, file.Path)
-	defer logger.Infof("Called Attr (%d) - %s", operID, file.Path)
+	operID := file.fs.GetNextOperationID()
+	logger.Infof("Calling Attr (%d) - %s", operID, file.path)
+	defer logger.Infof("Called Attr (%d) - %s", operID, file.path)
 
-	vfsEntry := file.FS.VFS.GetClosestEntry(file.Path)
+	vfsEntry := file.fs.vfs.GetClosestEntry(file.path)
 	if vfsEntry == nil {
-		logger.Errorf("failed to get VFS Entry for %s", file.Path)
+		logger.Errorf("failed to get VFS Entry for %s", file.path)
 		return syscall.EREMOTEIO
 	}
 
@@ -141,14 +141,14 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 		logger.Errorf("failed to get file attribute from a virtual dir mapping")
 		return syscall.EREMOTEIO
 	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
-		irodsPath, err := vfsEntry.GetIRODSPath(file.Path)
+		irodsPath, err := vfsEntry.GetIRODSPath(file.path)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to get IRODS path")
 			return syscall.EREMOTEIO
 		}
 
 		// redo to get fresh info
-		irodsEntry, err := file.FS.IRODSClient.Stat(irodsPath)
+		irodsEntry, err := file.fs.irodsClient.Stat(irodsPath)
 		if err != nil {
 			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
@@ -159,11 +159,11 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 			return syscall.EREMOTEIO
 		}
 
-		file.Entry = vfs.NewVFSEntryFromIRODSFSEntry(file.Path, irodsEntry, vfsEntry.ReadOnly)
+		file.entry = vfs.NewVFSEntryFromIRODSFSEntry(file.path, irodsEntry, vfsEntry.ReadOnly)
 
 		attr.Inode = uint64(irodsEntry.ID)
-		attr.Uid = file.FS.UID
-		attr.Gid = file.FS.GID
+		attr.Uid = file.fs.uid
+		attr.Gid = file.fs.gid
 		attr.Ctime = irodsEntry.CreateTime
 		attr.Mtime = irodsEntry.ModifyTime
 		attr.Atime = irodsEntry.ModifyTime
@@ -178,7 +178,7 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 
 // Setattr sets file attributes
 func (file *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
-	if file.FS.Terminated {
+	if file.fs.terminated {
 		return syscall.ECONNABORTED
 	}
 
@@ -196,15 +196,15 @@ func (file *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *f
 	}()
 
 	// apply pending update if exists
-	file.FS.FileMetaUpdater.Apply(file)
+	file.fs.fileMetaUpdater.Apply(file)
 
 	// don't lock here
 	//file.Mutex.RLock()
 	//defer file.Mutex.RUnlock()
 
-	operID := file.FS.GetNextOperationID()
-	logger.Infof("Calling Setattr (%d) - %s", operID, file.Path)
-	defer logger.Infof("Called Setattr (%d) - %s", operID, file.Path)
+	operID := file.fs.GetNextOperationID()
+	logger.Infof("Calling Setattr (%d) - %s", operID, file.path)
+	defer logger.Infof("Called Setattr (%d) - %s", operID, file.path)
 
 	if req.Valid.Size() {
 		// size changed
@@ -216,7 +216,7 @@ func (file *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *f
 
 // Truncate truncates file entry
 func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
-	if file.FS.Terminated {
+	if file.fs.terminated {
 		return syscall.ECONNABORTED
 	}
 
@@ -234,18 +234,18 @@ func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *
 	}()
 
 	// apply pending update if exists
-	file.FS.FileMetaUpdater.Apply(file)
+	file.fs.fileMetaUpdater.Apply(file)
 
-	file.Mutex.RLock()
-	defer file.Mutex.RUnlock()
+	file.mutex.RLock()
+	defer file.mutex.RUnlock()
 
-	operID := file.FS.GetNextOperationID()
-	logger.Infof("Calling Truncate (%d) - %s, %d", operID, file.Path, req.Size)
-	defer logger.Infof("Called Truncate (%d) - %s, %d", operID, file.Path, req.Size)
+	operID := file.fs.GetNextOperationID()
+	logger.Infof("Calling Truncate (%d) - %s, %d", operID, file.path, req.Size)
+	defer logger.Infof("Called Truncate (%d) - %s, %d", operID, file.path, req.Size)
 
-	vfsEntry := file.FS.VFS.GetClosestEntry(file.Path)
+	vfsEntry := file.fs.vfs.GetClosestEntry(file.path)
 	if vfsEntry == nil {
-		logger.Errorf("failed to get VFS Entry for %s", file.Path)
+		logger.Errorf("failed to get VFS Entry for %s", file.path)
 		return syscall.EREMOTEIO
 	}
 
@@ -253,14 +253,14 @@ func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *
 		logger.Errorf("failed to truncate a virtual dir")
 		return syscall.EREMOTEIO
 	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
-		irodsPath, err := vfsEntry.GetIRODSPath(file.Path)
+		irodsPath, err := vfsEntry.GetIRODSPath(file.path)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to get IRODS path")
 			return syscall.EREMOTEIO
 		}
 
 		// redo to get fresh info
-		irodsEntry, err := file.FS.IRODSClient.Stat(irodsPath)
+		irodsEntry, err := file.fs.irodsClient.Stat(irodsPath)
 		if err != nil {
 			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
@@ -272,7 +272,7 @@ func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *
 		}
 
 		if irodsEntry.Size != int64(req.Size) {
-			err = file.FS.IRODSClient.TruncateFile(irodsPath, int64(req.Size))
+			err = file.fs.irodsClient.TruncateFile(irodsPath, int64(req.Size))
 			if err != nil {
 				if irodsapi.IsFileNotFoundError(err) {
 					logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
@@ -293,7 +293,7 @@ func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *
 
 // Open opens file for the path and returns file handle
 func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenResponse) (fusefs.Handle, error) {
-	if file.FS.Terminated {
+	if file.fs.terminated {
 		return nil, syscall.ECONNABORTED
 	}
 
@@ -311,10 +311,10 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 	}()
 
 	// apply pending update if exists
-	file.FS.FileMetaUpdater.Apply(file)
+	file.fs.fileMetaUpdater.Apply(file)
 
-	file.Mutex.RLock()
-	defer file.Mutex.RUnlock()
+	file.mutex.RLock()
+	defer file.mutex.RUnlock()
 
 	openMode := string(irodsapi.FileOpenModeReadOnly)
 
@@ -340,13 +340,13 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		return nil, syscall.EACCES
 	}
 
-	operID := file.FS.GetNextOperationID()
-	logger.Infof("Calling Open (%d) - %s, mode(%s)", operID, file.Path, openMode)
-	defer logger.Infof("Called Open (%d) - %s, mode(%s)", operID, file.Path, openMode)
+	operID := file.fs.GetNextOperationID()
+	logger.Infof("Calling Open (%d) - %s, mode(%s)", operID, file.path, openMode)
+	defer logger.Infof("Called Open (%d) - %s, mode(%s)", operID, file.path, openMode)
 
-	vfsEntry := file.FS.VFS.GetClosestEntry(file.Path)
+	vfsEntry := file.fs.vfs.GetClosestEntry(file.path)
 	if vfsEntry == nil {
-		logger.Errorf("failed to get VFS Entry for %s", file.Path)
+		logger.Errorf("failed to get VFS Entry for %s", file.path)
 		return nil, syscall.EREMOTEIO
 	}
 
@@ -361,13 +361,13 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 			return nil, syscall.EREMOTEIO
 		}
 
-		irodsPath, err := vfsEntry.GetIRODSPath(file.Path)
+		irodsPath, err := vfsEntry.GetIRODSPath(file.path)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to get IRODS path")
 			return nil, syscall.EREMOTEIO
 		}
 
-		handle, err := file.FS.IRODSClient.OpenFile(irodsPath, "", openMode)
+		handle, err := file.fs.irodsClient.OpenFile(irodsPath, "", openMode)
 		if err != nil {
 			if irodsapi.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
@@ -380,30 +380,33 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 
 		handleMutex := &sync.Mutex{}
 
-		if file.FS.MonitoringReporter != nil {
-			file.FS.MonitoringReporter.ReportNewFileTransferStart(file.Entry.IRODSEntry.Path, handle, file.Entry.IRODSEntry.Size)
+		if file.fs.monitoringReporter != nil {
+			file.fs.monitoringReporter.ReportNewFileTransferStart(file.entry.IRODSEntry.Path, handle, file.entry.IRODSEntry.Size)
 		}
 
 		var writer io.Writer
-		if req.Flags.IsWriteOnly() && len(file.FS.Config.PoolHost) == 0 {
-			asyncWriter := io.NewAsyncWriter(irodsPath, handle, handleMutex, file.FS.Buffer, file.FS.MonitoringReporter)
+		if req.Flags.IsWriteOnly() && len(file.fs.config.PoolHost) == 0 {
+			asyncWriter := io.NewAsyncWriter(irodsPath, handle, handleMutex, file.fs.buffer, file.fs.monitoringReporter)
 			writer = io.NewBufferedWriter(irodsPath, asyncWriter)
 		} else if req.Flags.IsReadOnly() {
 			writer = nil
 		} else {
-			writer = io.NewSyncWriter(irodsPath, handle, handleMutex, file.FS.MonitoringReporter)
+			writer = io.NewSyncWriter(irodsPath, handle, handleMutex, file.fs.monitoringReporter)
 		}
 
 		fileHandle := &FileHandle{
-			FS:             file.FS,
-			Path:           file.Path,
-			Entry:          file.Entry,
-			IRODSFSEntry:   file.Entry.IRODSEntry,
-			FileHandle:     handle,
-			FileHandleLock: handleMutex,
+			fs:          file.fs,
+			path:        file.path,
+			entry:       file.entry,
+			irodsEntry:  file.entry.IRODSEntry,
+			irodsHandle: handle,
+			mutex:       handleMutex,
 
-			Writer: writer,
+			writer: writer,
 		}
+
+		// add to file handle map
+		file.fs.fileHandleMap.Add(fileHandle)
 
 		return fileHandle, nil
 	}
@@ -414,7 +417,7 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 
 // Fsync syncs file
 func (file *File) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
-	if file.FS.Terminated {
+	if file.fs.terminated {
 		return syscall.ECONNABORTED
 	}
 

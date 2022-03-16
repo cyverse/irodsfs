@@ -44,24 +44,25 @@ func GetFuseMountOptions(config *commons.Config) []fuse.MountOption {
 
 // IRODSFS is a file system object
 type IRODSFS struct {
-	Config          *commons.Config
-	FuseConnection  *fuse.Conn
-	Fuse            *fusefs.Server
-	VFS             *vfs.VFS
-	FileMetaUpdater *FileMetaUpdater
-	IRODSClient     irodsapi.IRODSClient
-	Buffer          io.Buffer
-	UserGroupsMap   map[string]*irodsapi.IRODSUser
+	config          *commons.Config
+	fuseConnection  *fuse.Conn
+	fuse            *fusefs.Server
+	vfs             *vfs.VFS
+	fileMetaUpdater *FileMetaUpdater
+	irodsClient     irodsapi.IRODSClient
+	fileHandleMap   *FileHandleMap
+	buffer          io.Buffer
+	userGroupsMap   map[string]*irodsapi.IRODSUser
 
-	UID uint32
-	GID uint32
+	uid uint32
+	gid uint32
 
-	MonitoringReporter *report.MonitoringReporter
+	monitoringReporter *report.MonitoringReporter
 
-	Terminated bool
-	KillFUSE   bool
+	terminated bool
+	killFUSE   bool
 
-	OperationIDCurrent uint64
+	operationIDCurrent uint64
 }
 
 // NewFileSystem creates a new file system
@@ -150,6 +151,9 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	logger.Info("Initializing File Meta Updater")
 	fileMetaUpdater := NewFileMetaUpdater()
 
+	logger.Info("Initializing File Handle Map")
+	fileHandleMap := NewFileHandleMap()
+
 	var ramBuffer io.Buffer
 	if len(config.PoolHost) == 0 && config.BufferSizeMax > 0 {
 		logger.Infof("Initializing RAMBuffer, bufferSize %d", config.BufferSizeMax)
@@ -171,21 +175,22 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	}
 
 	return &IRODSFS{
-		Config:          config,
-		Fuse:            nil,
-		VFS:             vfs,
-		FileMetaUpdater: fileMetaUpdater,
-		IRODSClient:     irodsClient,
-		Buffer:          ramBuffer,
-		UserGroupsMap:   userGroupsMap,
+		config:          config,
+		fuse:            nil,
+		vfs:             vfs,
+		fileMetaUpdater: fileMetaUpdater,
+		irodsClient:     irodsClient,
+		fileHandleMap:   fileHandleMap,
+		buffer:          ramBuffer,
+		userGroupsMap:   userGroupsMap,
 
-		UID: uint32(config.UID),
-		GID: uint32(config.GID),
+		uid: uint32(config.UID),
+		gid: uint32(config.GID),
 
-		MonitoringReporter: reporter,
-		Terminated:         false,
+		monitoringReporter: reporter,
+		terminated:         false,
 
-		OperationIDCurrent: 0,
+		operationIDCurrent: 0,
 	}, nil
 }
 
@@ -204,25 +209,25 @@ func (fs *IRODSFS) ConnectToFuse() error {
 		}
 	}()
 
-	logger.Infof("Connecting to FUSE, mount on %s", fs.Config.MountPath)
+	logger.Infof("Connecting to FUSE, mount on %s", fs.config.MountPath)
 
-	fuseConn, err := fuse.Mount(fs.Config.MountPath, GetFuseMountOptions(fs.Config)...)
+	fuseConn, err := fuse.Mount(fs.config.MountPath, GetFuseMountOptions(fs.config)...)
 	if err != nil {
 		logger.WithError(err).Error("failed to connect to FUSE")
 		return err
 	}
 
-	fs.FuseConnection = fuseConn
+	fs.fuseConnection = fuseConn
 
 	// register a new client
-	if fs.MonitoringReporter != nil {
-		err = fs.MonitoringReporter.ReportNewInstance(fs.Config)
+	if fs.monitoringReporter != nil {
+		err = fs.monitoringReporter.ReportNewInstance(fs.config)
 		if err != nil {
 			return err
 		}
 	}
 
-	logger.Infof("Connected to FUSE, mount on %s", fs.Config.MountPath)
+	logger.Infof("Connected to FUSE, mount on %s", fs.config.MountPath)
 	return nil
 }
 
@@ -241,16 +246,16 @@ func (fs *IRODSFS) StartFuse() error {
 		}
 	}()
 
-	if fs.FuseConnection == nil {
+	if fs.fuseConnection == nil {
 		logger.Error("failed to start FUSE server without connection")
 		return fmt.Errorf("failed to start FUSE server without connection")
 	}
 
-	fuseServer := fusefs.New(fs.FuseConnection, nil)
-	fs.Fuse = fuseServer
+	fuseServer := fusefs.New(fs.fuseConnection, nil)
+	fs.fuse = fuseServer
 
 	if err := fuseServer.Serve(fs); err != nil {
-		if fs.KillFUSE {
+		if fs.killFUSE {
 			// suppress error
 			return nil
 		}
@@ -275,22 +280,22 @@ func (fs *IRODSFS) StopFuse() {
 		time.Sleep(100 * time.Millisecond)
 		// this is to create a request to dead fuse
 		// causing the fuse client to notice it's closing
-		os.Stat(fs.Config.MountPath)
+		os.Stat(fs.config.MountPath)
 	}()
 
 	// forcefully close the fuse connection
-	fs.KillFUSE = true
-	fs.FuseConnection.Close()
+	fs.killFUSE = true
+	fs.fuseConnection.Close()
 }
 
 // Destroy destroys the file system
 func (fs *IRODSFS) Destroy() {
-	if fs.Terminated {
+	if fs.terminated {
 		// already terminated
 		return
 	}
 
-	fs.Terminated = true
+	fs.terminated = true
 
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
@@ -300,38 +305,43 @@ func (fs *IRODSFS) Destroy() {
 
 	logger.Info("Destroying FileSystem")
 
-	if fs.MonitoringReporter != nil {
-		fs.MonitoringReporter.ReportInstanceTermination()
-		fs.MonitoringReporter = nil
+	if fs.monitoringReporter != nil {
+		fs.monitoringReporter.ReportInstanceTermination()
+		fs.monitoringReporter = nil
+	}
+
+	if fs.fileHandleMap != nil {
+		fs.fileHandleMap.Clear()
+		fs.fileHandleMap = nil
 	}
 
 	logger.Info("> Releasing resources")
-	if fs.IRODSClient != nil {
-		fs.IRODSClient.Release()
-		fs.IRODSClient = nil
+	if fs.irodsClient != nil {
+		fs.irodsClient.Release()
+		fs.irodsClient = nil
 	}
 
-	if fs.Buffer != nil {
-		fs.Buffer.Release()
-		fs.Buffer = nil
+	if fs.buffer != nil {
+		fs.buffer.Release()
+		fs.buffer = nil
 	}
 
-	if fs.FuseConnection != nil {
+	if fs.fuseConnection != nil {
 		logger.Info("> Closing fuse connection")
-		fs.FuseConnection.Close()
-		fs.FuseConnection = nil
+		fs.fuseConnection.Close()
+		fs.fuseConnection = nil
 	}
 
 	// try to unmount (error may occur but ignore it)
 	logger.Info("> Unmounting mountpath")
-	fuse.Unmount(fs.Config.MountPath)
+	fuse.Unmount(fs.config.MountPath)
 
 	logger.Info("Destroyed FileSystem")
 }
 
 // Root returns root directory node
 func (fs *IRODSFS) Root() (fusefs.Node, error) {
-	if fs.Terminated {
+	if fs.terminated {
 		return nil, syscall.ECONNABORTED
 	}
 
@@ -348,7 +358,7 @@ func (fs *IRODSFS) Root() (fusefs.Node, error) {
 		}
 	}()
 
-	vfsEntry := fs.VFS.GetEntry("/")
+	vfsEntry := fs.vfs.GetEntry("/")
 	if vfsEntry == nil {
 		logger.Errorf("failed to get Root VFS Entry")
 		return nil, syscall.EREMOTEIO
@@ -356,9 +366,9 @@ func (fs *IRODSFS) Root() (fusefs.Node, error) {
 
 	if vfsEntry.Type == vfs.VFSVirtualDirEntryType {
 		return &Dir{
-			FS:      fs,
-			InodeID: vfsEntry.VirtualDirEntry.ID,
-			Path:    "/",
+			fs:      fs,
+			inodeID: vfsEntry.VirtualDirEntry.ID,
+			path:    "/",
 		}, nil
 	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
 		if vfsEntry.IRODSEntry.Type != irodsapi.DirectoryEntry {
@@ -367,9 +377,9 @@ func (fs *IRODSFS) Root() (fusefs.Node, error) {
 		}
 
 		return &Dir{
-			FS:      fs,
-			InodeID: vfsEntry.IRODSEntry.ID,
-			Path:    "/",
+			fs:      fs,
+			inodeID: vfsEntry.IRODSEntry.ID,
+			path:    "/",
 		}, nil
 	} else {
 		logger.Errorf("unknown VFS Entry type : %s", vfsEntry.Type)
@@ -379,6 +389,6 @@ func (fs *IRODSFS) Root() (fusefs.Node, error) {
 
 // GetNextOperationID returns next operation ID
 func (fs *IRODSFS) GetNextOperationID() uint64 {
-	fs.OperationIDCurrent++
-	return fs.OperationIDCurrent
+	fs.operationIDCurrent++
+	return fs.operationIDCurrent
 }
