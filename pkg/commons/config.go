@@ -67,6 +67,7 @@ type Config struct {
 	ClientUser   string            `yaml:"client_user"`
 	Zone         string            `yaml:"zone"`
 	Password     string            `yaml:"password,omitempty"`
+	Resource     string            `yaml:"resource,omitempty"`
 	PathMappings []vfs.PathMapping `yaml:"path_mappings"`
 	UID          int               `yaml:"uid"`
 	GID          int               `yaml:"gid"`
@@ -114,6 +115,7 @@ func NewDefaultConfig() *Config {
 
 	return &Config{
 		Port:         PortDefault,
+		Resource:     "",
 		PathMappings: []vfs.PathMapping{},
 		UID:          uid,
 		GID:          gid,
@@ -160,6 +162,7 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 
 	config := Config{
 		Port:         PortDefault,
+		Resource:     "",
 		PathMappings: []vfs.PathMapping{},
 		UID:          uid,
 		GID:          gid,

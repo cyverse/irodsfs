@@ -81,7 +81,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 
 	account, err := irodsclient_types.CreateIRODSProxyAccount(config.Host, config.Port,
 		config.ClientUser, config.Zone, config.ProxyUser, config.Zone,
-		irodsclient_types.AuthScheme(config.AuthScheme), config.Password)
+		irodsclient_types.AuthScheme(config.AuthScheme), config.Password, config.Resource)
 	if err != nil {
 		logger.WithError(err).Error("failed to create IRODS Account")
 		return nil, fmt.Errorf("failed to create IRODS Account - %v", err)
