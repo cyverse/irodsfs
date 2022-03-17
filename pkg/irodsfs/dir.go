@@ -98,7 +98,7 @@ func mapDirACL(vfsEntry *vfs.VFSEntry, dir *Dir, irodsEntry *irodsapi.IRODSEntry
 		}
 	}
 
-	logger.Errorf("failed to find ACL information of the Entry for %s and user %s", irodsEntry.Path, dir.fs.config.ClientUser)
+	logger.Debugf("failed to find ACL information of the Entry for %s and user %s", irodsEntry.Path, dir.fs.config.ClientUser)
 	return highestPermission
 }
 
@@ -245,7 +245,7 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 		irodsEntry, err := dir.fs.irodsClient.Stat(irodsPath)
 		if err != nil {
 			if irodsapi.IsFileNotFoundError(err) {
-				logger.WithError(err).Infof("failed to find a file - %s", irodsPath)
+				logger.WithError(err).Debugf("failed to find a file - %s", irodsPath)
 				return nil, syscall.ENOENT
 			}
 
@@ -711,16 +711,14 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 		switch irodsEntry.Type {
 		case irodsapi.DirectoryEntry:
 			// lock first
-			/*
-				openFilePaths := dir.fs.fileHandleMap.ListPathsInDir(irodsSrcPath)
-				for _, openFilePath := range openFilePaths {
-					handlesOpened := dir.fs.fileHandleMap.ListByPath(openFilePath)
-					for _, handle := range handlesOpened {
-						handle.mutex.Lock()
-						defer handle.mutex.Unlock()
-					}
+			openFilePaths := dir.fs.fileHandleMap.ListPathsInDir(irodsSrcPath)
+			for _, openFilePath := range openFilePaths {
+				handlesOpened := dir.fs.fileHandleMap.ListByPath(openFilePath)
+				for _, handle := range handlesOpened {
+					handle.mutex.Lock()
+					defer handle.mutex.Unlock()
 				}
-			*/
+			}
 
 			err = dir.fs.irodsClient.RenameDirToDir(irodsSrcPath, irodsDestPath)
 			if err != nil {
@@ -753,13 +751,11 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 			}
 
 			// lock first
-			/*
-				handlesOpened := dir.fs.fileHandleMap.ListByPath(irodsSrcPath)
-				for _, handle := range handlesOpened {
-					handle.mutex.Lock()
-					defer handle.mutex.Unlock()
-				}
-			*/
+			handlesOpened := dir.fs.fileHandleMap.ListByPath(irodsSrcPath)
+			for _, handle := range handlesOpened {
+				handle.mutex.Lock()
+				defer handle.mutex.Unlock()
+			}
 
 			err = dir.fs.irodsClient.RenameFileToFile(irodsSrcPath, irodsDestPath)
 			if err != nil {
