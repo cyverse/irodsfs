@@ -906,7 +906,8 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 				writer = io.NewBufferedWriter(irodsPath, syncWriter)
 			}
 		} else if req.Flags.IsReadOnly() {
-			reader = io.NewSyncReader(irodsPath, handle, handleMutex, dir.fs.monitoringReporter)
+			// this never happens
+			reader = io.NewNilReader(irodsPath, handle)
 			writer = io.NewNilWriter(irodsPath, handle)
 		} else {
 			reader = io.NewSyncReader(irodsPath, handle, handleMutex, dir.fs.monitoringReporter)
