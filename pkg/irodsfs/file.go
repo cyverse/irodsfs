@@ -384,13 +384,25 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 			file.fs.monitoringReporter.ReportNewFileTransferStart(file.entry.IRODSEntry.Path, handle, file.entry.IRODSEntry.Size)
 		}
 
+		var reader io.Reader
 		var writer io.Writer
-		if req.Flags.IsWriteOnly() && len(file.fs.config.PoolHost) == 0 {
-			asyncWriter := io.NewAsyncWriter(irodsPath, handle, handleMutex, file.fs.buffer, file.fs.monitoringReporter)
-			writer = io.NewBufferedWriter(irodsPath, asyncWriter)
+		if req.Flags.IsWriteOnly() {
+			reader = io.NewNilReader(irodsPath, handle)
+
+			if len(file.fs.config.PoolHost) == 0 {
+				// if there's no pool server configured, use async-buffered write
+				asyncWriter := io.NewAsyncWriter(irodsPath, handle, handleMutex, file.fs.buffer, file.fs.monitoringReporter)
+				writer = io.NewBufferedWriter(irodsPath, asyncWriter)
+			} else {
+				// if there's pool server configured, use sync-buffered write
+				syncWriter := io.NewSyncWriter(irodsPath, handle, handleMutex, file.fs.monitoringReporter)
+				writer = io.NewBufferedWriter(irodsPath, syncWriter)
+			}
 		} else if req.Flags.IsReadOnly() {
-			writer = nil
+			reader = io.NewSyncReader(irodsPath, handle, handleMutex, file.fs.monitoringReporter)
+			writer = io.NewNilWriter(irodsPath, handle)
 		} else {
+			reader = io.NewSyncReader(irodsPath, handle, handleMutex, file.fs.monitoringReporter)
 			writer = io.NewSyncWriter(irodsPath, handle, handleMutex, file.fs.monitoringReporter)
 		}
 
@@ -402,6 +414,7 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 			irodsHandle: handle,
 			mutex:       handleMutex,
 
+			reader: reader,
 			writer: writer,
 		}
 

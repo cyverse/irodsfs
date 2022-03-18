@@ -891,12 +891,25 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 
 		handleMutex := &sync.Mutex{}
 
+		var reader io.Reader
 		var writer io.Writer
-		if req.Flags.IsWriteOnly() && len(dir.fs.config.PoolHost) == 0 {
-			asyncWriter := io.NewAsyncWriter(irodsPath, handle, handleMutex, dir.fs.buffer, dir.fs.monitoringReporter)
-			//syncWriter := asyncwrite.NewSyncWriter(irodsPath, handle, handleMutex, dir.FS.MonitoringReporter)
-			writer = io.NewBufferedWriter(irodsPath, asyncWriter)
+		if req.Flags.IsWriteOnly() {
+			reader = io.NewNilReader(irodsPath, handle)
+
+			if len(dir.fs.config.PoolHost) == 0 {
+				// if there's no pool server configured, use async-buffered write
+				asyncWriter := io.NewAsyncWriter(irodsPath, handle, handleMutex, dir.fs.buffer, dir.fs.monitoringReporter)
+				writer = io.NewBufferedWriter(irodsPath, asyncWriter)
+			} else {
+				// if there's pool server configured, use sync-buffered write
+				syncWriter := io.NewSyncWriter(irodsPath, handle, handleMutex, dir.fs.monitoringReporter)
+				writer = io.NewBufferedWriter(irodsPath, syncWriter)
+			}
+		} else if req.Flags.IsReadOnly() {
+			reader = io.NewSyncReader(irodsPath, handle, handleMutex, dir.fs.monitoringReporter)
+			writer = io.NewNilWriter(irodsPath, handle)
 		} else {
+			reader = io.NewSyncReader(irodsPath, handle, handleMutex, dir.fs.monitoringReporter)
 			writer = io.NewSyncWriter(irodsPath, handle, handleMutex, dir.fs.monitoringReporter)
 		}
 
@@ -908,6 +921,7 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 			irodsHandle: handle,
 			mutex:       handleMutex,
 
+			reader: reader,
 			writer: writer,
 		}
 

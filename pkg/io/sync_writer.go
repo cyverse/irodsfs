@@ -19,11 +19,11 @@ type SyncWriter struct {
 }
 
 // NewSyncWriter create a new SyncWriter
-func NewSyncWriter(path string, fileHandle irodsapi.IRODSFileHandle, fileHandleLock *sync.Mutex, monitoringReporter *report.MonitoringReporter) *SyncWriter {
+func NewSyncWriter(path string, fileHandle irodsapi.IRODSFileHandle, fileHandleMutex *sync.Mutex, monitoringReporter *report.MonitoringReporter) *SyncWriter {
 	syncWriter := &SyncWriter{
 		path:            path,
 		fileHandle:      fileHandle,
-		fileHandleMutex: fileHandleLock,
+		fileHandleMutex: fileHandleMutex,
 
 		monitoringReporter: monitoringReporter,
 	}

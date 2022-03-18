@@ -25,6 +25,7 @@ type FileHandle struct {
 	irodsEntry  *irodsapi.IRODSEntry
 	irodsHandle irodsapi.IRODSFileHandle
 	mutex       *sync.Mutex
+	reader      io.Reader
 	writer      io.Writer
 }
 
@@ -50,17 +51,18 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 	logger.Infof("Calling Read - %s, %d Offset, %d Bytes", handle.path, req.Offset, req.Size)
 	defer logger.Infof("Called Read - %s, %d Offset, %d Bytes", handle.path, req.Offset, req.Size)
 
-	// Lock
-	handle.mutex.Lock()
-	defer handle.mutex.Unlock()
-
 	if handle.irodsHandle == nil {
 		logger.Errorf("failed to get a file handle - %s", handle.path)
 		return syscall.EBADFD
 	}
 
 	if !handle.irodsHandle.IsReadMode() {
-		logger.Errorf("failed to read file opened with write mode - %s", handle.path)
+		logger.Errorf("failed to read file opened with writeonly mode - %s", handle.path)
+		return syscall.EBADFD
+	}
+
+	if handle.reader == nil {
+		logger.Errorf("failed to write file opened with writeonly mode - %s", handle.path)
 		return syscall.EBADFD
 	}
 
@@ -69,19 +71,14 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 		return nil
 	}
 
-	data, err := handle.irodsHandle.ReadAt(req.Offset, req.Size)
+	data, err := handle.reader.ReadAt(req.Offset, req.Size)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to read - %s, %d", handle.path, req.Size)
+		logger.WithError(err).Errorf("failed to read data for file %s, offset %d, length %d", handle.path, req.Offset, req.Size)
 		return syscall.EREMOTEIO
 	}
 
 	copiedLen := copy(resp.Data[:req.Size], data)
 	resp.Data = resp.Data[:copiedLen]
-
-	// Report
-	if handle.fs.monitoringReporter != nil {
-		handle.fs.monitoringReporter.ReportFileTransfer(handle.irodsEntry.Path, handle.irodsHandle, req.Offset, int64(copiedLen))
-	}
 
 	return nil
 }
@@ -203,6 +200,16 @@ func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest)
 		return syscall.EREMOTEIO
 	}
 
+	if handle.reader != nil {
+		handle.reader.Release()
+		err := handle.reader.GetPendingError()
+		if err != nil {
+			logger.WithError(err).Errorf("got a read failure - %s, %v", handle.path, err)
+			return syscall.EREMOTEIO
+		}
+		handle.reader = nil
+	}
+
 	// Flush
 	if handle.writer != nil {
 		// wait until all queued tasks complete
@@ -213,6 +220,7 @@ func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest)
 			logger.WithError(err).Errorf("got a write failure - %s, %v", handle.path, err)
 			return syscall.EREMOTEIO
 		}
+		handle.writer = nil
 	}
 
 	// Lock
