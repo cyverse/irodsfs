@@ -9,12 +9,12 @@ Pre-built binaries can be found in `Release` tab in the source repository.
 iRODS FUSE Lite only works on Linux systems. It does not run on MacOS (osx).
 The binary can run on any Linux distros (e.g., Ubuntu 18.x, Ubuntu 20.x, CentOS 7, or CentOS 8).
 
-Links for iRODS FUSE Lite `v0.5.6`:
+Links for iRODS FUSE Lite `v0.6.0`:
 
-- Linux/amd64: [irodsfs_amd64_linux_v0.5.6.tar](https://github.com/cyverse/irodsfs/releases/download/v0.5.6/irodsfs_amd64_linux_v0.5.6.tar)
-- Linux/arm64: [irodsfs_arm64_linux_v0.5.6.tar](https://github.com/cyverse/irodsfs/releases/download/v0.5.6/irodsfs_arm64_linux_v0.5.6.tar)
-- Linux/i386: [irodsfs_arm_linux_v0.5.6.tar](https://github.com/cyverse/irodsfs/releases/download/v0.5.6/irodsfs_arm_linux_v0.5.6.tar)
-- Linux/arm32: [irodsfs_arm_linux_v0.5.6.tar](https://github.com/cyverse/irodsfs/releases/download/v0.5.2/irodsfs_arm_linux_v0.5.6.tar)
+- Linux/amd64: [irodsfs_amd64_linux_v0.6.0.tar](https://github.com/cyverse/irodsfs/releases/download/v0.6.0/irodsfs_amd64_linux_v0.6.0.tar)
+- Linux/arm64: [irodsfs_arm64_linux_v0.6.0.tar](https://github.com/cyverse/irodsfs/releases/download/v0.6.0/irodsfs_arm64_linux_v0.6.0.tar)
+- Linux/i386: [irodsfs_arm_linux_v0.6.0.tar](https://github.com/cyverse/irodsfs/releases/download/v0.6.0/irodsfs_arm_linux_v0.6.0.tar)
+- Linux/arm32: [irodsfs_arm_linux_v0.6.0.tar](https://github.com/cyverse/irodsfs/releases/download/v0.5.2/irodsfs_arm_linux_v0.6.0.tar)
 
 ## Build from source
 
