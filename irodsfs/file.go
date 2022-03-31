@@ -4,39 +4,46 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"runtime/debug"
 	"sync"
 	"syscall"
 
 	fuse "bazil.org/fuse"
 	fusefs "bazil.org/fuse/fs"
-	"github.com/cyverse/irodsfs/pkg/io"
-	"github.com/cyverse/irodsfs/pkg/irodsapi"
-	"github.com/cyverse/irodsfs/pkg/vfs"
+	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
+	irodsfscommon_utils "github.com/cyverse/irodsfs-common/utils"
+
+	"github.com/cyverse/irodsfs/vfs"
 	log "github.com/sirupsen/logrus"
 )
 
 // File is a file node
 type File struct {
-	fs      *IRODSFS
-	inodeID int64
-	path    string
-	entry   *vfs.VFSEntry
-	mutex   sync.RWMutex // for accessing Path
+	fs       *IRODSFS
+	inodeID  int64
+	path     string
+	vfsEntry *vfs.VFSEntry
+	mutex    sync.RWMutex // for accessing Path
 }
 
-func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, irodsEntry *irodsapi.IRODSEntry) os.FileMode {
+// NewFile creates a new File
+func NewFile(fs *IRODSFS, inodeID int64, path string, vfsEntry *vfs.VFSEntry) *File {
+	return &File{
+		fs:       fs,
+		inodeID:  inodeID,
+		path:     path,
+		vfsEntry: vfsEntry,
+		mutex:    sync.RWMutex{},
+	}
+}
+
+func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, irodsEntry *irodsclient_fs.Entry) os.FileMode {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"function": "mapFileACL",
 	})
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
-			logger.Panic(r)
-		}
-	}()
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
 	// we don't actually check permissions for reading file when vfsEntry is read only
 	// because files with no-access for the user will not be visible
@@ -52,46 +59,46 @@ func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, irodsEntry *irodsapi.IRODSEn
 	logger.Infof("Checking ACL information of the Entry for %s and user %s", irodsEntry.Path, file.fs.config.ClientUser)
 	defer logger.Infof("Checked ACL information of the Entry for %s and user %s", irodsEntry.Path, file.fs.config.ClientUser)
 
-	accesses, err := file.fs.irodsClient.ListFileACLs(irodsEntry.Path)
+	accesses, err := file.fs.fsClient.ListFileACLs(irodsEntry.Path)
 	if err != nil {
 		logger.Errorf("failed to get ACL information of the Entry for %s", irodsEntry.Path)
 	}
 
 	var highestPermission os.FileMode = 0o400
 	for _, access := range accesses {
-		if access.UserType == irodsapi.IRODSUserRodsUser && access.UserName == file.fs.config.ClientUser {
+		if access.UserType == irodsclient_types.IRODSUserRodsUser && access.UserName == file.fs.config.ClientUser {
 			// found
 			switch access.AccessLevel {
-			case irodsapi.IRODSAccessLevelOwner:
+			case irodsclient_types.IRODSAccessLevelOwner:
 				// highest, don't need to continue
 				return 0o700
-			case irodsapi.IRODSAccessLevelWrite:
+			case irodsclient_types.IRODSAccessLevelWrite:
 				if highestPermission < 0o600 {
 					highestPermission = 0o600
 				}
-			case irodsapi.IRODSAccessLevelRead:
+			case irodsclient_types.IRODSAccessLevelRead:
 				if highestPermission < 0o400 {
 					highestPermission = 0o400
 				}
-			case irodsapi.IRODSAccessLevelNone:
+			case irodsclient_types.IRODSAccessLevelNone:
 				// nothing
 			}
-		} else if access.UserType == irodsapi.IRODSUserRodsGroup {
+		} else if access.UserType == irodsclient_types.IRODSUserRodsGroup {
 			if _, ok := file.fs.userGroupsMap[access.UserName]; ok {
 				// my group
 				switch access.AccessLevel {
-				case irodsapi.IRODSAccessLevelOwner:
+				case irodsclient_types.IRODSAccessLevelOwner:
 					// highest, don't need to continue
 					return 0o700
-				case irodsapi.IRODSAccessLevelWrite:
+				case irodsclient_types.IRODSAccessLevelWrite:
 					if highestPermission < 0o600 {
 						highestPermission = 0o600
 					}
-				case irodsapi.IRODSAccessLevelRead:
+				case irodsclient_types.IRODSAccessLevelRead:
 					if highestPermission < 0o400 {
 						highestPermission = 0o400
 					}
-				case irodsapi.IRODSAccessLevelNone:
+				case irodsclient_types.IRODSAccessLevelNone:
 					// nothing
 				}
 			}
@@ -114,12 +121,7 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 		"function": "Attr",
 	})
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
-			logger.Panic(r)
-		}
-	}()
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
 	// apply pending update if exists
 	file.fs.fileMetaUpdater.Apply(file)
@@ -148,9 +150,9 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 		}
 
 		// redo to get fresh info
-		irodsEntry, err := file.fs.irodsClient.Stat(irodsPath)
+		irodsEntry, err := file.fs.fsClient.Stat(irodsPath)
 		if err != nil {
-			if irodsapi.IsFileNotFoundError(err) {
+			if irodsclient_types.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
 				return syscall.ENOENT
 			}
@@ -159,7 +161,7 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 			return syscall.EREMOTEIO
 		}
 
-		file.entry = vfs.NewVFSEntryFromIRODSFSEntry(file.path, irodsEntry, vfsEntry.ReadOnly)
+		file.vfsEntry = vfs.NewVFSEntryFromIRODSFSEntry(file.path, irodsEntry, vfsEntry.ReadOnly)
 
 		attr.Inode = uint64(irodsEntry.ID)
 		attr.Uid = file.fs.uid
@@ -188,12 +190,7 @@ func (file *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *f
 		"function": "Setattr",
 	})
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
-			logger.Panic(r)
-		}
-	}()
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
 	// apply pending update if exists
 	file.fs.fileMetaUpdater.Apply(file)
@@ -226,12 +223,7 @@ func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *
 		"function": "Truncate",
 	})
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
-			logger.Panic(r)
-		}
-	}()
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
 	// apply pending update if exists
 	file.fs.fileMetaUpdater.Apply(file)
@@ -260,9 +252,9 @@ func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *
 		}
 
 		// redo to get fresh info
-		irodsEntry, err := file.fs.irodsClient.Stat(irodsPath)
+		irodsEntry, err := file.fs.fsClient.Stat(irodsPath)
 		if err != nil {
-			if irodsapi.IsFileNotFoundError(err) {
+			if irodsclient_types.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
 				return syscall.ENOENT
 			}
@@ -272,9 +264,9 @@ func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *
 		}
 
 		if irodsEntry.Size != int64(req.Size) {
-			err = file.fs.irodsClient.TruncateFile(irodsPath, int64(req.Size))
+			err = file.fs.fsClient.TruncateFile(irodsPath, int64(req.Size))
 			if err != nil {
-				if irodsapi.IsFileNotFoundError(err) {
+				if irodsclient_types.IsFileNotFoundError(err) {
 					logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
 					return syscall.ENOENT
 				}
@@ -303,12 +295,7 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		"function": "Open",
 	})
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
-			logger.Panic(r)
-		}
-	}()
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
 	// apply pending update if exists
 	file.fs.fileMetaUpdater.Apply(file)
@@ -316,25 +303,25 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 	file.mutex.RLock()
 	defer file.mutex.RUnlock()
 
-	openMode := string(irodsapi.FileOpenModeReadOnly)
+	openMode := string(irodsclient_types.FileOpenModeReadOnly)
 
 	if req.Flags.IsReadOnly() {
-		openMode = string(irodsapi.FileOpenModeReadOnly)
+		openMode = string(irodsclient_types.FileOpenModeReadOnly)
 		resp.Flags |= fuse.OpenKeepCache
 		resp.Flags &^= fuse.OpenDirectIO // disable
 	} else if req.Flags.IsWriteOnly() {
-		openMode = string(irodsapi.FileOpenModeWriteOnly)
+		openMode = string(irodsclient_types.FileOpenModeWriteOnly)
 
 		if req.Flags&fuse.OpenAppend == fuse.OpenAppend {
 			// append
-			openMode = string(irodsapi.FileOpenModeAppend)
+			openMode = string(irodsclient_types.FileOpenModeAppend)
 		} else if req.Flags&fuse.OpenTruncate == fuse.OpenTruncate {
 			// truncate
-			openMode = string(irodsapi.FileOpenModeWriteTruncate)
+			openMode = string(irodsclient_types.FileOpenModeWriteTruncate)
 		}
 		resp.Flags |= fuse.OpenDirectIO
 	} else if req.Flags.IsReadWrite() {
-		openMode = string(irodsapi.FileOpenModeReadWrite)
+		openMode = string(irodsclient_types.FileOpenModeReadWrite)
 	} else {
 		logger.Errorf("unknown file open mode - %s", req.Flags.String())
 		return nil, syscall.EACCES
@@ -356,7 +343,7 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		logger.Error(err)
 		return nil, syscall.EACCES
 	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
-		if vfsEntry.ReadOnly && openMode != string(irodsapi.FileOpenModeReadOnly) {
+		if vfsEntry.ReadOnly && openMode != string(irodsclient_types.FileOpenModeReadOnly) {
 			logger.Errorf("failed to open a read-only file with non-read-only mode")
 			return nil, syscall.EREMOTEIO
 		}
@@ -367,9 +354,9 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 			return nil, syscall.EREMOTEIO
 		}
 
-		handle, err := file.fs.irodsClient.OpenFile(irodsPath, "", openMode)
+		handle, err := file.fs.fsClient.OpenFile(irodsPath, "", openMode)
 		if err != nil {
-			if irodsapi.IsFileNotFoundError(err) {
+			if irodsclient_types.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
 				return nil, syscall.ENOENT
 			}
@@ -378,45 +365,11 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 			return nil, syscall.EREMOTEIO
 		}
 
-		handleMutex := &sync.Mutex{}
-
-		if file.fs.monitoringReporter != nil {
-			file.fs.monitoringReporter.ReportNewFileTransferStart(file.entry.IRODSEntry.Path, handle, file.entry.IRODSEntry.Size)
+		if file.fs.instanceReportClient != nil {
+			file.fs.instanceReportClient.StartFileAccess(handle)
 		}
 
-		var reader io.Reader
-		var writer io.Writer
-		if req.Flags.IsWriteOnly() {
-			reader = io.NewNilReader(irodsPath, handle)
-
-			if len(file.fs.config.PoolHost) == 0 {
-				// if there's no pool server configured, use async-buffered write
-				asyncWriter := io.NewAsyncWriter(irodsPath, handle, handleMutex, file.fs.buffer, file.fs.monitoringReporter)
-				writer = io.NewBufferedWriter(irodsPath, asyncWriter)
-			} else {
-				// if there's pool server configured, use sync-buffered write
-				syncWriter := io.NewSyncWriter(irodsPath, handle, handleMutex, file.fs.monitoringReporter)
-				writer = io.NewBufferedWriter(irodsPath, syncWriter)
-			}
-		} else if req.Flags.IsReadOnly() {
-			reader = io.NewSyncReader(irodsPath, handle, handleMutex, file.fs.monitoringReporter)
-			writer = io.NewNilWriter(irodsPath, handle)
-		} else {
-			reader = io.NewSyncReader(irodsPath, handle, handleMutex, file.fs.monitoringReporter)
-			writer = io.NewSyncWriter(irodsPath, handle, handleMutex, file.fs.monitoringReporter)
-		}
-
-		fileHandle := &FileHandle{
-			fs:          file.fs,
-			path:        file.path,
-			entry:       file.entry,
-			irodsEntry:  file.entry.IRODSEntry,
-			irodsHandle: handle,
-			mutex:       handleMutex,
-
-			reader: reader,
-			writer: writer,
-		}
+		fileHandle := NewFileHandle(file, handle)
 
 		// add to file handle map
 		file.fs.fileHandleMap.Add(fileHandle)

@@ -5,8 +5,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/cyverse/irodsfs/pkg/utils"
-	"github.com/cyverse/irodsfs/pkg/vfs"
+	irodsfscommon_utils "github.com/cyverse/irodsfs-common/utils"
+
+	"github.com/cyverse/irodsfs/utils"
+	"github.com/cyverse/irodsfs/vfs"
 	"github.com/rs/xid"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -54,9 +56,9 @@ func GetDefaultLogFilePath() string {
 
 // MetadataCacheTimeoutSetting defines cache timeout for path
 type MetadataCacheTimeoutSetting struct {
-	Path    string   `yaml:"path"`
-	Timeout Duration `yaml:"timeout"`
-	Inherit bool     `yaml:"inherit,omitempty"`
+	Path    string                       `yaml:"path"`
+	Timeout irodsfscommon_utils.Duration `yaml:"timeout"`
+	Inherit bool                         `yaml:"inherit,omitempty"`
 }
 
 // Config holds the parameters list which can be configured
@@ -85,12 +87,12 @@ type Config struct {
 	HashRounds          int    `yaml:"ssl_encryption_hash_rounds"`
 
 	ReadAheadMax                          int                           `yaml:"read_ahead_max"`
-	OperationTimeout                      Duration                      `yaml:"operation_timeout"`
-	ConnectionLifespan                    Duration                      `yaml:"connection_lifespan"`
-	ConnectionIdleTimeout                 Duration                      `yaml:"connection_idle_timeout"`
+	OperationTimeout                      irodsfscommon_utils.Duration  `yaml:"operation_timeout"`
+	ConnectionLifespan                    irodsfscommon_utils.Duration  `yaml:"connection_lifespan"`
+	ConnectionIdleTimeout                 irodsfscommon_utils.Duration  `yaml:"connection_idle_timeout"`
 	ConnectionMax                         int                           `yaml:"connection_max"`
-	MetadataCacheTimeout                  Duration                      `yaml:"metadata_cache_timeout"`
-	MetadataCacheCleanupTime              Duration                      `yaml:"metadata_cache_cleanup_time"`
+	MetadataCacheTimeout                  irodsfscommon_utils.Duration  `yaml:"metadata_cache_timeout"`
+	MetadataCacheCleanupTime              irodsfscommon_utils.Duration  `yaml:"metadata_cache_cleanup_time"`
 	MetadataCacheTimeoutSettings          []MetadataCacheTimeoutSetting `yaml:"metadata_cache_timeout_settings"`
 	BufferSizeMax                         int64                         `yaml:"buffer_size_max"`
 	StartNewTransaction                   bool                          `yaml:"start_new_transaction"`
@@ -131,12 +133,12 @@ func NewDefaultConfig() *Config {
 		HashRounds:          HashRoundsDefault,
 
 		ReadAheadMax:                          ReadAheadMaxDefault,
-		OperationTimeout:                      Duration(OperationTimeoutDefault),
-		ConnectionLifespan:                    Duration(ConnectionLifespanDefault),
-		ConnectionIdleTimeout:                 Duration(ConnectionIdleTimeoutDefault),
+		OperationTimeout:                      irodsfscommon_utils.Duration(OperationTimeoutDefault),
+		ConnectionLifespan:                    irodsfscommon_utils.Duration(ConnectionLifespanDefault),
+		ConnectionIdleTimeout:                 irodsfscommon_utils.Duration(ConnectionIdleTimeoutDefault),
 		ConnectionMax:                         ConnectionMaxDefault,
-		MetadataCacheTimeout:                  Duration(MetadataCacheTimeoutDefault),
-		MetadataCacheCleanupTime:              Duration(MetadataCacheCleanupTimeDefault),
+		MetadataCacheTimeout:                  irodsfscommon_utils.Duration(MetadataCacheTimeoutDefault),
+		MetadataCacheCleanupTime:              irodsfscommon_utils.Duration(MetadataCacheCleanupTimeDefault),
 		MetadataCacheTimeoutSettings:          []MetadataCacheTimeoutSetting{},
 		BufferSizeMax:                         BufferSizeMaxDefault,
 		StartNewTransaction:                   true,
@@ -178,12 +180,12 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		HashRounds:          HashRoundsDefault,
 
 		ReadAheadMax:                          ReadAheadMaxDefault,
-		OperationTimeout:                      Duration(OperationTimeoutDefault),
-		ConnectionLifespan:                    Duration(ConnectionLifespanDefault),
-		ConnectionIdleTimeout:                 Duration(ConnectionIdleTimeoutDefault),
+		OperationTimeout:                      irodsfscommon_utils.Duration(OperationTimeoutDefault),
+		ConnectionLifespan:                    irodsfscommon_utils.Duration(ConnectionLifespanDefault),
+		ConnectionIdleTimeout:                 irodsfscommon_utils.Duration(ConnectionIdleTimeoutDefault),
 		ConnectionMax:                         ConnectionMaxDefault,
-		MetadataCacheTimeout:                  Duration(MetadataCacheTimeoutDefault),
-		MetadataCacheCleanupTime:              Duration(MetadataCacheCleanupTimeDefault),
+		MetadataCacheTimeout:                  irodsfscommon_utils.Duration(MetadataCacheTimeoutDefault),
+		MetadataCacheCleanupTime:              irodsfscommon_utils.Duration(MetadataCacheCleanupTimeDefault),
 		MetadataCacheTimeoutSettings:          []MetadataCacheTimeoutSetting{},
 		BufferSizeMax:                         BufferSizeMaxDefault,
 		StartNewTransaction:                   true,

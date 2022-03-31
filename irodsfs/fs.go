@@ -3,7 +3,6 @@ package irodsfs
 import (
 	"fmt"
 	"os"
-	"runtime/debug"
 	"syscall"
 	"time"
 
@@ -11,11 +10,15 @@ import (
 	fusefs "bazil.org/fuse/fs"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
-	"github.com/cyverse/irodsfs/pkg/commons"
-	"github.com/cyverse/irodsfs/pkg/io"
-	"github.com/cyverse/irodsfs/pkg/irodsapi"
-	"github.com/cyverse/irodsfs/pkg/report"
-	"github.com/cyverse/irodsfs/pkg/vfs"
+	irodsfscommon_io "github.com/cyverse/irodsfs-common/io"
+	irodsfscommon_irods "github.com/cyverse/irodsfs-common/irods"
+	irodsfscommon_report "github.com/cyverse/irodsfs-common/report"
+	irodsfscommon_utils "github.com/cyverse/irodsfs-common/utils"
+	monitor_types "github.com/cyverse/irodsfs-monitor/types"
+	irodspoolclient "github.com/cyverse/irodsfs-pool/client"
+
+	"github.com/cyverse/irodsfs/commons"
+	"github.com/cyverse/irodsfs/vfs"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -49,15 +52,16 @@ type IRODSFS struct {
 	fuse            *fusefs.Server
 	vfs             *vfs.VFS
 	fileMetaUpdater *FileMetaUpdater
-	irodsClient     irodsapi.IRODSClient
+	fsClient        irodsfscommon_irods.IRODSFSClient
 	fileHandleMap   *FileHandleMap
-	buffer          io.Buffer
-	userGroupsMap   map[string]*irodsapi.IRODSUser
+	buffer          irodsfscommon_io.Buffer
+	userGroupsMap   map[string]*irodsclient_types.IRODSUser
 
 	uid uint32
 	gid uint32
 
-	monitoringReporter *report.MonitoringReporter
+	reportClient         irodsfscommon_report.IRODSFSReportClient
+	instanceReportClient irodsfscommon_report.IRODSFSInstanceReportClient
 
 	terminated bool
 	killFUSE   bool
@@ -72,12 +76,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		"function": "NewFileSystem",
 	})
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
-			logger.Panic(r)
-		}
-	}()
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
 	account, err := irodsclient_types.CreateIRODSProxyAccount(config.Host, config.Port,
 		config.ClientUser, config.Zone, config.ProxyUser, config.Zone,
@@ -87,7 +86,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		return nil, fmt.Errorf("failed to create IRODS Account - %v", err)
 	}
 
-	if config.AuthScheme == commons.AuthSchemePAM {
+	if irodsclient_types.AuthScheme(config.AuthScheme) == irodsclient_types.AuthSchemePAM {
 		sslConfig, err := irodsclient_types.CreateIRODSSSLConfig(config.CACertificateFile, config.EncryptionKeySize,
 			config.EncryptionAlgorithm, config.SaltSize, config.HashRounds)
 		if err != nil {
@@ -110,7 +109,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		}
 	}
 
-	fsconfig := irodsclient_fs.NewFileSystemConfig(
+	fsConfig := irodsclient_fs.NewFileSystemConfig(
 		FSName,
 		time.Duration(config.ConnectionLifespan),
 		time.Duration(config.OperationTimeout), time.Duration(config.ConnectionIdleTimeout),
@@ -121,28 +120,28 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		config.InvalidateParentEntryCacheImmediately,
 	)
 
-	logger.Info("Initializing a client driver")
-	var irodsClient irodsapi.IRODSClient = nil
+	logger.Info("Initializing an iRODS file system client")
+	var fsClient irodsfscommon_irods.IRODSFSClient = nil
 	if len(config.PoolHost) > 0 {
 		// use pool driver
-		logger.Info("Initializing irodsfs-pool driver")
-		irodsClient, err = irodsapi.NewPoolClientDriver(config.PoolHost, config.PoolPort, account, fsconfig, config.InstanceID)
+		logger.Info("Initializing irodsfs-pool fs client")
+		fsClient, err = irodspoolclient.NewIRODSFSClientPool(config.PoolHost, config.PoolPort, account, fsConfig, config.InstanceID)
 		if err != nil {
-			logger.WithError(err).Error("failed to create a new iRODS Pool Client")
-			return nil, fmt.Errorf("failed to create a new iRODS Pool Client - %v", err)
+			logger.WithError(err).Error("failed to create a new irodsfs-pool fs client")
+			return nil, fmt.Errorf("failed to create a new irodsfs-pool fs client - %v", err)
 		}
 	} else {
 		// use go-irodsclient driver
-		logger.Info("Initializing go-irodsclient driver")
-		irodsClient, err = irodsapi.NewGoIRODSClientDriver(account, fsconfig)
+		logger.Info("Initializing an iRODS native file system client")
+		fsClient, err = irodsfscommon_irods.NewIRODSFSClientDirect(account, fsConfig)
 		if err != nil {
-			logger.WithError(err).Error("failed to create a new iRODS Client")
-			return nil, fmt.Errorf("failed to create a new iRODS Client - %v", err)
+			logger.WithError(err).Error("failed to create a new go-irodsclient fs client")
+			return nil, fmt.Errorf("failed to create a new go-irodsclient fs client - %v", err)
 		}
 	}
 
 	logger.Info("Initializing VFS")
-	vfs, err := vfs.NewVFS(irodsClient, config.PathMappings)
+	vfs, err := vfs.NewVFS(fsClient, config.PathMappings)
 	if err != nil {
 		logger.WithError(err).Error("failed to create VFS")
 		return nil, fmt.Errorf("failed to create VFS - %v", err)
@@ -154,22 +153,55 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	logger.Info("Initializing File Handle Map")
 	fileHandleMap := NewFileHandleMap()
 
-	var ramBuffer io.Buffer
+	var ramBuffer irodsfscommon_io.Buffer
 	if len(config.PoolHost) == 0 && config.BufferSizeMax > 0 {
 		logger.Infof("Initializing RAMBuffer, bufferSize %d", config.BufferSizeMax)
-		ramBuffer = io.NewRAMBuffer(config.BufferSizeMax)
+		ramBuffer = irodsfscommon_io.NewRAMBuffer(config.BufferSizeMax)
 	}
 
-	logger.Info("Initializing Monitoring Reporter")
-	reporter := report.NewMonitoringReporter(config.MonitorURL, true)
+	var reportClient irodsfscommon_report.IRODSFSReportClient
+	var instanceReportClient irodsfscommon_report.IRODSFSInstanceReportClient
+	if len(config.MonitorURL) > 0 {
+		logger.Info("Initializing Monitoring Reporter")
+		reportClient = irodsfscommon_report.NewIRODSFSRestReporter(config.MonitorURL, true, 100, 10)
 
-	userGroups, err := irodsClient.ListUserGroups(account.ClientUser)
+		instanceInfo := &monitor_types.ReportInstance{
+			Host:                     config.Host,
+			Port:                     config.Port,
+			Zone:                     config.Zone,
+			ClientUser:               config.ClientUser,
+			ProxyUser:                config.ProxyUser,
+			AuthScheme:               config.AuthScheme,
+			ReadAheadMax:             config.ReadAheadMax,
+			OperationTimeout:         time.Duration(config.OperationTimeout).String(),
+			ConnectionIdleTimeout:    time.Duration(config.ConnectionIdleTimeout).String(),
+			ConnectionMax:            config.ConnectionMax,
+			MetadataCacheTimeout:     time.Duration(config.MetadataCacheTimeout).String(),
+			MetadataCacheCleanupTime: time.Duration(config.MetadataCacheCleanupTime).String(),
+			BufferSizeMax:            config.BufferSizeMax,
+
+			PoolHost: config.PoolHost,
+			PoolPort: config.PoolPort,
+
+			InstanceID: config.InstanceID,
+
+			CreationTime: time.Now().UTC(),
+		}
+
+		instanceReportClient, err = reportClient.StartInstance(instanceInfo)
+		if err != nil {
+			logger.WithError(err).Errorf("failed to report the instance to monitoring service")
+			// keep going.
+		}
+	}
+
+	userGroups, err := fsClient.ListUserGroups(account.ClientUser)
 	if err != nil {
 		logger.WithError(err).Errorf("failed to list groups for a user - %s", account.ClientUser)
 		return nil, fmt.Errorf("failed to list groups for a user - %s", account.ClientUser)
 	}
 
-	userGroupsMap := map[string]*irodsapi.IRODSUser{}
+	userGroupsMap := map[string]*irodsclient_types.IRODSUser{}
 	for _, userGroup := range userGroups {
 		userGroupsMap[userGroup.Name] = userGroup
 	}
@@ -179,7 +211,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		fuse:            nil,
 		vfs:             vfs,
 		fileMetaUpdater: fileMetaUpdater,
-		irodsClient:     irodsClient,
+		fsClient:        fsClient,
 		fileHandleMap:   fileHandleMap,
 		buffer:          ramBuffer,
 		userGroupsMap:   userGroupsMap,
@@ -187,8 +219,9 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		uid: uint32(config.UID),
 		gid: uint32(config.GID),
 
-		monitoringReporter: reporter,
-		terminated:         false,
+		reportClient:         reportClient,
+		instanceReportClient: instanceReportClient,
+		terminated:           false,
 
 		operationIDCurrent: 0,
 	}, nil
@@ -202,12 +235,7 @@ func (fs *IRODSFS) ConnectToFuse() error {
 		"function": "ConnectToFuse",
 	})
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
-			logger.Panic(r)
-		}
-	}()
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
 	logger.Infof("Connecting to FUSE, mount on %s", fs.config.MountPath)
 
@@ -218,14 +246,6 @@ func (fs *IRODSFS) ConnectToFuse() error {
 	}
 
 	fs.fuseConnection = fuseConn
-
-	// register a new client
-	if fs.monitoringReporter != nil {
-		err = fs.monitoringReporter.ReportNewInstance(fs.config)
-		if err != nil {
-			return err
-		}
-	}
 
 	logger.Infof("Connected to FUSE, mount on %s", fs.config.MountPath)
 	return nil
@@ -239,12 +259,7 @@ func (fs *IRODSFS) StartFuse() error {
 		"function": "StartFuse",
 	})
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
-			logger.Panic(r)
-		}
-	}()
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
 	if fs.fuseConnection == nil {
 		logger.Error("failed to start FUSE server without connection")
@@ -305,9 +320,14 @@ func (fs *IRODSFS) Destroy() {
 
 	logger.Info("Destroying FileSystem")
 
-	if fs.monitoringReporter != nil {
-		fs.monitoringReporter.ReportInstanceTermination()
-		fs.monitoringReporter = nil
+	if fs.instanceReportClient != nil {
+		fs.instanceReportClient.Terminate()
+		fs.instanceReportClient = nil
+	}
+
+	if fs.reportClient != nil {
+		fs.reportClient.Release()
+		fs.reportClient = nil
 	}
 
 	if fs.fileHandleMap != nil {
@@ -316,9 +336,9 @@ func (fs *IRODSFS) Destroy() {
 	}
 
 	logger.Info("> Releasing resources")
-	if fs.irodsClient != nil {
-		fs.irodsClient.Release()
-		fs.irodsClient = nil
+	if fs.fsClient != nil {
+		fs.fsClient.Release()
+		fs.fsClient = nil
 	}
 
 	if fs.buffer != nil {
@@ -351,12 +371,7 @@ func (fs *IRODSFS) Root() (fusefs.Node, error) {
 		"function": "Root",
 	})
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
-			logger.Panic(r)
-		}
-	}()
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
 	vfsEntry := fs.vfs.GetEntry("/")
 	if vfsEntry == nil {
@@ -365,22 +380,14 @@ func (fs *IRODSFS) Root() (fusefs.Node, error) {
 	}
 
 	if vfsEntry.Type == vfs.VFSVirtualDirEntryType {
-		return &Dir{
-			fs:      fs,
-			inodeID: vfsEntry.VirtualDirEntry.ID,
-			path:    "/",
-		}, nil
+		return NewDir(fs, vfsEntry.VirtualDirEntry.ID, "/"), nil
 	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
-		if vfsEntry.IRODSEntry.Type != irodsapi.DirectoryEntry {
+		if vfsEntry.IRODSEntry.Type != irodsclient_fs.DirectoryEntry {
 			logger.Errorf("failed to mount a data object as a root")
 			return nil, syscall.EREMOTEIO
 		}
 
-		return &Dir{
-			fs:      fs,
-			inodeID: vfsEntry.IRODSEntry.ID,
-			path:    "/",
-		}, nil
+		return NewDir(fs, vfsEntry.IRODSEntry.ID, "/"), nil
 	} else {
 		logger.Errorf("unknown VFS Entry type : %s", vfsEntry.Type)
 		return nil, syscall.EREMOTEIO

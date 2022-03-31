@@ -10,12 +10,14 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"runtime/debug"
 	"strings"
 	"syscall"
 
-	"github.com/cyverse/irodsfs/pkg/commons"
-	"github.com/cyverse/irodsfs/pkg/irodsfs"
+	"github.com/cyverse/irodsfs/commons"
+	"github.com/cyverse/irodsfs/irodsfs"
+
+	irodsfscommon_utils "github.com/cyverse/irodsfs-common/utils"
+
 	"github.com/pkg/profile"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -75,12 +77,7 @@ func parentRun(irodsfsExec string, config *commons.Config) error {
 		"function": "parentRun",
 	})
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
-			logger.Panic(r)
-		}
-	}()
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
 	err := config.Validate()
 	if err != nil {
@@ -183,12 +180,7 @@ func parentMain() {
 		"function": "parentMain",
 	})
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
-			logger.Panic(r)
-		}
-	}()
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
 	// parse argument
 	config, logWriter, exit, err := processArguments()
@@ -239,12 +231,7 @@ func childMain() {
 		"function": "childMain",
 	})
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
-			logger.Panic(r)
-		}
-	}()
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
 	// output to default log file for child process
 	childLogWriter := getLogWriter(commons.LogFilePathChildDefault)
@@ -314,12 +301,7 @@ func run(config *commons.Config, isChildProcess bool) error {
 		"function": "run",
 	})
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
-			logger.Panic(r)
-		}
-	}()
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
 	// profile
 	if config.Profile {

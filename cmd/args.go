@@ -15,8 +15,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cyverse/irodsfs/pkg/commons"
-	"github.com/cyverse/irodsfs/pkg/vfs"
+	irodsfscommon_utils "github.com/cyverse/irodsfs-common/utils"
+
+	"github.com/cyverse/irodsfs/commons"
+	"github.com/cyverse/irodsfs/vfs"
 	"golang.org/x/term"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gopkg.in/yaml.v2"
@@ -366,7 +368,7 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 			return nil, logWriter, true, err
 		}
 
-		config.OperationTimeout = commons.Duration(timeout)
+		config.OperationTimeout = irodsfscommon_utils.Duration(timeout)
 	}
 
 	if len(connectionIdleTimeout) > 0 {
@@ -376,7 +378,7 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 			return nil, logWriter, true, err
 		}
 
-		config.ConnectionIdleTimeout = commons.Duration(timeout)
+		config.ConnectionIdleTimeout = irodsfscommon_utils.Duration(timeout)
 	}
 
 	if len(metadataCacheTimeout) > 0 {
@@ -386,7 +388,7 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 			return nil, logWriter, true, err
 		}
 
-		config.MetadataCacheTimeout = commons.Duration(timeout)
+		config.MetadataCacheTimeout = irodsfscommon_utils.Duration(timeout)
 	}
 
 	if len(metadataCacheCleanupTime) > 0 {
@@ -396,7 +398,7 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 			return nil, logWriter, true, err
 		}
 
-		config.MetadataCacheCleanupTime = commons.Duration(timeout)
+		config.MetadataCacheCleanupTime = irodsfscommon_utils.Duration(timeout)
 	}
 
 	err := config.CorrectSystemUser()

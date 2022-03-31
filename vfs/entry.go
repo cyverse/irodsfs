@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cyverse/irodsfs/pkg/irodsapi"
-	"github.com/cyverse/irodsfs/pkg/utils"
+	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsfscommon_utils "github.com/cyverse/irodsfs-common/utils"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -41,11 +41,11 @@ type VFSEntry struct {
 
 	// Only one of fields below is filled according to the Type
 	VirtualDirEntry *VFSVirtualDirEntry
-	IRODSEntry      *irodsapi.IRODSEntry
+	IRODSEntry      *irodsclient_fs.Entry
 }
 
 // NewVFSEntryFromIRODSFSEntry creates a new VFSEntry from IRODSEntry
-func NewVFSEntryFromIRODSFSEntry(path string, irodsEntry *irodsapi.IRODSEntry, readonly bool) *VFSEntry {
+func NewVFSEntryFromIRODSFSEntry(path string, irodsEntry *irodsclient_fs.Entry, readonly bool) *VFSEntry {
 	return &VFSEntry{
 		Type:            VFSIRODSEntryType,
 		Path:            path,
@@ -74,7 +74,7 @@ func (entry *VFSEntry) GetIRODSPath(vpath string) (string, error) {
 		return "", err
 	}
 
-	relPath, err := utils.GetRelativePath(entry.Path, vpath)
+	relPath, err := irodsfscommon_utils.GetRelativePath(entry.Path, vpath)
 	if err != nil {
 		logger.WithError(err).Errorf("failed to compute relative path")
 		return "", err
@@ -89,5 +89,5 @@ func (entry *VFSEntry) GetIRODSPath(vpath string) (string, error) {
 		return entry.IRODSEntry.Path, nil
 	}
 
-	return utils.JoinPath(entry.IRODSEntry.Path, relPath), nil
+	return irodsfscommon_utils.JoinPath(entry.IRODSEntry.Path, relPath), nil
 }

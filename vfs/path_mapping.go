@@ -3,7 +3,7 @@ package vfs
 import (
 	"fmt"
 
-	"github.com/cyverse/irodsfs/pkg/utils"
+	irodsfscommon_utils "github.com/cyverse/irodsfs-common/utils"
 )
 
 // PathMappingResourceType determines the type of Path Mapping Entry
@@ -28,11 +28,11 @@ type PathMapping struct {
 
 // Validate validates PathMapping
 func (mapping *PathMapping) Validate() error {
-	if !utils.IsAbsolutePath(mapping.IRODSPath) {
+	if !irodsfscommon_utils.IsAbsolutePath(mapping.IRODSPath) {
 		return fmt.Errorf("IRODSPath given (%s) is not absolute path", mapping.IRODSPath)
 	}
 
-	if !utils.IsAbsolutePath(mapping.MappingPath) {
+	if !irodsfscommon_utils.IsAbsolutePath(mapping.MappingPath) {
 		return fmt.Errorf("MappingPath given (%s) is not absolute path", mapping.MappingPath)
 	}
 

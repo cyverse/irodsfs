@@ -4,16 +4,16 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"runtime/debug"
 	"sync"
 	"syscall"
 
 	fuse "bazil.org/fuse"
 	fusefs "bazil.org/fuse/fs"
-	"github.com/cyverse/irodsfs/pkg/io"
-	"github.com/cyverse/irodsfs/pkg/irodsapi"
-	"github.com/cyverse/irodsfs/pkg/utils"
-	"github.com/cyverse/irodsfs/pkg/vfs"
+	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
+	irodsfscommon_utils "github.com/cyverse/irodsfs-common/utils"
+
+	"github.com/cyverse/irodsfs/vfs"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -25,18 +25,23 @@ type Dir struct {
 	mutex   sync.RWMutex // for accessing Path
 }
 
-func mapDirACL(vfsEntry *vfs.VFSEntry, dir *Dir, irodsEntry *irodsapi.IRODSEntry) os.FileMode {
+// NewDir creates a new Dir
+func NewDir(fs *IRODSFS, inodeID int64, path string) *Dir {
+	return &Dir{
+		fs:      fs,
+		inodeID: inodeID,
+		path:    path,
+		mutex:   sync.RWMutex{},
+	}
+}
+
+func mapDirACL(vfsEntry *vfs.VFSEntry, dir *Dir, irodsEntry *irodsclient_fs.Entry) os.FileMode {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"function": "mapDirACL",
 	})
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
-			logger.Panic(r)
-		}
-	}()
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
 	// we don't actually check permissions for reading file when vfsEntry is read only
 	// because files with no-access for the user will not be visible
@@ -52,46 +57,46 @@ func mapDirACL(vfsEntry *vfs.VFSEntry, dir *Dir, irodsEntry *irodsapi.IRODSEntry
 	logger.Infof("Checking ACL information of the Entry for %s and user %s", irodsEntry.Path, dir.fs.config.ClientUser)
 	defer logger.Infof("Checked ACL information of the Entry for %s and user %s", irodsEntry.Path, dir.fs.config.ClientUser)
 
-	accesses, err := dir.fs.irodsClient.ListDirACLs(irodsEntry.Path)
+	accesses, err := dir.fs.fsClient.ListDirACLs(irodsEntry.Path)
 	if err != nil {
 		logger.Errorf("failed to get ACL information of the Entry for %s", irodsEntry.Path)
 	}
 
 	var highestPermission os.FileMode = 0o400
 	for _, access := range accesses {
-		if access.UserType == irodsapi.IRODSUserRodsUser && access.UserName == dir.fs.config.ClientUser {
+		if access.UserType == irodsclient_types.IRODSUserRodsUser && access.UserName == dir.fs.config.ClientUser {
 			// found
 			switch access.AccessLevel {
-			case irodsapi.IRODSAccessLevelOwner:
+			case irodsclient_types.IRODSAccessLevelOwner:
 				// highest, don't need to continue
 				return 0o700
-			case irodsapi.IRODSAccessLevelWrite:
+			case irodsclient_types.IRODSAccessLevelWrite:
 				if highestPermission < 0o600 {
 					highestPermission = 0o600
 				}
-			case irodsapi.IRODSAccessLevelRead:
+			case irodsclient_types.IRODSAccessLevelRead:
 				if highestPermission < 0o400 {
 					highestPermission = 0o400
 				}
-			case irodsapi.IRODSAccessLevelNone:
+			case irodsclient_types.IRODSAccessLevelNone:
 				// nothing
 			}
-		} else if access.UserType == irodsapi.IRODSUserRodsGroup {
+		} else if access.UserType == irodsclient_types.IRODSUserRodsGroup {
 			if _, ok := dir.fs.userGroupsMap[access.UserName]; ok {
 				// my group
 				switch access.AccessLevel {
-				case irodsapi.IRODSAccessLevelOwner:
+				case irodsclient_types.IRODSAccessLevelOwner:
 					// highest, don't need to continue
 					return 0o700
-				case irodsapi.IRODSAccessLevelWrite:
+				case irodsclient_types.IRODSAccessLevelWrite:
 					if highestPermission < 0o600 {
 						highestPermission = 0o600
 					}
-				case irodsapi.IRODSAccessLevelRead:
+				case irodsclient_types.IRODSAccessLevelRead:
 					if highestPermission < 0o400 {
 						highestPermission = 0o400
 					}
-				case irodsapi.IRODSAccessLevelNone:
+				case irodsclient_types.IRODSAccessLevelNone:
 					// nothing
 				}
 			}
@@ -114,12 +119,7 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 		"function": "Attr",
 	})
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
-			logger.Panic(r)
-		}
-	}()
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
 	// apply pending update if exists
 	dir.fs.fileMetaUpdater.Apply(dir)
@@ -152,7 +152,7 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 		}
 		return syscall.ENOENT
 	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
-		if vfsEntry.IRODSEntry.Type != irodsapi.DirectoryEntry {
+		if vfsEntry.IRODSEntry.Type != irodsclient_fs.DirectoryEntry {
 			logger.Errorf("failed to get dir attribute from a data object")
 			return syscall.EREMOTEIO
 		}
@@ -163,9 +163,9 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 			return syscall.EREMOTEIO
 		}
 
-		irodsEntry, err := dir.fs.irodsClient.Stat(irodsPath)
+		irodsEntry, err := dir.fs.fsClient.Stat(irodsPath)
 		if err != nil {
-			if irodsapi.IsFileNotFoundError(err) {
+			if irodsclient_types.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
 				return syscall.ENOENT
 			}
@@ -201,12 +201,7 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 		"function": "Lookup",
 	})
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
-			logger.Panic(r)
-		}
-	}()
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
 	// apply pending update if exists
 	dir.fs.fileMetaUpdater.Apply(dir)
@@ -214,7 +209,7 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 	dir.mutex.RLock()
 	defer dir.mutex.RUnlock()
 
-	targetPath := utils.JoinPath(dir.path, name)
+	targetPath := irodsfscommon_utils.JoinPath(dir.path, name)
 
 	operID := dir.fs.GetNextOperationID()
 	logger.Infof("Calling Lookup (%d) - %s", operID, targetPath)
@@ -242,9 +237,9 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 			return nil, syscall.EREMOTEIO
 		}
 
-		irodsEntry, err := dir.fs.irodsClient.Stat(irodsPath)
+		irodsEntry, err := dir.fs.fsClient.Stat(irodsPath)
 		if err != nil {
-			if irodsapi.IsFileNotFoundError(err) {
+			if irodsclient_types.IsFileNotFoundError(err) {
 				logger.WithError(err).Debugf("failed to find a file - %s", irodsPath)
 				return nil, syscall.ENOENT
 			}
@@ -254,19 +249,11 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 		}
 
 		switch irodsEntry.Type {
-		case irodsapi.FileEntry:
-			return &File{
-				fs:      dir.fs,
-				inodeID: irodsEntry.ID,
-				path:    targetPath,
-				entry:   vfs.NewVFSEntryFromIRODSFSEntry(targetPath, irodsEntry, vfsEntry.ReadOnly),
-			}, nil
-		case irodsapi.DirectoryEntry:
-			return &Dir{
-				fs:      dir.fs,
-				inodeID: irodsEntry.ID,
-				path:    targetPath,
-			}, nil
+		case irodsclient_fs.FileEntry:
+			newVFSEntry := vfs.NewVFSEntryFromIRODSFSEntry(targetPath, irodsEntry, vfsEntry.ReadOnly)
+			return NewFile(dir.fs, irodsEntry.ID, targetPath, newVFSEntry), nil
+		case irodsclient_fs.DirectoryEntry:
+			return NewDir(dir.fs, irodsEntry.ID, targetPath), nil
 		default:
 			logger.Errorf("unknown entry type - %s", irodsEntry.Type)
 			return nil, syscall.EREMOTEIO
@@ -289,12 +276,7 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 		"function": "ReadDirAll",
 	})
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
-			logger.Panic(r)
-		}
-	}()
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
 	// apply pending update if exists
 	dir.fs.fileMetaUpdater.Apply(dir)
@@ -329,9 +311,9 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 					entryType := fuse.DT_File
 
 					switch entry.IRODSEntry.Type {
-					case irodsapi.FileEntry:
+					case irodsclient_fs.FileEntry:
 						entryType = fuse.DT_File
-					case irodsapi.DirectoryEntry:
+					case irodsclient_fs.DirectoryEntry:
 						entryType = fuse.DT_Dir
 					default:
 						logger.Errorf("unknown entry type - %s", entry.Type)
@@ -341,7 +323,7 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 					dirEntry := fuse.Dirent{
 						Inode: uint64(entry.IRODSEntry.ID),
 						Type:  entryType,
-						Name:  utils.GetFileName(entry.Path),
+						Name:  irodsfscommon_utils.GetFileName(entry.Path),
 					}
 
 					dirEntries = append(dirEntries, dirEntry)
@@ -361,7 +343,7 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 			return nil, syscall.EREMOTEIO
 		}
 
-		irodsEntries, err := dir.fs.irodsClient.List(irodsPath)
+		irodsEntries, err := dir.fs.fsClient.List(irodsPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to list - %s", irodsPath)
 			return nil, syscall.EREMOTEIO
@@ -373,9 +355,9 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 			entryType := fuse.DT_File
 
 			switch irodsEntry.Type {
-			case irodsapi.FileEntry:
+			case irodsclient_fs.FileEntry:
 				entryType = fuse.DT_File
-			case irodsapi.DirectoryEntry:
+			case irodsclient_fs.DirectoryEntry:
 				entryType = fuse.DT_Dir
 			default:
 				logger.Errorf("unknown entry type - %s", irodsEntry.Type)
@@ -411,12 +393,7 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 		"function": "Remove",
 	})
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
-			logger.Panic(r)
-		}
-	}()
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
 	// apply pending update if exists
 	dir.fs.fileMetaUpdater.Apply(dir)
@@ -424,7 +401,7 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 	dir.mutex.RLock()
 	defer dir.mutex.RUnlock()
 
-	targetPath := utils.JoinPath(dir.path, req.Name)
+	targetPath := irodsfscommon_utils.JoinPath(dir.path, req.Name)
 
 	operID := dir.fs.GetNextOperationID()
 	logger.Infof("Calling Remove (%d) - %s", operID, targetPath)
@@ -462,9 +439,9 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 			return syscall.EREMOTEIO
 		}
 
-		irodsEntry, err := dir.fs.irodsClient.Stat(irodsPath)
+		irodsEntry, err := dir.fs.fsClient.Stat(irodsPath)
 		if err != nil {
-			if irodsapi.IsFileNotFoundError(err) {
+			if irodsclient_types.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
 				return syscall.ENOENT
 			}
@@ -474,10 +451,10 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 		}
 
 		switch irodsEntry.Type {
-		case irodsapi.FileEntry:
-			err = dir.fs.irodsClient.RemoveFile(irodsPath, true)
+		case irodsclient_fs.FileEntry:
+			err = dir.fs.fsClient.RemoveFile(irodsPath, true)
 			if err != nil {
-				if irodsapi.IsFileNotFoundError(err) {
+				if irodsclient_types.IsFileNotFoundError(err) {
 					logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
 					return syscall.ENOENT
 				}
@@ -486,13 +463,13 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 				return syscall.EREMOTEIO
 			}
 			return nil
-		case irodsapi.DirectoryEntry:
-			err = dir.fs.irodsClient.RemoveDir(irodsPath, false, true)
+		case irodsclient_fs.DirectoryEntry:
+			err = dir.fs.fsClient.RemoveDir(irodsPath, false, true)
 			if err != nil {
-				if irodsapi.IsFileNotFoundError(err) {
+				if irodsclient_types.IsFileNotFoundError(err) {
 					logger.WithError(err).Errorf("failed to find a dir - %s", irodsPath)
 					return syscall.ENOENT
-				} else if irodsapi.IsCollectionNotEmptyError(err) {
+				} else if irodsclient_types.IsCollectionNotEmptyError(err) {
 					logger.WithError(err).Errorf("the dir is not empty - %s", irodsPath)
 					return syscall.ENOTEMPTY
 				}
@@ -523,12 +500,7 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 		"function": "Mkdir",
 	})
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
-			logger.Panic(r)
-		}
-	}()
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
 	// apply pending update if exists
 	dir.fs.fileMetaUpdater.Apply(dir)
@@ -536,7 +508,7 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 	dir.mutex.RLock()
 	defer dir.mutex.RUnlock()
 
-	targetPath := utils.JoinPath(dir.path, req.Name)
+	targetPath := irodsfscommon_utils.JoinPath(dir.path, req.Name)
 
 	operID := dir.fs.GetNextOperationID()
 	logger.Infof("Calling Mkdir (%d) - %s", operID, targetPath)
@@ -573,13 +545,13 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 			return nil, syscall.EREMOTEIO
 		}
 
-		err = dir.fs.irodsClient.MakeDir(irodsPath, false)
+		err = dir.fs.fsClient.MakeDir(irodsPath, false)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to make a dir - %s", irodsPath)
 			return nil, syscall.EREMOTEIO
 		}
 
-		entry, err := dir.fs.irodsClient.Stat(irodsPath)
+		entry, err := dir.fs.fsClient.Stat(irodsPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to stat - %s", irodsPath)
 			return nil, syscall.EREMOTEIO
@@ -608,12 +580,7 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 		"function": "Rename",
 	})
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
-			logger.Panic(r)
-		}
-	}()
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
 	// apply pending update if exists
 	dir.fs.fileMetaUpdater.Apply(dir)
@@ -621,14 +588,14 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 	dir.mutex.RLock()
 	defer dir.mutex.RUnlock()
 
-	targetSrcPath := utils.JoinPath(dir.path, req.OldName)
+	targetSrcPath := irodsfscommon_utils.JoinPath(dir.path, req.OldName)
 
 	newdir := newDir.(*Dir)
 
 	newdir.mutex.RLock()
 	defer newdir.mutex.RUnlock()
 
-	targetDestPath := utils.JoinPath(newdir.path, req.NewName)
+	targetDestPath := irodsfscommon_utils.JoinPath(newdir.path, req.NewName)
 
 	operID := dir.fs.GetNextOperationID()
 	logger.Infof("Calling Rename (%d) - %s to %s", operID, targetSrcPath, targetDestPath)
@@ -697,9 +664,9 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 			return syscall.EREMOTEIO
 		}
 
-		irodsEntry, err := dir.fs.irodsClient.Stat(irodsSrcPath)
+		irodsEntry, err := dir.fs.fsClient.Stat(irodsSrcPath)
 		if err != nil {
-			if irodsapi.IsFileNotFoundError(err) {
+			if irodsclient_types.IsFileNotFoundError(err) {
 				logger.WithError(err).Errorf("failed to find a file - %s", irodsSrcPath)
 				return syscall.ENOENT
 			}
@@ -709,7 +676,7 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 		}
 
 		switch irodsEntry.Type {
-		case irodsapi.DirectoryEntry:
+		case irodsclient_fs.DirectoryEntry:
 			// lock first
 			openFilePaths := dir.fs.fileHandleMap.ListPathsInDir(irodsSrcPath)
 			for _, openFilePath := range openFilePaths {
@@ -720,7 +687,7 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 				}
 			}
 
-			err = dir.fs.irodsClient.RenameDirToDir(irodsSrcPath, irodsDestPath)
+			err = dir.fs.fsClient.RenameDirToDir(irodsSrcPath, irodsDestPath)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to rename dir - %s to %s", irodsSrcPath, irodsDestPath)
 				return syscall.EREMOTEIO
@@ -731,10 +698,10 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 				dir.fs.fileMetaUpdater.Add(irodsEntry.ID, targetDestPath)
 			}
 			return nil
-		case irodsapi.FileEntry:
-			destEntry, err := dir.fs.irodsClient.Stat(irodsDestPath)
+		case irodsclient_fs.FileEntry:
+			destEntry, err := dir.fs.fsClient.Stat(irodsDestPath)
 			if err != nil {
-				if !irodsapi.IsFileNotFoundError(err) {
+				if !irodsclient_types.IsFileNotFoundError(err) {
 					logger.WithError(err).Errorf("failed to stat - %s", irodsDestPath)
 					return syscall.EREMOTEIO
 				}
@@ -742,7 +709,7 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 				// no error
 				if destEntry.ID > 0 {
 					// delete first
-					err = dir.fs.irodsClient.RemoveFile(irodsDestPath, true)
+					err = dir.fs.fsClient.RemoveFile(irodsDestPath, true)
 					if err != nil {
 						logger.WithError(err).Errorf("failed to delete file - %s", irodsDestPath)
 						return syscall.EREMOTEIO
@@ -757,7 +724,7 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 				defer handle.mutex.Unlock()
 			}
 
-			err = dir.fs.irodsClient.RenameFileToFile(irodsSrcPath, irodsDestPath)
+			err = dir.fs.fsClient.RenameFileToFile(irodsSrcPath, irodsDestPath)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to rename file - %s to %s", irodsSrcPath, irodsDestPath)
 				return syscall.EREMOTEIO
@@ -790,12 +757,7 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 		"function": "Create",
 	})
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Errorf("stacktrace from panic: %s", string(debug.Stack()))
-			logger.Panic(r)
-		}
-	}()
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
 	// apply pending update if exists
 	dir.fs.fileMetaUpdater.Apply(dir)
@@ -803,27 +765,27 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 	dir.mutex.RLock()
 	defer dir.mutex.RUnlock()
 
-	targetPath := utils.JoinPath(dir.path, req.Name)
+	targetPath := irodsfscommon_utils.JoinPath(dir.path, req.Name)
 
 	operID := dir.fs.GetNextOperationID()
 	logger.Infof("Calling Create (%d) - %s", operID, targetPath)
 	defer logger.Infof("Called Create (%d) - %s", operID, targetPath)
 
-	openMode := string(irodsapi.FileOpenModeReadOnly)
+	var openMode string
 
 	if req.Flags.IsWriteOnly() {
-		openMode = string(irodsapi.FileOpenModeWriteOnly)
+		openMode = string(irodsclient_types.FileOpenModeWriteOnly)
 
 		if req.Flags&fuse.OpenAppend == fuse.OpenAppend {
 			// append
-			openMode = string(irodsapi.FileOpenModeAppend)
+			openMode = string(irodsclient_types.FileOpenModeAppend)
 		} else if req.Flags&fuse.OpenTruncate == fuse.OpenTruncate {
 			// truncate
-			openMode = string(irodsapi.FileOpenModeWriteTruncate)
+			openMode = string(irodsclient_types.FileOpenModeWriteTruncate)
 		}
 		resp.Flags |= fuse.OpenDirectIO
 	} else if req.Flags.IsReadWrite() {
-		openMode = string(irodsapi.FileOpenModeReadWrite)
+		openMode = string(irodsclient_types.FileOpenModeReadWrite)
 	} else {
 		logger.Errorf("unknown file open mode - %s", req.Flags.String())
 		return nil, nil, syscall.EACCES
@@ -861,15 +823,15 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 			return nil, nil, syscall.EREMOTEIO
 		}
 
-		handle, err := dir.fs.irodsClient.CreateFile(irodsPath, "", openMode)
+		handle, err := dir.fs.fsClient.CreateFile(irodsPath, "", openMode)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to create a file - %s", irodsPath)
 			return nil, nil, syscall.EREMOTEIO
 		}
 
-		irodsEntry, err := dir.fs.irodsClient.Stat(irodsPath)
+		irodsEntry, err := dir.fs.fsClient.Stat(irodsPath)
 		if err != nil {
-			if irodsapi.IsFileNotFoundError(err) {
+			if irodsclient_types.IsFileNotFoundError(err) {
 				logger.WithError(err).Infof("failed to find a file - %s", irodsPath)
 				return nil, nil, syscall.EREMOTEIO
 			}
@@ -878,53 +840,14 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 			return nil, nil, syscall.EREMOTEIO
 		}
 
-		file := &File{
-			fs:      dir.fs,
-			inodeID: irodsEntry.ID,
-			path:    targetPath,
-			entry:   vfs.NewVFSEntryFromIRODSFSEntry(targetPath, irodsEntry, vfsEntry.ReadOnly),
+		newVFSEntry := vfs.NewVFSEntryFromIRODSFSEntry(targetPath, irodsEntry, vfsEntry.ReadOnly)
+		file := NewFile(dir.fs, irodsEntry.ID, targetPath, newVFSEntry)
+
+		if dir.fs.instanceReportClient != nil {
+			dir.fs.instanceReportClient.StartFileAccess(handle)
 		}
 
-		if file.fs.monitoringReporter != nil {
-			file.fs.monitoringReporter.ReportNewFileTransferStart(file.entry.IRODSEntry.Path, handle, file.entry.IRODSEntry.Size)
-		}
-
-		handleMutex := &sync.Mutex{}
-
-		var reader io.Reader
-		var writer io.Writer
-		if req.Flags.IsWriteOnly() {
-			reader = io.NewNilReader(irodsPath, handle)
-
-			if len(dir.fs.config.PoolHost) == 0 {
-				// if there's no pool server configured, use async-buffered write
-				asyncWriter := io.NewAsyncWriter(irodsPath, handle, handleMutex, dir.fs.buffer, dir.fs.monitoringReporter)
-				writer = io.NewBufferedWriter(irodsPath, asyncWriter)
-			} else {
-				// if there's pool server configured, use sync-buffered write
-				syncWriter := io.NewSyncWriter(irodsPath, handle, handleMutex, dir.fs.monitoringReporter)
-				writer = io.NewBufferedWriter(irodsPath, syncWriter)
-			}
-		} else if req.Flags.IsReadOnly() {
-			// this never happens
-			reader = io.NewNilReader(irodsPath, handle)
-			writer = io.NewNilWriter(irodsPath, handle)
-		} else {
-			reader = io.NewSyncReader(irodsPath, handle, handleMutex, dir.fs.monitoringReporter)
-			writer = io.NewSyncWriter(irodsPath, handle, handleMutex, dir.fs.monitoringReporter)
-		}
-
-		fileHandle := &FileHandle{
-			fs:          file.fs,
-			path:        file.path,
-			entry:       file.entry,
-			irodsEntry:  file.entry.IRODSEntry,
-			irodsHandle: handle,
-			mutex:       handleMutex,
-
-			reader: reader,
-			writer: writer,
-		}
+		fileHandle := NewFileHandle(file, handle)
 
 		// add to file handle map
 		dir.fs.fileHandleMap.Add(fileHandle)
