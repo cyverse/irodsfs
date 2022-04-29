@@ -46,7 +46,7 @@ func mapDirACL(vfsEntry *vfs.VFSEntry, dir *Dir, irodsEntry *irodsclient_fs.Entr
 	// we don't actually check permissions for reading file when vfsEntry is read only
 	// because files with no-access for the user will not be visible
 	if vfsEntry.ReadOnly {
-		return 0o400
+		return 0o500
 	}
 
 	if irodsEntry.Owner == dir.fs.config.ClientUser {
@@ -62,7 +62,7 @@ func mapDirACL(vfsEntry *vfs.VFSEntry, dir *Dir, irodsEntry *irodsclient_fs.Entr
 		logger.Errorf("failed to get ACL information of the Entry for %s", irodsEntry.Path)
 	}
 
-	var highestPermission os.FileMode = 0o400
+	var highestPermission os.FileMode = 0o500
 	for _, access := range accesses {
 		if access.UserType == irodsclient_types.IRODSUserRodsUser && access.UserName == dir.fs.config.ClientUser {
 			// found
@@ -71,12 +71,12 @@ func mapDirACL(vfsEntry *vfs.VFSEntry, dir *Dir, irodsEntry *irodsclient_fs.Entr
 				// highest, don't need to continue
 				return 0o700
 			case irodsclient_types.IRODSAccessLevelWrite:
-				if highestPermission < 0o600 {
-					highestPermission = 0o600
+				if highestPermission < 0o700 {
+					highestPermission = 0o700
 				}
 			case irodsclient_types.IRODSAccessLevelRead:
-				if highestPermission < 0o400 {
-					highestPermission = 0o400
+				if highestPermission < 0o500 {
+					highestPermission = 0o500
 				}
 			case irodsclient_types.IRODSAccessLevelNone:
 				// nothing
@@ -89,12 +89,12 @@ func mapDirACL(vfsEntry *vfs.VFSEntry, dir *Dir, irodsEntry *irodsclient_fs.Entr
 					// highest, don't need to continue
 					return 0o700
 				case irodsclient_types.IRODSAccessLevelWrite:
-					if highestPermission < 0o600 {
-						highestPermission = 0o600
+					if highestPermission < 0o700 {
+						highestPermission = 0o700
 					}
 				case irodsclient_types.IRODSAccessLevelRead:
-					if highestPermission < 0o400 {
-						highestPermission = 0o400
+					if highestPermission < 0o500 {
+						highestPermission = 0o500
 					}
 				case irodsclient_types.IRODSAccessLevelNone:
 					// nothing
