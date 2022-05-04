@@ -112,15 +112,13 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 		return nil
 	}
 
-	data, err := handle.reader.ReadAt(req.Offset, req.Size)
+	readLen, err := handle.reader.ReadAt(resp.Data[:req.Size], req.Offset)
 	if err != nil {
 		logger.WithError(err).Errorf("failed to read data for file %s, offset %d, length %d", handle.file.path, req.Offset, req.Size)
 		return syscall.EREMOTEIO
 	}
 
-	copiedLen := copy(resp.Data[:req.Size], data)
-	resp.Data = resp.Data[:copiedLen]
-
+	resp.Data = resp.Data[:readLen]
 	return nil
 }
 
@@ -160,13 +158,13 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 		return nil
 	}
 
-	err := handle.writer.WriteAt(req.Offset, req.Data)
+	writeLen, err := handle.writer.WriteAt(req.Data, req.Offset)
 	if err != nil {
 		logger.WithError(err).Errorf("failed to write data for file %s, offset %d, length %d", handle.file.path, req.Offset, len(req.Data))
 		return syscall.EREMOTEIO
 	}
 
-	resp.Size = len(req.Data)
+	resp.Size = writeLen
 	return nil
 }
 

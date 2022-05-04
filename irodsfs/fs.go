@@ -125,7 +125,15 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	if len(config.PoolHost) > 0 {
 		// use pool driver
 		logger.Info("Initializing irodsfs-pool fs client")
-		fsClient, err = irodspoolclient.NewIRODSFSClientPool(config.PoolHost, config.PoolPort, account, fsConfig, config.InstanceID)
+		poolHost := fmt.Sprintf("%s:%d", config.PoolHost, config.PoolPort)
+		poolClient := irodspoolclient.NewPoolServiceClient(poolHost, time.Duration(config.OperationTimeout), config.InstanceID)
+		err = poolClient.Connect()
+		if err != nil {
+			logger.WithError(err).Error("failed to connect to irodsfs-pool server %s", poolHost)
+			return nil, fmt.Errorf("failed to connect to irodsfs-pool server %s - %v", poolHost, err)
+		}
+
+		fsClient, err = poolClient.NewSession(account, FSName)
 		if err != nil {
 			logger.WithError(err).Error("failed to create a new irodsfs-pool fs client")
 			return nil, fmt.Errorf("failed to create a new irodsfs-pool fs client - %v", err)
