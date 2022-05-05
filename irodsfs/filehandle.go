@@ -261,10 +261,12 @@ func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest)
 	handle.fs.fileHandleMap.Remove(handle.fileHandle.GetID())
 
 	// Report
-	err = handle.fs.instanceReportClient.DoneFileAccess(handle.fileHandle)
-	if err != nil {
-		logger.WithError(err).Error("failed to report the file transfer to monitoring service")
-		return err
+	if handle.fs.instanceReportClient != nil {
+		err = handle.fs.instanceReportClient.DoneFileAccess(handle.fileHandle)
+		if err != nil {
+			logger.WithError(err).Error("failed to report the file transfer to monitoring service")
+			return err
+		}
 	}
 
 	return nil
