@@ -2,6 +2,7 @@ package irodsfs
 
 import (
 	"context"
+	"io"
 	"sync"
 	"syscall"
 
@@ -14,7 +15,7 @@ import (
 )
 
 const (
-	writeBlockSize int = 1024 * 1024 * 8 // 8MB
+	readDataBlockSize int = 1 * 1024 * 1024 // 1MB
 )
 
 // FileHandle is a file handle
@@ -39,7 +40,8 @@ func NewFileHandle(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle)
 		// writer
 		writer = irodsfscommon_io.NewNilWriter(fileHandle)
 		// reader
-		reader = irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
+		syncReader := irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
+		reader = irodsfscommon_io.NewBlockReader(syncReader, readDataBlockSize, nil)
 	} else if openMode.IsWriteOnly() {
 		// write only
 		reader = irodsfscommon_io.NewNilReader(fileHandle)
@@ -113,7 +115,7 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 	}
 
 	readLen, err := handle.reader.ReadAt(resp.Data[:req.Size], req.Offset)
-	if err != nil {
+	if err != nil && err != io.EOF {
 		logger.WithError(err).Errorf("failed to read data for file %s, offset %d, length %d", handle.file.path, req.Offset, req.Size)
 		return syscall.EREMOTEIO
 	}

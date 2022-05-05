@@ -319,7 +319,8 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 			// truncate
 			openMode = string(irodsclient_types.FileOpenModeWriteTruncate)
 		}
-		resp.Flags |= fuse.OpenDirectIO
+		//resp.Flags |= fuse.OpenDirectIO
+		resp.Flags &^= fuse.OpenDirectIO // disable
 	} else if req.Flags.IsReadWrite() {
 		openMode = string(irodsclient_types.FileOpenModeReadWrite)
 	} else {
