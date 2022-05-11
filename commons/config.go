@@ -290,6 +290,11 @@ func (config *Config) Validate() error {
 		return fmt.Errorf("mountpoint (%s) must be a directory", config.MountPath)
 	}
 
+	perm := fileinfo.Mode().Perm()
+	if perm&0200 != 0200 {
+		return fmt.Errorf("mountpoint (%s) must have write permission", config.MountPath)
+	}
+
 	if config.ReadAheadMax < 0 {
 		return fmt.Errorf("readahead max must be equal or greater than 0")
 	}
