@@ -25,7 +25,7 @@ const (
 
 	LogFilePathPrefixDefault   string = "/tmp/irodsfs"
 	LogFilePathChildDefault    string = "/tmp/irodsfs_child.log"
-	BufferSizeMaxDefault       int64  = 1024 * 1024 * 64 // 64MB
+	TempRootPathPrefixDefault  string = "/tmp/irodsfs_temp"
 	AuthSchemePAM              string = "pam"
 	AuthSchemeNative           string = "native"
 	AuthSchemeDefault          string = AuthSchemeNative
@@ -54,6 +54,11 @@ func GetDefaultLogFilePath() string {
 	return fmt.Sprintf("%s_%s.log", LogFilePathPrefixDefault, getInstanceID())
 }
 
+// GetDefaultTempRootPath returns default temp root path
+func GetDefaultTempRootPath() string {
+	return fmt.Sprintf("%s_%s", TempRootPathPrefixDefault, getInstanceID())
+}
+
 // MetadataCacheTimeoutSetting defines cache timeout for path
 type MetadataCacheTimeoutSetting struct {
 	Path    string                       `yaml:"path"`
@@ -76,6 +81,8 @@ type Config struct {
 	SystemUser   string            `yaml:"system_user"`
 	MountPath    string            `yaml:"mount_path,omitempty"`
 
+	TempRootPath string `yaml:"temp_root_path,omitempty"`
+
 	PoolHost string `yaml:"pool_host,omitempty"`
 	PoolPort int    `yaml:"pool_port,omitempty"`
 
@@ -94,7 +101,6 @@ type Config struct {
 	MetadataCacheTimeout                  irodsfscommon_utils.Duration  `yaml:"metadata_cache_timeout"`
 	MetadataCacheCleanupTime              irodsfscommon_utils.Duration  `yaml:"metadata_cache_cleanup_time"`
 	MetadataCacheTimeoutSettings          []MetadataCacheTimeoutSetting `yaml:"metadata_cache_timeout_settings"`
-	BufferSizeMax                         int64                         `yaml:"buffer_size_max"`
 	StartNewTransaction                   bool                          `yaml:"start_new_transaction"`
 	InvalidateParentEntryCacheImmediately bool                          `yaml:"invalidate_parent_entry_cache_immediately"`
 
@@ -126,6 +132,8 @@ func NewDefaultConfig() *Config {
 		PoolHost: "",
 		PoolPort: 0,
 
+		TempRootPath: GetDefaultTempRootPath(),
+
 		AuthScheme:          AuthSchemeDefault,
 		EncryptionKeySize:   EncryptionKeySizeDefault,
 		EncryptionAlgorithm: EncryptionAlgorithmDefault,
@@ -140,7 +148,6 @@ func NewDefaultConfig() *Config {
 		MetadataCacheTimeout:                  irodsfscommon_utils.Duration(MetadataCacheTimeoutDefault),
 		MetadataCacheCleanupTime:              irodsfscommon_utils.Duration(MetadataCacheCleanupTimeDefault),
 		MetadataCacheTimeoutSettings:          []MetadataCacheTimeoutSetting{},
-		BufferSizeMax:                         BufferSizeMaxDefault,
 		StartNewTransaction:                   true,
 		InvalidateParentEntryCacheImmediately: false,
 
@@ -173,6 +180,8 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		PoolHost: "",
 		PoolPort: 0,
 
+		TempRootPath: GetDefaultTempRootPath(),
+
 		AuthScheme:          AuthSchemeDefault,
 		EncryptionKeySize:   EncryptionKeySizeDefault,
 		EncryptionAlgorithm: EncryptionAlgorithmDefault,
@@ -187,7 +196,6 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		MetadataCacheTimeout:                  irodsfscommon_utils.Duration(MetadataCacheTimeoutDefault),
 		MetadataCacheCleanupTime:              irodsfscommon_utils.Duration(MetadataCacheCleanupTimeDefault),
 		MetadataCacheTimeoutSettings:          []MetadataCacheTimeoutSetting{},
-		BufferSizeMax:                         BufferSizeMaxDefault,
 		StartNewTransaction:                   true,
 		InvalidateParentEntryCacheImmediately: false,
 

@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	readDataBlockSize int = 1 * 1024 * 1024 // 1MB
+	iRODSIOBlockSize int = 4 * 1024 * 1024 // 4MB
+	iRODSReadSize    int = 128 * 1024      // 128KB
 )
 
 // FileHandle is a file handle
@@ -31,35 +32,28 @@ type FileHandle struct {
 }
 
 func NewFileHandle(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle) *FileHandle {
-	openMode := fileHandle.GetOpenMode()
-
 	var writer irodsfscommon_io.Writer
 	var reader irodsfscommon_io.Reader
 
+	openMode := fileHandle.GetOpenMode()
 	if openMode.IsReadOnly() {
 		// writer
 		writer = irodsfscommon_io.NewNilWriter(fileHandle)
-		// reader
-		syncReader := irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
-		reader = irodsfscommon_io.NewBlockReader(syncReader, readDataBlockSize, nil)
-	} else if openMode.IsWriteOnly() {
-		// write only
-		reader = irodsfscommon_io.NewNilReader(fileHandle)
 
-		if len(file.fs.config.PoolHost) == 0 {
-			if file.fs.buffer != nil {
-				// if there's no pool server configured, use async-buffered write
-				asyncWriter := irodsfscommon_io.NewAsyncWriter(fileHandle, file.fs.buffer, file.fs.instanceReportClient)
-				writer = irodsfscommon_io.NewBufferedWriter(asyncWriter)
-			} else {
-				syncWriter := irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
-				writer = irodsfscommon_io.NewBufferedWriter(syncWriter)
-			}
+		// reader
+		if len(file.fs.config.TempRootPath) > 0 {
+			syncReader := irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
+			reader = irodsfscommon_io.NewAsyncBlockReader(syncReader, iRODSIOBlockSize, iRODSReadSize, file.fs.config.TempRootPath)
 		} else {
-			// if there's pool server configured, use sync-buffered write
-			syncWriter := irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
-			writer = irodsfscommon_io.NewBufferedWriter(syncWriter)
+			reader = irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
 		}
+	} else if openMode.IsWriteOnly() {
+		// writer
+		syncWriter := irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
+		writer = irodsfscommon_io.NewSyncBufferedWriter(syncWriter)
+
+		// reader
+		reader = irodsfscommon_io.NewNilReader(fileHandle)
 	} else {
 		writer = irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
 		reader = irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
