@@ -271,6 +271,14 @@ func childMain() {
 		log.SetOutput(logWriter)
 	}
 
+	// make temp dir if required
+	err = config.MakeTempRootDir()
+	if err != nil {
+		logger.Error(err)
+		fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
+		os.Exit(1)
+	}
+
 	err = config.Validate()
 	if err != nil {
 		logger.WithError(err).Error("invalid configuration")
@@ -330,7 +338,7 @@ func run(config *commons.Config, isChildProcess bool) error {
 	logger.Info("Successfully created a File System")
 
 	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL, syscall.SIGQUIT)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	go func() {
 		receivedSignal := <-signalChan

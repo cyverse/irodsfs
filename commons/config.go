@@ -238,6 +238,38 @@ func (config *Config) CorrectSystemUser() error {
 	return nil
 }
 
+// MakeTempRootDir makes temp root dir
+func (config *Config) MakeTempRootDir() error {
+	if len(config.TempRootPath) == 0 {
+		return nil
+	}
+
+	tempDirInfo, err := os.Stat(config.TempRootPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// make
+			mkdirErr := os.MkdirAll(config.TempRootPath, 0600)
+			if mkdirErr != nil {
+				return fmt.Errorf("making a temp root dir (%s) error - %v", config.TempRootPath, mkdirErr)
+			}
+			return nil
+		}
+
+		return fmt.Errorf("temp root dir (%s) error - %v", config.TempRootPath, err)
+	}
+
+	if !tempDirInfo.IsDir() {
+		return fmt.Errorf("temp root dir (%s) exist, but not a directory", config.TempRootPath)
+	}
+
+	tempDirPerm := tempDirInfo.Mode().Perm()
+	if tempDirPerm&0200 != 0200 {
+		return fmt.Errorf("temp root dir (%s) exist, but does not have write permission", config.TempRootPath)
+	}
+
+	return nil
+}
+
 // Validate validates configuration
 func (config *Config) Validate() error {
 	if len(config.Host) == 0 {
@@ -289,18 +321,34 @@ func (config *Config) Validate() error {
 		return fmt.Errorf("mount path must be given")
 	}
 
-	fileinfo, err := os.Stat(config.MountPath)
+	mountDirInfo, err := os.Stat(config.MountPath)
 	if err != nil {
 		return fmt.Errorf("mountpoint (%s) error - %v", config.MountPath, err)
 	}
 
-	if !fileinfo.IsDir() {
+	if !mountDirInfo.IsDir() {
 		return fmt.Errorf("mountpoint (%s) must be a directory", config.MountPath)
 	}
 
-	perm := fileinfo.Mode().Perm()
-	if perm&0200 != 0200 {
+	mountDirPerm := mountDirInfo.Mode().Perm()
+	if mountDirPerm&0200 != 0200 {
 		return fmt.Errorf("mountpoint (%s) must have write permission", config.MountPath)
+	}
+
+	if len(config.TempRootPath) > 0 {
+		tempDirInfo, err := os.Stat(config.TempRootPath)
+		if err != nil {
+			return fmt.Errorf("temp root dir (%s) error - %v", config.TempRootPath, err)
+		}
+
+		if !tempDirInfo.IsDir() {
+			return fmt.Errorf("temp root dir (%s) must be a directory", config.TempRootPath)
+		}
+
+		tempDirPerm := tempDirInfo.Mode().Perm()
+		if tempDirPerm&0200 != 0200 {
+			return fmt.Errorf("temp root (%s) must have write permission", config.TempRootPath)
+		}
 	}
 
 	if config.ReadAheadMax < 0 {
