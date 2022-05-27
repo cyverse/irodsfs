@@ -41,16 +41,29 @@ func NewFileHandle(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle)
 		writer = irodsfscommon_io.NewNilWriter(fileHandle)
 
 		// reader
-		if len(file.fs.config.TempRootPath) > 0 {
-			syncReader := irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
-			reader = irodsfscommon_io.NewAsyncBlockReader(syncReader, iRODSIOBlockSize, iRODSReadSize, file.fs.config.TempRootPath)
-		} else {
+		if len(file.fs.config.PoolHost) > 0 {
 			reader = irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
+		} else {
+			if len(file.fs.config.TempRootPath) > 0 {
+				syncReader := irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
+				reader = irodsfscommon_io.NewAsyncBlockReader(syncReader, iRODSIOBlockSize, iRODSReadSize, file.fs.config.TempRootPath)
+			} else {
+				reader = irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
+			}
 		}
 	} else if openMode.IsWriteOnly() {
 		// writer
-		syncWriter := irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
-		writer = irodsfscommon_io.NewSyncBufferedWriter(syncWriter)
+		if len(file.fs.config.PoolHost) > 0 {
+			writer = irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
+		} else {
+			if len(file.fs.config.TempRootPath) > 0 {
+				syncWriter := irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
+				writer = irodsfscommon_io.NewAsyncWriter(syncWriter, iRODSIOBlockSize, file.fs.config.TempRootPath)
+			} else {
+				syncWriter := irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
+				writer = irodsfscommon_io.NewSyncBufferedWriter(syncWriter, iRODSIOBlockSize)
+			}
+		}
 
 		// reader
 		reader = irodsfscommon_io.NewNilReader(fileHandle)

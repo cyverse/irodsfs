@@ -248,10 +248,11 @@ func (config *Config) MakeTempRootDir() error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			// make
-			mkdirErr := os.MkdirAll(config.TempRootPath, 0600)
+			mkdirErr := os.MkdirAll(config.TempRootPath, 0775)
 			if mkdirErr != nil {
 				return fmt.Errorf("making a temp root dir (%s) error - %v", config.TempRootPath, mkdirErr)
 			}
+
 			return nil
 		}
 
@@ -268,6 +269,15 @@ func (config *Config) MakeTempRootDir() error {
 	}
 
 	return nil
+}
+
+// RemoveTempRootDir removes temp root dir
+func (config *Config) RemoveTempRootDir() error {
+	if len(config.TempRootPath) == 0 {
+		return nil
+	}
+
+	return os.RemoveAll(config.TempRootPath)
 }
 
 // Validate validates configuration

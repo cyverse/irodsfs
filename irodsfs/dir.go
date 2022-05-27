@@ -693,6 +693,9 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 				return syscall.EREMOTEIO
 			}
 
+			// report update to fileHandleMap
+			dir.fs.fileHandleMap.RenameDir(irodsSrcPath, irodsDestPath)
+
 			// report update of path
 			if irodsEntry.ID > 0 {
 				dir.fs.fileMetaUpdater.Add(irodsEntry.ID, targetDestPath)
@@ -729,6 +732,9 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 				logger.WithError(err).Errorf("failed to rename file - %s to %s", irodsSrcPath, irodsDestPath)
 				return syscall.EREMOTEIO
 			}
+
+			// report update to fileHandleMap
+			dir.fs.fileHandleMap.Rename(irodsSrcPath, irodsDestPath)
 
 			// report update of path
 			if irodsEntry.ID > 0 {

@@ -79,9 +79,16 @@ func parentRun(irodsfsExec string, config *commons.Config) error {
 
 	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
-	err := config.Validate()
+	// make temp dir if required
+	err := config.MakeTempRootDir()
 	if err != nil {
-		logger.WithError(err).Error("invalid argument")
+		logger.WithError(err).Error("invalid configuration")
+		return err
+	}
+
+	err = config.Validate()
+	if err != nil {
+		logger.WithError(err).Error("invalid configuration")
 		return err
 	}
 
@@ -274,7 +281,7 @@ func childMain() {
 	// make temp dir if required
 	err = config.MakeTempRootDir()
 	if err != nil {
-		logger.Error(err)
+		logger.WithError(err).Error("invalid configuration")
 		fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
 		os.Exit(1)
 	}
@@ -384,5 +391,9 @@ func run(config *commons.Config, isChildProcess bool) error {
 	// returns if mount fails, or stopped.
 	logger.Info("FUSE stopped, terminating iRODS FUSE Lite")
 	fs.Destroy()
+
+	// remote temp dir
+	config.RemoveTempRootDir()
+
 	return nil
 }
