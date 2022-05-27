@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	iRODSIOBlockSize int = 4 * 1024 * 1024 // 4MB
-	iRODSReadSize    int = 128 * 1024      // 128KB
+	iRODSIOBlockSize   int = 4 * 1024 * 1024 // 4MB
+	iRODSReadWriteSize int = 128 * 1024      // 128KB
 )
 
 // FileHandle is a file handle
@@ -46,7 +46,7 @@ func NewFileHandle(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle)
 		} else {
 			if len(file.fs.config.TempRootPath) > 0 {
 				syncReader := irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
-				reader = irodsfscommon_io.NewAsyncBlockReader(syncReader, iRODSIOBlockSize, iRODSReadSize, file.fs.config.TempRootPath)
+				reader = irodsfscommon_io.NewAsyncBlockReader(syncReader, iRODSIOBlockSize, iRODSReadWriteSize, file.fs.config.TempRootPath)
 			} else {
 				reader = irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
 			}
@@ -58,7 +58,7 @@ func NewFileHandle(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle)
 		} else {
 			if len(file.fs.config.TempRootPath) > 0 {
 				syncWriter := irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
-				writer = irodsfscommon_io.NewAsyncWriter(syncWriter, iRODSIOBlockSize, file.fs.config.TempRootPath)
+				writer = irodsfscommon_io.NewAsyncWriter(syncWriter, iRODSReadWriteSize, file.fs.config.TempRootPath)
 			} else {
 				syncWriter := irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
 				writer = irodsfscommon_io.NewSyncBufferedWriter(syncWriter, iRODSIOBlockSize)
