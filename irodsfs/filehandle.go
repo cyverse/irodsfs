@@ -58,7 +58,8 @@ func NewFileHandle(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle)
 		} else {
 			if len(file.fs.config.TempRootPath) > 0 {
 				syncWriter := irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
-				writer = irodsfscommon_io.NewAsyncWriter(syncWriter, iRODSReadWriteSize, file.fs.config.TempRootPath)
+				asyncWriter := irodsfscommon_io.NewAsyncWriter(syncWriter, iRODSIOBlockSize, file.fs.config.TempRootPath)
+				writer = irodsfscommon_io.NewSyncBufferedWriter(asyncWriter, iRODSIOBlockSize)
 			} else {
 				syncWriter := irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
 				writer = irodsfscommon_io.NewSyncBufferedWriter(syncWriter, iRODSIOBlockSize)
