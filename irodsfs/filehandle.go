@@ -16,8 +16,8 @@ import (
 
 const (
 	iRODSWriteBufferSize int = 16 * 1024 * 1024 // 16MB
-	iRODSIOBlockSize     int = 4 * 1024 * 1024  // 4MB
 	iRODSReadWriteSize   int = 128 * 1024       // 128KB
+	iRODSIOBlockSize     int = 4 * 1024 * 1024  // 4MB
 )
 
 // FileHandle is a file handle
@@ -100,8 +100,8 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 
 	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
-	logger.Infof("Calling Read - %s, %d Offset, %d Bytes", handle.file.path, req.Offset, req.Size)
-	defer logger.Infof("Called Read - %s, %d Offset, %d Bytes", handle.file.path, req.Offset, req.Size)
+	logger.Debugf("Calling Read - %s, %d Offset, %d Bytes", handle.file.path, req.Offset, req.Size)
+	defer logger.Debugf("Called Read - %s, %d Offset, %d Bytes", handle.file.path, req.Offset, req.Size)
 
 	if handle.fileHandle == nil {
 		logger.Errorf("failed to get a file handle - %s", handle.file.path)
@@ -147,8 +147,8 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 
 	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
-	logger.Infof("Calling Write - %s, %d Bytes", handle.file.path, len(req.Data))
-	defer logger.Infof("Called Write - %s, %d Bytes", handle.file.path, len(req.Data))
+	logger.Debugf("Calling Write - %s, %d Bytes", handle.file.path, len(req.Data))
+	defer logger.Debugf("Called Write - %s, %d Bytes", handle.file.path, len(req.Data))
 
 	if handle.fileHandle == nil {
 		logger.Errorf("failed to get a file handle - %s", handle.file.path)
@@ -193,8 +193,8 @@ func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) err
 
 	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
-	logger.Infof("Calling Flush - %s", handle.file.path)
-	defer logger.Infof("Called Flush - %s", handle.file.path)
+	logger.Debugf("Calling Flush - %s", handle.file.path)
+	defer logger.Debugf("Called Flush - %s", handle.file.path)
 
 	if handle.fileHandle == nil {
 		logger.Errorf("failed to get a file handle - %s", handle.file.path)
@@ -227,8 +227,8 @@ func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest)
 
 	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
-	logger.Infof("Calling Release - %s", handle.file.path)
-	defer logger.Infof("Called Release - %s", handle.file.path)
+	logger.Debugf("Calling Release - %s", handle.file.path)
+	defer logger.Debugf("Called Release - %s", handle.file.path)
 
 	if handle.fileHandle == nil {
 		logger.Errorf("failed to get a file handle - %s", handle.file.path)
