@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	iRODSIOBlockSize   int = 4 * 1024 * 1024 // 4MB
-	iRODSReadWriteSize int = 128 * 1024      // 128KB
+	iRODSWriteBufferSize int = 16 * 1024 * 1024 // 16MB
+	iRODSIOBlockSize     int = 4 * 1024 * 1024  // 4MB
+	iRODSReadWriteSize   int = 128 * 1024       // 128KB
 )
 
 // FileHandle is a file handle
@@ -59,7 +60,7 @@ func NewFileHandle(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle)
 			if len(file.fs.config.TempRootPath) > 0 {
 				syncWriter := irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
 				asyncWriter := irodsfscommon_io.NewAsyncWriter(syncWriter, iRODSIOBlockSize, file.fs.config.TempRootPath)
-				writer = irodsfscommon_io.NewSyncBufferedWriter(asyncWriter, iRODSIOBlockSize)
+				writer = irodsfscommon_io.NewSyncBufferedWriter(asyncWriter, iRODSWriteBufferSize)
 			} else {
 				syncWriter := irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
 				writer = irodsfscommon_io.NewSyncBufferedWriter(syncWriter, iRODSIOBlockSize)
