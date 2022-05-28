@@ -16,8 +16,8 @@ import (
 
 const (
 	iRODSWriteBufferSize int = 16 * 1024 * 1024 // 16MB
+	iRODSIOBlockSize     int = 16 * 1024 * 1024 // 16MB
 	iRODSReadWriteSize   int = 128 * 1024       // 128KB
-	iRODSIOBlockSize     int = 4 * 1024 * 1024  // 4MB
 )
 
 // FileHandle is a file handle
