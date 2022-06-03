@@ -227,7 +227,6 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 	flag.StringVar(&connectionIdleTimeout, "connection_idle_timeout", "", "Set idle data transfer timeout")
 	flag.StringVar(&metadataCacheTimeout, "metadata_cache_timeout", "", "Set filesystem metadata cache timeout")
 	flag.StringVar(&metadataCacheCleanupTime, "metadata_cache_cleanup_time", "", "Set filesystem metadata cache cleanup time")
-	flag.Int64Var(&config.BufferSizeMax, "buffer_size_max", commons.BufferSizeMaxDefault, "Set file buffer max size")
 	flag.BoolVar(&notransaction, "notransaction", false, "No transaction")
 	flag.Var(&fuseOptions, "o", "Other fuse options")
 	flag.StringVar(&config.LogPath, "log", commons.GetDefaultLogFilePath(), "Set log file path")
@@ -243,6 +242,7 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 	flag.StringVar(&config.SystemUser, "sys_user", "", "Set System User of file/directory owner")
 	flag.StringVar(&config.PoolHost, "pool_host", "", "Set iRODS FUSE Lite Pool host")
 	flag.IntVar(&config.PoolPort, "pool_port", 12020, "Set iRODS FUSE Lite Pool port")
+	flag.StringVar(&config.TempRootPath, "temp_root", commons.GetDefaultTempRootPath(), "Set temp file root path")
 	flag.BoolVar(&config.Profile, "profile", false, "Enable profiling")
 	flag.IntVar(&config.ProfileServicePort, "profile_port", commons.ProfileServicePortDefault, "Set profile service port")
 

@@ -54,8 +54,8 @@ func mapDirACL(vfsEntry *vfs.VFSEntry, dir *Dir, irodsEntry *irodsclient_fs.Entr
 		return 0o700
 	}
 
-	logger.Infof("Checking ACL information of the Entry for %s and user %s", irodsEntry.Path, dir.fs.config.ClientUser)
-	defer logger.Infof("Checked ACL information of the Entry for %s and user %s", irodsEntry.Path, dir.fs.config.ClientUser)
+	logger.Debugf("Checking ACL information of the Entry for %s and user %s", irodsEntry.Path, dir.fs.config.ClientUser)
+	defer logger.Debugf("Checked ACL information of the Entry for %s and user %s", irodsEntry.Path, dir.fs.config.ClientUser)
 
 	accesses, err := dir.fs.fsClient.ListDirACLs(irodsEntry.Path)
 	if err != nil {
@@ -166,7 +166,7 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 		irodsEntry, err := dir.fs.fsClient.Stat(irodsPath)
 		if err != nil {
 			if irodsclient_types.IsFileNotFoundError(err) {
-				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
+				logger.WithError(err).Debugf("failed to find a file - %s", irodsPath)
 				return syscall.ENOENT
 			}
 
@@ -693,6 +693,9 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 				return syscall.EREMOTEIO
 			}
 
+			// report update to fileHandleMap
+			dir.fs.fileHandleMap.RenameDir(irodsSrcPath, irodsDestPath)
+
 			// report update of path
 			if irodsEntry.ID > 0 {
 				dir.fs.fileMetaUpdater.Add(irodsEntry.ID, targetDestPath)
@@ -729,6 +732,9 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 				logger.WithError(err).Errorf("failed to rename file - %s to %s", irodsSrcPath, irodsDestPath)
 				return syscall.EREMOTEIO
 			}
+
+			// report update to fileHandleMap
+			dir.fs.fileHandleMap.Rename(irodsSrcPath, irodsDestPath)
 
 			// report update of path
 			if irodsEntry.ID > 0 {

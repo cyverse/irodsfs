@@ -197,3 +197,49 @@ func (fileHandleMap *FileHandleMap) PopByPath(path string) []*FileHandle {
 
 	return handles
 }
+
+// RenameDir renames files under parentPath
+func (fileHandleMap *FileHandleMap) RenameDir(srcParentPath string, destParentPath string) {
+	fileHandleMap.mutex.Lock()
+	defer fileHandleMap.mutex.Unlock()
+
+	prefix := srcParentPath
+	if len(prefix) > 1 && !strings.HasSuffix(prefix, "/") {
+		prefix = fmt.Sprintf("%s/", prefix)
+	}
+
+	newPrefix := destParentPath
+	if len(newPrefix) > 1 && !strings.HasSuffix(newPrefix, "/") {
+		newPrefix = fmt.Sprintf("%s/", newPrefix)
+	}
+
+	paths := []string{}
+	// loop over all file handles opened
+	for path := range fileHandleMap.filePathID {
+		// check if it's sub dirs or files in the dir
+		if strings.HasPrefix(path, prefix) {
+			paths = append(paths, path)
+		}
+	}
+
+	for _, path := range paths {
+		subPath := path[len(prefix):]
+		newPath := fmt.Sprintf("%s%s", newPrefix, subPath)
+
+		// rename
+		ids := fileHandleMap.filePathID[path]
+		delete(fileHandleMap.filePathID, path)
+		fileHandleMap.filePathID[newPath] = ids
+	}
+}
+
+// Rename renames files
+func (fileHandleMap *FileHandleMap) Rename(srcPath string, destPath string) {
+	fileHandleMap.mutex.Lock()
+	defer fileHandleMap.mutex.Unlock()
+
+	// rename
+	ids := fileHandleMap.filePathID[srcPath]
+	delete(fileHandleMap.filePathID, srcPath)
+	fileHandleMap.filePathID[destPath] = ids
+}

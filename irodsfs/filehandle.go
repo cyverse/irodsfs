@@ -15,7 +15,9 @@ import (
 )
 
 const (
-	readDataBlockSize int = 1 * 1024 * 1024 // 1MB
+	iRODSWriteBufferSize int = 16 * 1024 * 1024 // 16MB
+	iRODSIOBlockSize     int = 16 * 1024 * 1024 // 16MB
+	iRODSReadWriteSize   int = 128 * 1024       // 128KB
 )
 
 // FileHandle is a file handle
@@ -31,35 +33,42 @@ type FileHandle struct {
 }
 
 func NewFileHandle(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle) *FileHandle {
-	openMode := fileHandle.GetOpenMode()
-
 	var writer irodsfscommon_io.Writer
 	var reader irodsfscommon_io.Reader
 
+	openMode := fileHandle.GetOpenMode()
 	if openMode.IsReadOnly() {
 		// writer
 		writer = irodsfscommon_io.NewNilWriter(fileHandle)
-		// reader
-		syncReader := irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
-		reader = irodsfscommon_io.NewBlockReader(syncReader, readDataBlockSize, nil)
-	} else if openMode.IsWriteOnly() {
-		// write only
-		reader = irodsfscommon_io.NewNilReader(fileHandle)
 
-		if len(file.fs.config.PoolHost) == 0 {
-			if file.fs.buffer != nil {
-				// if there's no pool server configured, use async-buffered write
-				asyncWriter := irodsfscommon_io.NewAsyncWriter(fileHandle, file.fs.buffer, file.fs.instanceReportClient)
-				writer = irodsfscommon_io.NewBufferedWriter(asyncWriter)
+		// reader
+		if len(file.fs.config.PoolHost) > 0 {
+			reader = irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
+		} else {
+			if len(file.fs.config.TempRootPath) > 0 {
+				syncReader := irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
+				reader = irodsfscommon_io.NewAsyncBlockReader(syncReader, iRODSIOBlockSize, iRODSReadWriteSize, file.fs.config.TempRootPath)
+			} else {
+				reader = irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
+			}
+		}
+	} else if openMode.IsWriteOnly() {
+		// writer
+		if len(file.fs.config.PoolHost) > 0 {
+			writer = irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
+		} else {
+			if len(file.fs.config.TempRootPath) > 0 {
+				syncWriter := irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
+				asyncWriter := irodsfscommon_io.NewAsyncWriter(syncWriter, iRODSIOBlockSize, file.fs.config.TempRootPath)
+				writer = irodsfscommon_io.NewSyncBufferedWriter(asyncWriter, iRODSWriteBufferSize)
 			} else {
 				syncWriter := irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
-				writer = irodsfscommon_io.NewBufferedWriter(syncWriter)
+				writer = irodsfscommon_io.NewSyncBufferedWriter(syncWriter, iRODSIOBlockSize)
 			}
-		} else {
-			// if there's pool server configured, use sync-buffered write
-			syncWriter := irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
-			writer = irodsfscommon_io.NewBufferedWriter(syncWriter)
 		}
+
+		// reader
+		reader = irodsfscommon_io.NewNilReader(fileHandle)
 	} else {
 		writer = irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
 		reader = irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
@@ -91,8 +100,8 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 
 	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
-	logger.Infof("Calling Read - %s, %d Offset, %d Bytes", handle.file.path, req.Offset, req.Size)
-	defer logger.Infof("Called Read - %s, %d Offset, %d Bytes", handle.file.path, req.Offset, req.Size)
+	logger.Debugf("Calling Read - %s, %d Offset, %d Bytes", handle.file.path, req.Offset, req.Size)
+	defer logger.Debugf("Called Read - %s, %d Offset, %d Bytes", handle.file.path, req.Offset, req.Size)
 
 	if handle.fileHandle == nil {
 		logger.Errorf("failed to get a file handle - %s", handle.file.path)
@@ -138,8 +147,8 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 
 	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
-	logger.Infof("Calling Write - %s, %d Bytes", handle.file.path, len(req.Data))
-	defer logger.Infof("Called Write - %s, %d Bytes", handle.file.path, len(req.Data))
+	logger.Debugf("Calling Write - %s, %d Bytes", handle.file.path, len(req.Data))
+	defer logger.Debugf("Called Write - %s, %d Bytes", handle.file.path, len(req.Data))
 
 	if handle.fileHandle == nil {
 		logger.Errorf("failed to get a file handle - %s", handle.file.path)
@@ -184,8 +193,8 @@ func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) err
 
 	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
-	logger.Infof("Calling Flush - %s", handle.file.path)
-	defer logger.Infof("Called Flush - %s", handle.file.path)
+	logger.Debugf("Calling Flush - %s", handle.file.path)
+	defer logger.Debugf("Called Flush - %s", handle.file.path)
 
 	if handle.fileHandle == nil {
 		logger.Errorf("failed to get a file handle - %s", handle.file.path)
@@ -218,8 +227,8 @@ func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest)
 
 	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
-	logger.Infof("Calling Release - %s", handle.file.path)
-	defer logger.Infof("Called Release - %s", handle.file.path)
+	logger.Debugf("Calling Release - %s", handle.file.path)
+	defer logger.Debugf("Called Release - %s", handle.file.path)
 
 	if handle.fileHandle == nil {
 		logger.Errorf("failed to get a file handle - %s", handle.file.path)

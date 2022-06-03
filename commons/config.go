@@ -25,7 +25,7 @@ const (
 
 	LogFilePathPrefixDefault   string = "/tmp/irodsfs"
 	LogFilePathChildDefault    string = "/tmp/irodsfs_child.log"
-	BufferSizeMaxDefault       int64  = 1024 * 1024 * 64 // 64MB
+	TempRootPathPrefixDefault  string = "/tmp/irodsfs_temp"
 	AuthSchemePAM              string = "pam"
 	AuthSchemeNative           string = "native"
 	AuthSchemeDefault          string = AuthSchemeNative
@@ -54,6 +54,11 @@ func GetDefaultLogFilePath() string {
 	return fmt.Sprintf("%s_%s.log", LogFilePathPrefixDefault, getInstanceID())
 }
 
+// GetDefaultTempRootPath returns default temp root path
+func GetDefaultTempRootPath() string {
+	return fmt.Sprintf("%s_%s", TempRootPathPrefixDefault, getInstanceID())
+}
+
 // MetadataCacheTimeoutSetting defines cache timeout for path
 type MetadataCacheTimeoutSetting struct {
 	Path    string                       `yaml:"path"`
@@ -76,6 +81,8 @@ type Config struct {
 	SystemUser   string            `yaml:"system_user"`
 	MountPath    string            `yaml:"mount_path,omitempty"`
 
+	TempRootPath string `yaml:"temp_root_path,omitempty"`
+
 	PoolHost string `yaml:"pool_host,omitempty"`
 	PoolPort int    `yaml:"pool_port,omitempty"`
 
@@ -94,7 +101,6 @@ type Config struct {
 	MetadataCacheTimeout                  irodsfscommon_utils.Duration  `yaml:"metadata_cache_timeout"`
 	MetadataCacheCleanupTime              irodsfscommon_utils.Duration  `yaml:"metadata_cache_cleanup_time"`
 	MetadataCacheTimeoutSettings          []MetadataCacheTimeoutSetting `yaml:"metadata_cache_timeout_settings"`
-	BufferSizeMax                         int64                         `yaml:"buffer_size_max"`
 	StartNewTransaction                   bool                          `yaml:"start_new_transaction"`
 	InvalidateParentEntryCacheImmediately bool                          `yaml:"invalidate_parent_entry_cache_immediately"`
 
@@ -126,6 +132,8 @@ func NewDefaultConfig() *Config {
 		PoolHost: "",
 		PoolPort: 0,
 
+		TempRootPath: GetDefaultTempRootPath(),
+
 		AuthScheme:          AuthSchemeDefault,
 		EncryptionKeySize:   EncryptionKeySizeDefault,
 		EncryptionAlgorithm: EncryptionAlgorithmDefault,
@@ -140,7 +148,6 @@ func NewDefaultConfig() *Config {
 		MetadataCacheTimeout:                  irodsfscommon_utils.Duration(MetadataCacheTimeoutDefault),
 		MetadataCacheCleanupTime:              irodsfscommon_utils.Duration(MetadataCacheCleanupTimeDefault),
 		MetadataCacheTimeoutSettings:          []MetadataCacheTimeoutSetting{},
-		BufferSizeMax:                         BufferSizeMaxDefault,
 		StartNewTransaction:                   true,
 		InvalidateParentEntryCacheImmediately: false,
 
@@ -173,6 +180,8 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		PoolHost: "",
 		PoolPort: 0,
 
+		TempRootPath: GetDefaultTempRootPath(),
+
 		AuthScheme:          AuthSchemeDefault,
 		EncryptionKeySize:   EncryptionKeySizeDefault,
 		EncryptionAlgorithm: EncryptionAlgorithmDefault,
@@ -187,7 +196,6 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		MetadataCacheTimeout:                  irodsfscommon_utils.Duration(MetadataCacheTimeoutDefault),
 		MetadataCacheCleanupTime:              irodsfscommon_utils.Duration(MetadataCacheCleanupTimeDefault),
 		MetadataCacheTimeoutSettings:          []MetadataCacheTimeoutSetting{},
-		BufferSizeMax:                         BufferSizeMaxDefault,
 		StartNewTransaction:                   true,
 		InvalidateParentEntryCacheImmediately: false,
 
@@ -228,6 +236,48 @@ func (config *Config) CorrectSystemUser() error {
 	config.UID = uid
 	config.GID = gid
 	return nil
+}
+
+// MakeTempRootDir makes temp root dir
+func (config *Config) MakeTempRootDir() error {
+	if len(config.TempRootPath) == 0 {
+		return nil
+	}
+
+	tempDirInfo, err := os.Stat(config.TempRootPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// make
+			mkdirErr := os.MkdirAll(config.TempRootPath, 0775)
+			if mkdirErr != nil {
+				return fmt.Errorf("making a temp root dir (%s) error - %v", config.TempRootPath, mkdirErr)
+			}
+
+			return nil
+		}
+
+		return fmt.Errorf("temp root dir (%s) error - %v", config.TempRootPath, err)
+	}
+
+	if !tempDirInfo.IsDir() {
+		return fmt.Errorf("temp root dir (%s) exist, but not a directory", config.TempRootPath)
+	}
+
+	tempDirPerm := tempDirInfo.Mode().Perm()
+	if tempDirPerm&0200 != 0200 {
+		return fmt.Errorf("temp root dir (%s) exist, but does not have write permission", config.TempRootPath)
+	}
+
+	return nil
+}
+
+// RemoveTempRootDir removes temp root dir
+func (config *Config) RemoveTempRootDir() error {
+	if len(config.TempRootPath) == 0 {
+		return nil
+	}
+
+	return os.RemoveAll(config.TempRootPath)
 }
 
 // Validate validates configuration
@@ -281,18 +331,34 @@ func (config *Config) Validate() error {
 		return fmt.Errorf("mount path must be given")
 	}
 
-	fileinfo, err := os.Stat(config.MountPath)
+	mountDirInfo, err := os.Stat(config.MountPath)
 	if err != nil {
 		return fmt.Errorf("mountpoint (%s) error - %v", config.MountPath, err)
 	}
 
-	if !fileinfo.IsDir() {
+	if !mountDirInfo.IsDir() {
 		return fmt.Errorf("mountpoint (%s) must be a directory", config.MountPath)
 	}
 
-	perm := fileinfo.Mode().Perm()
-	if perm&0200 != 0200 {
+	mountDirPerm := mountDirInfo.Mode().Perm()
+	if mountDirPerm&0200 != 0200 {
 		return fmt.Errorf("mountpoint (%s) must have write permission", config.MountPath)
+	}
+
+	if len(config.TempRootPath) > 0 {
+		tempDirInfo, err := os.Stat(config.TempRootPath)
+		if err != nil {
+			return fmt.Errorf("temp root dir (%s) error - %v", config.TempRootPath, err)
+		}
+
+		if !tempDirInfo.IsDir() {
+			return fmt.Errorf("temp root dir (%s) must be a directory", config.TempRootPath)
+		}
+
+		tempDirPerm := tempDirInfo.Mode().Perm()
+		if tempDirPerm&0200 != 0200 {
+			return fmt.Errorf("temp root (%s) must have write permission", config.TempRootPath)
+		}
 	}
 
 	if config.ReadAheadMax < 0 {

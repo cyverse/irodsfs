@@ -39,7 +39,7 @@ func (w *NilWriter) Write(p []byte) (n int, err error) {
 }
 
 func main() {
-	log.SetLevel(log.DebugLevel)
+	log.SetLevel(log.InfoLevel)
 	log.SetFormatter(&log.TextFormatter{
 		TimestampFormat: "2006-01-02 15:04:05.000000",
 	})
@@ -79,9 +79,16 @@ func parentRun(irodsfsExec string, config *commons.Config) error {
 
 	defer irodsfscommon_utils.StackTraceFromPanic(logger)
 
-	err := config.Validate()
+	// make temp dir if required
+	err := config.MakeTempRootDir()
 	if err != nil {
-		logger.WithError(err).Error("invalid argument")
+		logger.WithError(err).Error("invalid configuration")
+		return err
+	}
+
+	err = config.Validate()
+	if err != nil {
+		logger.WithError(err).Error("invalid configuration")
 		return err
 	}
 
@@ -271,6 +278,14 @@ func childMain() {
 		log.SetOutput(logWriter)
 	}
 
+	// make temp dir if required
+	err = config.MakeTempRootDir()
+	if err != nil {
+		logger.WithError(err).Error("invalid configuration")
+		fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
+		os.Exit(1)
+	}
+
 	err = config.Validate()
 	if err != nil {
 		logger.WithError(err).Error("invalid configuration")
@@ -330,7 +345,7 @@ func run(config *commons.Config, isChildProcess bool) error {
 	logger.Info("Successfully created a File System")
 
 	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL, syscall.SIGQUIT)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	go func() {
 		receivedSignal := <-signalChan
@@ -376,5 +391,9 @@ func run(config *commons.Config, isChildProcess bool) error {
 	// returns if mount fails, or stopped.
 	logger.Info("FUSE stopped, terminating iRODS FUSE Lite")
 	fs.Destroy()
+
+	// remote temp dir
+	config.RemoveTempRootDir()
+
 	return nil
 }

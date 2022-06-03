@@ -10,7 +10,6 @@ import (
 	fusefs "bazil.org/fuse/fs"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
-	irodsfscommon_io "github.com/cyverse/irodsfs-common/io"
 	irodsfscommon_irods "github.com/cyverse/irodsfs-common/irods"
 	irodsfscommon_report "github.com/cyverse/irodsfs-common/report"
 	irodsfscommon_utils "github.com/cyverse/irodsfs-common/utils"
@@ -54,7 +53,6 @@ type IRODSFS struct {
 	fileMetaUpdater *FileMetaUpdater
 	fsClient        irodsfscommon_irods.IRODSFSClient
 	fileHandleMap   *FileHandleMap
-	buffer          irodsfscommon_io.Buffer
 	userGroupsMap   map[string]*irodsclient_types.IRODSUser
 
 	uid uint32
@@ -161,12 +159,6 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	logger.Info("Initializing File Handle Map")
 	fileHandleMap := NewFileHandleMap()
 
-	var ramBuffer irodsfscommon_io.Buffer
-	if len(config.PoolHost) == 0 && config.BufferSizeMax > 0 {
-		logger.Infof("Initializing RAMBuffer, bufferSize %d", config.BufferSizeMax)
-		ramBuffer = irodsfscommon_io.NewRAMBuffer(config.BufferSizeMax)
-	}
-
 	var reportClient irodsfscommon_report.IRODSFSReportClient
 	var instanceReportClient irodsfscommon_report.IRODSFSInstanceReportClient
 	if len(config.MonitorURL) > 0 {
@@ -186,7 +178,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 			ConnectionMax:            config.ConnectionMax,
 			MetadataCacheTimeout:     time.Duration(config.MetadataCacheTimeout).String(),
 			MetadataCacheCleanupTime: time.Duration(config.MetadataCacheCleanupTime).String(),
-			BufferSizeMax:            config.BufferSizeMax,
+			BufferSizeMax:            0,
 
 			PoolHost: config.PoolHost,
 			PoolPort: config.PoolPort,
@@ -221,7 +213,6 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		fileMetaUpdater: fileMetaUpdater,
 		fsClient:        fsClient,
 		fileHandleMap:   fileHandleMap,
-		buffer:          ramBuffer,
 		userGroupsMap:   userGroupsMap,
 
 		uid: uint32(config.UID),
@@ -347,11 +338,6 @@ func (fs *IRODSFS) Destroy() {
 	if fs.fsClient != nil {
 		fs.fsClient.Release()
 		fs.fsClient = nil
-	}
-
-	if fs.buffer != nil {
-		fs.buffer.Release()
-		fs.buffer = nil
 	}
 
 	if fs.fuseConnection != nil {

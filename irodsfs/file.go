@@ -319,10 +319,10 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 			// truncate
 			openMode = string(irodsclient_types.FileOpenModeWriteTruncate)
 		}
-		//resp.Flags |= fuse.OpenDirectIO
-		resp.Flags &^= fuse.OpenDirectIO // disable
+		resp.Flags |= fuse.OpenDirectIO
 	} else if req.Flags.IsReadWrite() {
 		openMode = string(irodsclient_types.FileOpenModeReadWrite)
+		resp.Flags |= fuse.OpenDirectIO
 	} else {
 		logger.Errorf("unknown file open mode - %s", req.Flags.String())
 		return nil, syscall.EACCES
