@@ -202,17 +202,17 @@ func parentMain() {
 	}
 
 	// check fuse
-	fuseCheckResult := checkFuse()
+	fuseCheckResult := commons.CheckFuse()
 	switch fuseCheckResult {
-	case CheckFUSEStatusFound:
+	case commons.CheckFUSEStatusFound:
 		// okay
 		logger.Info("Found FUSE Device. Starting iRODS FUSE Lite.")
-	case CheckFUSEStatusUnknown:
+	case commons.CheckFUSEStatusUnknown:
 		// try to go
 		logger.Info("It is not sure whether FUSE is running. Starting iRODS FUSE Lite, anyway.")
-	case CheckFUSEStatusNotFound:
+	case commons.CheckFUSEStatusNotFound:
 		logger.Fatal("FUSE is not running. Terminating iRODS FUSE Lite.")
-	case CheckFUSEStatusCannotRun:
+	case commons.CheckFUSEStatusCannotRun:
 		logger.Fatal("FUSE is not supported. Terminating iRODS FUSE Lite.")
 	}
 

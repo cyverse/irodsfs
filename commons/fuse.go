@@ -1,7 +1,10 @@
-package main
+package commons
 
 import (
+	"bytes"
+	"errors"
 	"os"
+	"os/exec"
 	"runtime"
 
 	log "github.com/sirupsen/logrus"
@@ -17,11 +20,11 @@ const (
 	CheckFUSEStatusUnknown   CheckFUSEStatus = "unknown"
 )
 
-// checkFuse checks FUSE installation state
-func checkFuse() CheckFUSEStatus {
+// CheckFuse checks FUSE installation state
+func CheckFuse() CheckFUSEStatus {
 	if runtime.GOOS == "linux" {
 		// check if FUSE device exists
-		return checkDevFuse()
+		return CheckDevFuse()
 	} else if runtime.GOOS == "darwin" {
 		// cannot run on MacOS, bazil.org/fuse does not support
 		return CheckFUSEStatusCannotRun
@@ -34,11 +37,11 @@ func checkFuse() CheckFUSEStatus {
 	return CheckFUSEStatusUnknown
 }
 
-// checkDevFuse checks FUSE device
-func checkDevFuse() CheckFUSEStatus {
+// CheckDevFuse checks FUSE device
+func CheckDevFuse() CheckFUSEStatus {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
-		"function": "checkDevFuse",
+		"function": "CheckDevFuse",
 	})
 
 	// if /dev/fuse device exists, it's installed
@@ -54,4 +57,19 @@ func checkDevFuse() CheckFUSEStatus {
 	}
 
 	return CheckFUSEStatusUnknown
+}
+
+// unmountFuse unmounts FUSE device
+func UnmountFuse(dir string) error {
+	cmd := exec.Command("fusermount", "-zu", dir)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		if len(output) > 0 {
+			output = bytes.TrimRight(output, "\n")
+			msg := err.Error() + ": " + string(output)
+			err = errors.New(msg)
+		}
+		return err
+	}
+	return nil
 }

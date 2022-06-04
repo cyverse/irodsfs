@@ -299,7 +299,10 @@ func (fs *IRODSFS) StopFuse() {
 
 	// forcefully close the fuse connection
 	fs.killFUSE = true
+
+	logger.Info("Closing fuse connection")
 	fs.fuseConnection.Close()
+	fs.fuseConnection = nil
 }
 
 // Destroy destroys the file system
@@ -348,7 +351,7 @@ func (fs *IRODSFS) Destroy() {
 
 	// try to unmount (error may occur but ignore it)
 	logger.Info("> Unmounting mountpath")
-	fuse.Unmount(fs.config.MountPath)
+	commons.UnmountFuse(fs.config.MountPath)
 
 	logger.Info("Destroyed FileSystem")
 }
