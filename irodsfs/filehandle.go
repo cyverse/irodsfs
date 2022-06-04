@@ -179,6 +179,46 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 	return nil
 }
 
+// Truncate truncates file content
+func (handle *FileHandle) Truncate(ctx context.Context, size int64) error {
+	if handle.fs.terminated {
+		return syscall.ECONNABORTED
+	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "FileHandle",
+		"function": "Truncate",
+	})
+
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
+
+	logger.Infof("Calling Truncate - %s, %d Bytes", handle.file.path, size)
+	defer logger.Infof("Called Truncate - %s, %d Bytes", handle.file.path, size)
+
+	if handle.fileHandle == nil {
+		logger.Errorf("failed to get a file handle - %s", handle.file.path)
+		return syscall.EBADFD
+	}
+
+	if !handle.fileHandle.IsWriteMode() {
+		logger.Errorf("failed to truncate file opened with readonly mode - %s", handle.file.path)
+		return syscall.EBADFD
+	}
+
+	if size < 0 {
+		size = 0
+	}
+
+	err := handle.fileHandle.Truncate(size)
+	if err != nil {
+		logger.WithError(err).Errorf("failed to truncate data for file %s, size %d", handle.file.path, size)
+		return syscall.EREMOTEIO
+	}
+
+	return nil
+}
+
 // Flush flushes content changes
 func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 	if handle.fs.terminated {

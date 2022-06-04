@@ -263,16 +263,37 @@ func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *
 			return syscall.EREMOTEIO
 		}
 
-		if irodsEntry.Size != int64(req.Size) {
-			err = file.fs.fsClient.TruncateFile(irodsPath, int64(req.Size))
-			if err != nil {
-				if irodsclient_types.IsFileNotFoundError(err) {
-					logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
-					return syscall.ENOENT
+		// check if there're opened file handles
+		// handle ftruncate operation
+		callFtruncate := false
+		handlesOpened := file.fs.fileHandleMap.ListByPath(irodsPath)
+		for _, handle := range handlesOpened {
+			if handle.fileHandle.IsWriteMode() {
+				// is writing
+				logger.Infof("Found opened file handle %s - %s", handle.file.path, handle.fileHandle.GetID())
+
+				err = handle.Truncate(ctx, int64(req.Size))
+				if err != nil {
+					logger.WithError(err).Errorf("failed to truncate a file - %s, %d", irodsPath, req.Size)
+					return syscall.EREMOTEIO
 				}
 
-				logger.WithError(err).Errorf("failed to truncate a file - %s, %d", irodsPath, req.Size)
-				return syscall.EREMOTEIO
+				callFtruncate = true
+			}
+		}
+
+		if !callFtruncate {
+			if irodsEntry.Size != int64(req.Size) {
+				err = file.fs.fsClient.TruncateFile(irodsPath, int64(req.Size))
+				if err != nil {
+					if irodsclient_types.IsFileNotFoundError(err) {
+						logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
+						return syscall.ENOENT
+					}
+
+					logger.WithError(err).Errorf("failed to truncate a file - %s, %d", irodsPath, req.Size)
+					return syscall.EREMOTEIO
+				}
 			}
 		}
 
