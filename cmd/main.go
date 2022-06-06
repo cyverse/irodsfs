@@ -16,7 +16,7 @@ import (
 	"github.com/cyverse/irodsfs/commons"
 	"github.com/cyverse/irodsfs/irodsfs"
 
-	irodsfscommon_utils "github.com/cyverse/irodsfs-common/utils"
+	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
 
 	"github.com/pkg/profile"
 	log "github.com/sirupsen/logrus"
@@ -77,7 +77,7 @@ func parentRun(irodsfsExec string, config *commons.Config) error {
 		"function": "parentRun",
 	})
 
-	defer irodsfscommon_utils.StackTraceFromPanic(logger)
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	// make temp dir if required
 	err := config.MakeTempRootDir()
@@ -187,7 +187,7 @@ func parentMain() {
 		"function": "parentMain",
 	})
 
-	defer irodsfscommon_utils.StackTraceFromPanic(logger)
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	// parse argument
 	config, logWriter, exit, err := processArguments()
@@ -238,7 +238,7 @@ func childMain() {
 		"function": "childMain",
 	})
 
-	defer irodsfscommon_utils.StackTraceFromPanic(logger)
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	// output to default log file for child process
 	childLogWriter := getLogWriter(commons.LogFilePathChildDefault)
@@ -316,7 +316,7 @@ func run(config *commons.Config, isChildProcess bool) error {
 		"function": "run",
 	})
 
-	defer irodsfscommon_utils.StackTraceFromPanic(logger)
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	// profile
 	if config.Profile {
