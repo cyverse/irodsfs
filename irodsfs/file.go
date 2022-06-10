@@ -206,13 +206,31 @@ func (file *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *f
 	if req.Valid.Size() {
 		// size changed
 		// call Truncate()
-		return file.Truncate(ctx, req, resp)
+		err := file.Truncate(ctx, req.Size)
+		if err != nil {
+			return err
+		}
+		resp.Attr.Size = req.Size
+		return nil
+	} else if req.Valid.Mode() {
+		// chmod
+		// not supported
+		return syscall.EOPNOTSUPP
+	} else if req.Valid.Atime() || req.Valid.AtimeNow() || req.Valid.Mtime() || req.Valid.MtimeNow() {
+		// changing date
+		// not supported
+		return syscall.EOPNOTSUPP
+	} else if req.Valid.Gid() || req.Valid.Uid() {
+		// changing ownership
+		// not supported
+		return syscall.EOPNOTSUPP
 	}
+
 	return nil
 }
 
 // Truncate truncates file entry
-func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
+func (file *File) Truncate(ctx context.Context, size uint64) error {
 	if file.fs.terminated {
 		return syscall.ECONNABORTED
 	}
@@ -232,8 +250,8 @@ func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *
 	defer file.mutex.RUnlock()
 
 	operID := file.fs.GetNextOperationID()
-	logger.Infof("Calling Truncate (%d) - %s, %d", operID, file.path, req.Size)
-	defer logger.Infof("Called Truncate (%d) - %s, %d", operID, file.path, req.Size)
+	logger.Infof("Calling Truncate (%d) - %s, %d", operID, file.path, size)
+	defer logger.Infof("Called Truncate (%d) - %s, %d", operID, file.path, size)
 
 	vfsEntry := file.fs.vfs.GetClosestEntry(file.path)
 	if vfsEntry == nil {
@@ -272,9 +290,9 @@ func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *
 				// is writing
 				logger.Infof("Found opened file handle %s - %s", handle.file.path, handle.fileHandle.GetID())
 
-				err = handle.Truncate(ctx, int64(req.Size))
+				err = handle.Truncate(ctx, int64(size))
 				if err != nil {
-					logger.WithError(err).Errorf("failed to truncate a file - %s, %d", irodsPath, req.Size)
+					logger.WithError(err).Errorf("failed to truncate a file - %s, %d", irodsPath, size)
 					return syscall.EREMOTEIO
 				}
 
@@ -283,15 +301,15 @@ func (file *File) Truncate(ctx context.Context, req *fuse.SetattrRequest, resp *
 		}
 
 		if !callFtruncate {
-			if irodsEntry.Size != int64(req.Size) {
-				err = file.fs.fsClient.TruncateFile(irodsPath, int64(req.Size))
+			if irodsEntry.Size != int64(size) {
+				err = file.fs.fsClient.TruncateFile(irodsPath, int64(size))
 				if err != nil {
 					if irodsclient_types.IsFileNotFoundError(err) {
 						logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
 						return syscall.ENOENT
 					}
 
-					logger.WithError(err).Errorf("failed to truncate a file - %s, %d", irodsPath, req.Size)
+					logger.WithError(err).Errorf("failed to truncate a file - %s, %d", irodsPath, size)
 					return syscall.EREMOTEIO
 				}
 			}

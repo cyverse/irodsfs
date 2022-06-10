@@ -189,6 +189,37 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 	return syscall.EREMOTEIO
 }
 
+// Setattr sets dir attributes
+func (dir *Dir) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
+	if dir.fs.terminated {
+		return syscall.ECONNABORTED
+	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "Dir",
+		"function": "Setattr",
+	})
+
+	defer irodsfscommon_utils.StackTraceFromPanic(logger)
+
+	if req.Valid.Mode() {
+		// chmod
+		// not supported
+		return syscall.EOPNOTSUPP
+	} else if req.Valid.Atime() || req.Valid.AtimeNow() || req.Valid.Mtime() || req.Valid.MtimeNow() {
+		// changing date
+		// not supported
+		return syscall.EOPNOTSUPP
+	} else if req.Valid.Gid() || req.Valid.Uid() {
+		// changing ownership
+		// not supported
+		return syscall.EOPNOTSUPP
+	}
+
+	return nil
+}
+
 // Lookup returns a node for the path
 func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 	if dir.fs.terminated {
