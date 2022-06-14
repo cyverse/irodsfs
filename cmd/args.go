@@ -15,10 +15,10 @@ import (
 	"syscall"
 	"time"
 
-	irodsfscommon_utils "github.com/cyverse/irodsfs-common/utils"
+	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
+	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 
 	"github.com/cyverse/irodsfs/commons"
-	"github.com/cyverse/irodsfs/vfs"
 	"golang.org/x/term"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gopkg.in/yaml.v2"
@@ -351,7 +351,7 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 			return nil, logWriter, true, err
 		}
 
-		pathMappings := []vfs.PathMapping{}
+		pathMappings := []irodsfs_common_vpath.VPathMapping{}
 		err = yaml.Unmarshal(yamlBytes, &pathMappings)
 		if err != nil {
 			return nil, logWriter, true, fmt.Errorf("failed to unmarshal YAML - %v", err)
@@ -368,7 +368,7 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 			return nil, logWriter, true, err
 		}
 
-		config.OperationTimeout = irodsfscommon_utils.Duration(timeout)
+		config.OperationTimeout = irodsfs_common_utils.Duration(timeout)
 	}
 
 	if len(connectionIdleTimeout) > 0 {
@@ -378,7 +378,7 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 			return nil, logWriter, true, err
 		}
 
-		config.ConnectionIdleTimeout = irodsfscommon_utils.Duration(timeout)
+		config.ConnectionIdleTimeout = irodsfs_common_utils.Duration(timeout)
 	}
 
 	if len(metadataCacheTimeout) > 0 {
@@ -388,7 +388,7 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 			return nil, logWriter, true, err
 		}
 
-		config.MetadataCacheTimeout = irodsfscommon_utils.Duration(timeout)
+		config.MetadataCacheTimeout = irodsfs_common_utils.Duration(timeout)
 	}
 
 	if len(metadataCacheCleanupTime) > 0 {
@@ -398,7 +398,7 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 			return nil, logWriter, true, err
 		}
 
-		config.MetadataCacheCleanupTime = irodsfscommon_utils.Duration(timeout)
+		config.MetadataCacheCleanupTime = irodsfs_common_utils.Duration(timeout)
 	}
 
 	err := config.CorrectSystemUser()
@@ -452,14 +452,14 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 			}
 
 			if len(access.Path) > 0 {
-				config.PathMappings = []vfs.PathMapping{
+				config.PathMappings = []irodsfs_common_vpath.VPathMapping{
 					{
-						IRODSPath:      access.Path,
-						MappingPath:    "/",
-						ResourceType:   vfs.PathMappingDirectory,
-						ReadOnly:       false,
-						CreateDir:      false,
-						IgnoreNotExist: false,
+						IRODSPath:           access.Path,
+						MappingPath:         "/",
+						ResourceType:        irodsfs_common_vpath.VPathMappingDirectory,
+						ReadOnly:            false,
+						CreateDir:           false,
+						IgnoreNotExistError: false,
 					},
 				}
 			}

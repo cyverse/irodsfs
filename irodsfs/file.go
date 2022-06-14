@@ -11,43 +11,43 @@ import (
 	fusefs "bazil.org/fuse/fs"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
-	irodsfscommon_utils "github.com/cyverse/irodsfs-common/utils"
+	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
+	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 
-	"github.com/cyverse/irodsfs/vfs"
 	log "github.com/sirupsen/logrus"
 )
 
 // File is a file node
 type File struct {
-	fs       *IRODSFS
-	inodeID  int64
-	path     string
-	vfsEntry *vfs.VFSEntry
-	mutex    sync.RWMutex // for accessing Path
+	fs         *IRODSFS
+	inodeID    int64
+	path       string
+	vpathEntry *irodsfs_common_vpath.VPathEntry
+	mutex      sync.RWMutex // for accessing Path
 }
 
 // NewFile creates a new File
-func NewFile(fs *IRODSFS, inodeID int64, path string, vfsEntry *vfs.VFSEntry) *File {
+func NewFile(fs *IRODSFS, inodeID int64, path string, vpathEntry *irodsfs_common_vpath.VPathEntry) *File {
 	return &File{
-		fs:       fs,
-		inodeID:  inodeID,
-		path:     path,
-		vfsEntry: vfsEntry,
-		mutex:    sync.RWMutex{},
+		fs:         fs,
+		inodeID:    inodeID,
+		path:       path,
+		vpathEntry: vpathEntry,
+		mutex:      sync.RWMutex{},
 	}
 }
 
-func mapFileACL(vfsEntry *vfs.VFSEntry, file *File, irodsEntry *irodsclient_fs.Entry) os.FileMode {
+func mapFileACL(vpathEntry *irodsfs_common_vpath.VPathEntry, file *File, irodsEntry *irodsclient_fs.Entry) os.FileMode {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"function": "mapFileACL",
 	})
 
-	defer irodsfscommon_utils.StackTraceFromPanic(logger)
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	// we don't actually check permissions for reading file when vfsEntry is read only
+	// we don't actually check permissions for reading file when vpathEntry is read only
 	// because files with no-access for the user will not be visible
-	if vfsEntry.ReadOnly {
+	if vpathEntry.ReadOnly {
 		return 0o400
 	}
 
@@ -121,7 +121,7 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 		"function": "Attr",
 	})
 
-	defer irodsfscommon_utils.StackTraceFromPanic(logger)
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	// apply pending update if exists
 	file.fs.fileMetaUpdater.Apply(file)
@@ -133,17 +133,17 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 	logger.Infof("Calling Attr (%d) - %s", operID, file.path)
 	defer logger.Infof("Called Attr (%d) - %s", operID, file.path)
 
-	vfsEntry := file.fs.vfs.GetClosestEntry(file.path)
-	if vfsEntry == nil {
-		logger.Errorf("failed to get VFS Entry for %s", file.path)
+	vpathEntry := file.fs.vpathManager.GetClosestEntry(file.path)
+	if vpathEntry == nil {
+		logger.Errorf("failed to get VPath Entry for %s", file.path)
 		return syscall.EREMOTEIO
 	}
 
-	if vfsEntry.Type == vfs.VFSVirtualDirEntryType {
+	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
 		logger.Errorf("failed to get file attribute from a virtual dir mapping")
 		return syscall.EREMOTEIO
-	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
-		irodsPath, err := vfsEntry.GetIRODSPath(file.path)
+	} else if vpathEntry.Type == irodsfs_common_vpath.VPathIRODS {
+		irodsPath, err := vpathEntry.GetIRODSPath(file.path)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to get IRODS path")
 			return syscall.EREMOTEIO
@@ -161,7 +161,7 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 			return syscall.EREMOTEIO
 		}
 
-		file.vfsEntry = vfs.NewVFSEntryFromIRODSFSEntry(file.path, irodsEntry, vfsEntry.ReadOnly)
+		file.vpathEntry = irodsfs_common_vpath.NewVPathEntryFromIRODSFSEntry(file.path, irodsEntry, vpathEntry.ReadOnly)
 
 		attr.Inode = uint64(irodsEntry.ID)
 		attr.Uid = file.fs.uid
@@ -170,11 +170,11 @@ func (file *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 		attr.Mtime = irodsEntry.ModifyTime
 		attr.Atime = irodsEntry.ModifyTime
 		attr.Size = uint64(irodsEntry.Size)
-		attr.Mode = mapFileACL(vfsEntry, file, irodsEntry)
+		attr.Mode = mapFileACL(vpathEntry, file, irodsEntry)
 		return nil
 	}
 
-	logger.Errorf("unknown VFS Entry type : %s", vfsEntry.Type)
+	logger.Errorf("unknown VPath Entry type : %s", vpathEntry.Type)
 	return syscall.EREMOTEIO
 }
 
@@ -190,7 +190,7 @@ func (file *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *f
 		"function": "Setattr",
 	})
 
-	defer irodsfscommon_utils.StackTraceFromPanic(logger)
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	// apply pending update if exists
 	file.fs.fileMetaUpdater.Apply(file)
@@ -241,7 +241,7 @@ func (file *File) Truncate(ctx context.Context, size uint64) error {
 		"function": "Truncate",
 	})
 
-	defer irodsfscommon_utils.StackTraceFromPanic(logger)
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	// apply pending update if exists
 	file.fs.fileMetaUpdater.Apply(file)
@@ -253,17 +253,17 @@ func (file *File) Truncate(ctx context.Context, size uint64) error {
 	logger.Infof("Calling Truncate (%d) - %s, %d", operID, file.path, size)
 	defer logger.Infof("Called Truncate (%d) - %s, %d", operID, file.path, size)
 
-	vfsEntry := file.fs.vfs.GetClosestEntry(file.path)
-	if vfsEntry == nil {
-		logger.Errorf("failed to get VFS Entry for %s", file.path)
+	vpathEntry := file.fs.vpathManager.GetClosestEntry(file.path)
+	if vpathEntry == nil {
+		logger.Errorf("failed to get VPath Entry for %s", file.path)
 		return syscall.EREMOTEIO
 	}
 
-	if vfsEntry.Type == vfs.VFSVirtualDirEntryType {
+	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
 		logger.Errorf("failed to truncate a virtual dir")
 		return syscall.EREMOTEIO
-	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
-		irodsPath, err := vfsEntry.GetIRODSPath(file.path)
+	} else if vpathEntry.Type == irodsfs_common_vpath.VPathIRODS {
+		irodsPath, err := vpathEntry.GetIRODSPath(file.path)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to get IRODS path")
 			return syscall.EREMOTEIO
@@ -318,7 +318,7 @@ func (file *File) Truncate(ctx context.Context, size uint64) error {
 		return nil
 	}
 
-	logger.Errorf("unknown VFS Entry type : %s", vfsEntry.Type)
+	logger.Errorf("unknown VPath Entry type : %s", vpathEntry.Type)
 	return syscall.EREMOTEIO
 }
 
@@ -334,7 +334,7 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		"function": "Open",
 	})
 
-	defer irodsfscommon_utils.StackTraceFromPanic(logger)
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	// apply pending update if exists
 	file.fs.fileMetaUpdater.Apply(file)
@@ -371,24 +371,24 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 	logger.Infof("Calling Open (%d) - %s, mode(%s)", operID, file.path, openMode)
 	defer logger.Infof("Called Open (%d) - %s, mode(%s)", operID, file.path, openMode)
 
-	vfsEntry := file.fs.vfs.GetClosestEntry(file.path)
-	if vfsEntry == nil {
-		logger.Errorf("failed to get VFS Entry for %s", file.path)
+	vpathEntry := file.fs.vpathManager.GetClosestEntry(file.path)
+	if vpathEntry == nil {
+		logger.Errorf("failed to get VPath Entry for %s", file.path)
 		return nil, syscall.EREMOTEIO
 	}
 
-	if vfsEntry.Type == vfs.VFSVirtualDirEntryType {
+	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
 		// failed to open directory
-		err := fmt.Errorf("failed to open mapped directory entry - %s", vfsEntry.Path)
+		err := fmt.Errorf("failed to open mapped directory entry - %s", vpathEntry.Path)
 		logger.Error(err)
 		return nil, syscall.EACCES
-	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
-		if vfsEntry.ReadOnly && openMode != string(irodsclient_types.FileOpenModeReadOnly) {
+	} else if vpathEntry.Type == irodsfs_common_vpath.VPathIRODS {
+		if vpathEntry.ReadOnly && openMode != string(irodsclient_types.FileOpenModeReadOnly) {
 			logger.Errorf("failed to open a read-only file with non-read-only mode")
 			return nil, syscall.EREMOTEIO
 		}
 
-		irodsPath, err := vfsEntry.GetIRODSPath(file.path)
+		irodsPath, err := vpathEntry.GetIRODSPath(file.path)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to get IRODS path")
 			return nil, syscall.EREMOTEIO
@@ -417,7 +417,7 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 		return fileHandle, nil
 	}
 
-	logger.Errorf("unknown VFS Entry type : %s", vfsEntry.Type)
+	logger.Errorf("unknown VPath Entry type : %s", vpathEntry.Type)
 	return nil, syscall.EREMOTEIO
 }
 

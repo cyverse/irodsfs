@@ -9,7 +9,7 @@ import (
 	fuse "bazil.org/fuse"
 	irodsfscommon_io "github.com/cyverse/irodsfs-common/io"
 	irodsfscommon_irods "github.com/cyverse/irodsfs-common/irods"
-	irodsfscommon_utils "github.com/cyverse/irodsfs-common/utils"
+	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -98,7 +98,7 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 		"function": "Read",
 	})
 
-	defer irodsfscommon_utils.StackTraceFromPanic(logger)
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	logger.Debugf("Calling Read - %s, %d Offset, %d Bytes", handle.file.path, req.Offset, req.Size)
 	defer logger.Debugf("Called Read - %s, %d Offset, %d Bytes", handle.file.path, req.Offset, req.Size)
@@ -145,7 +145,7 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 		"function": "Write",
 	})
 
-	defer irodsfscommon_utils.StackTraceFromPanic(logger)
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	logger.Debugf("Calling Write - %s, %d Bytes", handle.file.path, len(req.Data))
 	defer logger.Debugf("Called Write - %s, %d Bytes", handle.file.path, len(req.Data))
@@ -191,7 +191,7 @@ func (handle *FileHandle) Truncate(ctx context.Context, size int64) error {
 		"function": "Truncate",
 	})
 
-	defer irodsfscommon_utils.StackTraceFromPanic(logger)
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	logger.Infof("Calling Truncate - %s, %d Bytes", handle.file.path, size)
 	defer logger.Infof("Called Truncate - %s, %d Bytes", handle.file.path, size)
@@ -231,7 +231,7 @@ func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) err
 		"function": "Flush",
 	})
 
-	defer irodsfscommon_utils.StackTraceFromPanic(logger)
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	logger.Debugf("Calling Flush - %s", handle.file.path)
 	defer logger.Debugf("Called Flush - %s", handle.file.path)
@@ -265,7 +265,7 @@ func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest)
 		"function": "Release",
 	})
 
-	defer irodsfscommon_utils.StackTraceFromPanic(logger)
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	logger.Debugf("Calling Release - %s", handle.file.path)
 	defer logger.Debugf("Called Release - %s", handle.file.path)

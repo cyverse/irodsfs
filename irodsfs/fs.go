@@ -2,7 +2,6 @@ package irodsfs
 
 import (
 	"fmt"
-	"os"
 	"syscall"
 	"time"
 
@@ -10,14 +9,14 @@ import (
 	fusefs "bazil.org/fuse/fs"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
-	irodsfscommon_irods "github.com/cyverse/irodsfs-common/irods"
-	irodsfscommon_report "github.com/cyverse/irodsfs-common/report"
-	irodsfscommon_utils "github.com/cyverse/irodsfs-common/utils"
+	irodsfs_common_irods "github.com/cyverse/irodsfs-common/irods"
+	irodsfs_common_report "github.com/cyverse/irodsfs-common/report"
+	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
+	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 	monitor_types "github.com/cyverse/irodsfs-monitor/types"
 	irodspoolclient "github.com/cyverse/irodsfs-pool/client"
 
 	"github.com/cyverse/irodsfs/commons"
-	"github.com/cyverse/irodsfs/vfs"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -49,17 +48,17 @@ type IRODSFS struct {
 	config          *commons.Config
 	fuseConnection  *fuse.Conn
 	fuse            *fusefs.Server
-	vfs             *vfs.VFS
+	vpathManager    *irodsfs_common_vpath.VPathManager
 	fileMetaUpdater *FileMetaUpdater
-	fsClient        irodsfscommon_irods.IRODSFSClient
+	fsClient        irodsfs_common_irods.IRODSFSClient
 	fileHandleMap   *FileHandleMap
 	userGroupsMap   map[string]*irodsclient_types.IRODSUser
 
 	uid uint32
 	gid uint32
 
-	reportClient         irodsfscommon_report.IRODSFSReportClient
-	instanceReportClient irodsfscommon_report.IRODSFSInstanceReportClient
+	reportClient         irodsfs_common_report.IRODSFSReportClient
+	instanceReportClient irodsfs_common_report.IRODSFSInstanceReportClient
 
 	terminated bool
 	killFUSE   bool
@@ -74,7 +73,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		"function": "NewFileSystem",
 	})
 
-	defer irodsfscommon_utils.StackTraceFromPanic(logger)
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	account, err := irodsclient_types.CreateIRODSProxyAccount(config.Host, config.Port,
 		config.ClientUser, config.Zone, config.ProxyUser, config.Zone,
@@ -119,7 +118,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	)
 
 	logger.Info("Initializing an iRODS file system client")
-	var fsClient irodsfscommon_irods.IRODSFSClient = nil
+	var fsClient irodsfs_common_irods.IRODSFSClient = nil
 	if len(config.PoolHost) > 0 {
 		// use pool driver
 		logger.Info("Initializing irodsfs-pool fs client")
@@ -139,18 +138,18 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	} else {
 		// use go-irodsclient driver
 		logger.Info("Initializing an iRODS native file system client")
-		fsClient, err = irodsfscommon_irods.NewIRODSFSClientDirect(account, fsConfig)
+		fsClient, err = irodsfs_common_irods.NewIRODSFSClientDirect(account, fsConfig)
 		if err != nil {
 			logger.WithError(err).Error("failed to create a new go-irodsclient fs client")
 			return nil, fmt.Errorf("failed to create a new go-irodsclient fs client - %v", err)
 		}
 	}
 
-	logger.Info("Initializing VFS")
-	vfs, err := vfs.NewVFS(fsClient, config.PathMappings)
+	logger.Info("Initializing virtual path mappings")
+	vpathManager, err := irodsfs_common_vpath.NewVPathManager(fsClient, config.PathMappings)
 	if err != nil {
-		logger.WithError(err).Error("failed to create VFS")
-		return nil, fmt.Errorf("failed to create VFS - %v", err)
+		logger.WithError(err).Error("failed to create Virtual Path Manager")
+		return nil, fmt.Errorf("failed to create Virtual Path Manager - %v", err)
 	}
 
 	logger.Info("Initializing File Meta Updater")
@@ -159,11 +158,11 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	logger.Info("Initializing File Handle Map")
 	fileHandleMap := NewFileHandleMap()
 
-	var reportClient irodsfscommon_report.IRODSFSReportClient
-	var instanceReportClient irodsfscommon_report.IRODSFSInstanceReportClient
+	var reportClient irodsfs_common_report.IRODSFSReportClient
+	var instanceReportClient irodsfs_common_report.IRODSFSInstanceReportClient
 	if len(config.MonitorURL) > 0 {
 		logger.Info("Initializing Monitoring Reporter")
-		reportClient = irodsfscommon_report.NewIRODSFSRestReporter(config.MonitorURL, true, 100, 10)
+		reportClient = irodsfs_common_report.NewIRODSFSRestReporter(config.MonitorURL, true, 100, 10)
 
 		instanceInfo := &monitor_types.ReportInstance{
 			Host:                     config.Host,
@@ -209,7 +208,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	return &IRODSFS{
 		config:          config,
 		fuse:            nil,
-		vfs:             vfs,
+		vpathManager:    vpathManager,
 		fileMetaUpdater: fileMetaUpdater,
 		fsClient:        fsClient,
 		fileHandleMap:   fileHandleMap,
@@ -234,7 +233,7 @@ func (fs *IRODSFS) ConnectToFuse() error {
 		"function": "ConnectToFuse",
 	})
 
-	defer irodsfscommon_utils.StackTraceFromPanic(logger)
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	logger.Infof("Connecting to FUSE, mount on %s", fs.config.MountPath)
 
@@ -258,7 +257,7 @@ func (fs *IRODSFS) StartFuse() error {
 		"function": "StartFuse",
 	})
 
-	defer irodsfscommon_utils.StackTraceFromPanic(logger)
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	if fs.fuseConnection == nil {
 		logger.Error("failed to start FUSE server without connection")
@@ -288,14 +287,6 @@ func (fs *IRODSFS) StopFuse() {
 	})
 
 	logger.Info("Stopping FileSystem")
-
-	go func() {
-		logger.Info("Testing mount point")
-		time.Sleep(100 * time.Millisecond)
-		// this is to create a request to dead fuse
-		// causing the fuse client to notice it's closing
-		os.Stat(fs.config.MountPath)
-	}()
 
 	// forcefully close the fuse connection
 	fs.killFUSE = true
@@ -368,25 +359,25 @@ func (fs *IRODSFS) Root() (fusefs.Node, error) {
 		"function": "Root",
 	})
 
-	defer irodsfscommon_utils.StackTraceFromPanic(logger)
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	vfsEntry := fs.vfs.GetEntry("/")
-	if vfsEntry == nil {
-		logger.Errorf("failed to get Root VFS Entry")
+	vpathEntry := fs.vpathManager.GetEntry("/")
+	if vpathEntry == nil {
+		logger.Errorf("failed to get Root VPath Entry")
 		return nil, syscall.EREMOTEIO
 	}
 
-	if vfsEntry.Type == vfs.VFSVirtualDirEntryType {
-		return NewDir(fs, vfsEntry.VirtualDirEntry.ID, "/"), nil
-	} else if vfsEntry.Type == vfs.VFSIRODSEntryType {
-		if vfsEntry.IRODSEntry.Type != irodsclient_fs.DirectoryEntry {
+	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
+		return NewDir(fs, vpathEntry.VirtualDirEntry.ID, "/"), nil
+	} else if vpathEntry.Type == irodsfs_common_vpath.VPathIRODS {
+		if vpathEntry.IRODSEntry.Type != irodsclient_fs.DirectoryEntry {
 			logger.Errorf("failed to mount a data object as a root")
 			return nil, syscall.EREMOTEIO
 		}
 
-		return NewDir(fs, vfsEntry.IRODSEntry.ID, "/"), nil
+		return NewDir(fs, vpathEntry.IRODSEntry.ID, "/"), nil
 	} else {
-		logger.Errorf("unknown VFS Entry type : %s", vfsEntry.Type)
+		logger.Errorf("unknown VPath Entry type : %s", vpathEntry.Type)
 		return nil, syscall.EREMOTEIO
 	}
 }

@@ -6,9 +6,9 @@ import (
 	"time"
 
 	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
+	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 
 	"github.com/cyverse/irodsfs/utils"
-	"github.com/cyverse/irodsfs/vfs"
 	"github.com/rs/xid"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -68,18 +68,18 @@ type MetadataCacheTimeoutSetting struct {
 
 // Config holds the parameters list which can be configured
 type Config struct {
-	Host         string            `yaml:"host"`
-	Port         int               `yaml:"port"`
-	ProxyUser    string            `yaml:"proxy_user,omitempty"`
-	ClientUser   string            `yaml:"client_user"`
-	Zone         string            `yaml:"zone"`
-	Password     string            `yaml:"password,omitempty"`
-	Resource     string            `yaml:"resource,omitempty"`
-	PathMappings []vfs.PathMapping `yaml:"path_mappings"`
-	UID          int               `yaml:"uid"`
-	GID          int               `yaml:"gid"`
-	SystemUser   string            `yaml:"system_user"`
-	MountPath    string            `yaml:"mount_path,omitempty"`
+	Host         string                              `yaml:"host"`
+	Port         int                                 `yaml:"port"`
+	ProxyUser    string                              `yaml:"proxy_user,omitempty"`
+	ClientUser   string                              `yaml:"client_user"`
+	Zone         string                              `yaml:"zone"`
+	Password     string                              `yaml:"password,omitempty"`
+	Resource     string                              `yaml:"resource,omitempty"`
+	PathMappings []irodsfs_common_vpath.VPathMapping `yaml:"path_mappings"`
+	UID          int                                 `yaml:"uid"`
+	GID          int                                 `yaml:"gid"`
+	SystemUser   string                              `yaml:"system_user"`
+	MountPath    string                              `yaml:"mount_path,omitempty"`
 
 	TempRootPath string `yaml:"temp_root_path,omitempty"`
 
@@ -124,7 +124,7 @@ func NewDefaultConfig() *Config {
 	return &Config{
 		Port:         PortDefault,
 		Resource:     "",
-		PathMappings: []vfs.PathMapping{},
+		PathMappings: []irodsfs_common_vpath.VPathMapping{},
 		UID:          uid,
 		GID:          gid,
 		SystemUser:   systemUser,
@@ -172,7 +172,7 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 	config := Config{
 		Port:         PortDefault,
 		Resource:     "",
-		PathMappings: []vfs.PathMapping{},
+		PathMappings: []irodsfs_common_vpath.VPathMapping{},
 		UID:          uid,
 		GID:          gid,
 		SystemUser:   systemUser,
@@ -314,7 +314,7 @@ func (config *Config) Validate() error {
 		return fmt.Errorf("path mappings must be given")
 	}
 
-	err := vfs.ValidatePathMappings(config.PathMappings)
+	err := irodsfs_common_vpath.ValidateVPathMappings(config.PathMappings)
 	if err != nil {
 		return fmt.Errorf("invalid path mappings - %v", err)
 	}
