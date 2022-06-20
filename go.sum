@@ -15,13 +15,12 @@ github.com/cncf/udpa/go v0.0.0-20201120205902-5459f2c99403/go.mod h1:WmhPx2Nbnht
 github.com/cncf/xds/go v0.0.0-20210312221358-fbca930ec8ed/go.mod h1:eXthEFrGJvWHgFFCl3hGmgk+/aYT6PnTQLykKQRLhEs=
 github.com/cyverse/go-irodsclient v0.9.3 h1:ERfEZJYOH8ZvAceKD68iCfesWyMyqGf/VBVUwxudD9Y=
 github.com/cyverse/go-irodsclient v0.9.3/go.mod h1:vEllPYPlJhNUp/op6e4/zDKt/wOIeN8Y7Nyy4QpR/F0=
-github.com/cyverse/irodsfs-common v0.0.0-20220603193726-dbd3cc14aa11/go.mod h1:W/PowAhEzA2uXD3t7yEjEgpTvmQ+PtHhynO/7vChKFs=
-github.com/cyverse/irodsfs-common v0.0.0-20220614004341-9c8dfcfa4efa h1:+U2Vi5lzdmkNh/JDwYwb0Fqgy72QWHSZ/gcrXC3/Vr0=
-github.com/cyverse/irodsfs-common v0.0.0-20220614004341-9c8dfcfa4efa/go.mod h1:f9PHUB37hxA1eqkFSps0OZ8O4Cdgir6eKA5857yLVWI=
+github.com/cyverse/irodsfs-common v0.0.0-20220620233922-11e9e6a7ab2e h1:b6+I/KrZ950M2IsZBiiq3ab4pxOWPZ34PGagLSMmWVY=
+github.com/cyverse/irodsfs-common v0.0.0-20220620233922-11e9e6a7ab2e/go.mod h1:KpKdpK94+AJ5D8cMEZEm5RT+AGGiLBk5ocWalrq+h9I=
 github.com/cyverse/irodsfs-monitor v0.0.0-20210917223838-2f6d5cbbde0a h1:8GgM3Dw+qwJ436tpHlQbq5exsvfCzFEehuWLlZTPtcE=
 github.com/cyverse/irodsfs-monitor v0.0.0-20210917223838-2f6d5cbbde0a/go.mod h1:8UE1mT26+0vAsqS9UJ6Q/vlKq3da6FLdt5p6Tt1AIC4=
-github.com/cyverse/irodsfs-pool v0.5.0 h1:4P7FiaJ2T3XTo9Mmu7XRRjGGMDtBwaTDZj6KWDkuyTo=
-github.com/cyverse/irodsfs-pool v0.5.0/go.mod h1:UdB4R3jFyH40UXBGP+D2Sg72utx0g96VfKEA9ckYcr0=
+github.com/cyverse/irodsfs-pool v0.5.2-0.20220620234049-9b5906a462be h1:8IiMoNocb5ddLcYZwFpqPiZQZ2yMVvxuatIWexbvem4=
+github.com/cyverse/irodsfs-pool v0.5.2-0.20220620234049-9b5906a462be/go.mod h1:hWWAXXIANJ4A2Vt92HBy3YF4O9h1/ZrZmLqVVaN39k0=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
@@ -127,7 +126,6 @@ golang.org/x/sys v0.0.0-20190412213103-97732733099d/go.mod h1:h1NjWce9XRLGQEsW7w
 golang.org/x/sys v0.0.0-20191026070338-33540a1f6037/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20191210023423-ac6580df4449/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20200323222414-85ca7c5b95cd/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
-golang.org/x/sys v0.0.0-20201119102817-f84b799fce68/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20210119212857-b64e53b001e4/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20210601080250-7ecdf8ef093b/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
@@ -179,7 +177,6 @@ google.golang.org/protobuf v1.27.1/go.mod h1:9q0QmTI4eRPtz6boOQmLYwt+qCgq0jsYwAQ
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 h1:YR8cESwS4TdDjEe65xsg0ogRM/Nc3DYOhEAlW+xobZo=
-gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/natefinch/lumberjack.v2 v2.0.0 h1:1Lc07Kr7qY4U2YPouBjpCLxpiyxIVoxqXgkXLknAOE8=
 gopkg.in/natefinch/lumberjack.v2 v2.0.0/go.mod h1:l0ndWWf7gzL7RNwBG7wST/UCcT4T24xpD6X8LsfU/+k=
 gopkg.in/yaml.v2 v2.2.2/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
