@@ -343,11 +343,11 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 	defer file.mutex.RUnlock()
 
 	openMode := string(irodsclient_types.FileOpenModeReadOnly)
+	resp.Flags |= fuse.OpenDirectIO
 
 	if req.Flags.IsReadOnly() {
 		openMode = string(irodsclient_types.FileOpenModeReadOnly)
-		resp.Flags |= fuse.OpenKeepCache
-		resp.Flags &^= fuse.OpenDirectIO // disable
+		//resp.Flags |= fuse.OpenKeepCache
 	} else if req.Flags.IsWriteOnly() {
 		openMode = string(irodsclient_types.FileOpenModeWriteOnly)
 
@@ -358,10 +358,8 @@ func (file *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Op
 			// truncate
 			openMode = string(irodsclient_types.FileOpenModeWriteTruncate)
 		}
-		resp.Flags |= fuse.OpenDirectIO
 	} else if req.Flags.IsReadWrite() {
 		openMode = string(irodsclient_types.FileOpenModeReadWrite)
-		resp.Flags |= fuse.OpenDirectIO
 	} else {
 		logger.Errorf("unknown file open mode - %s", req.Flags.String())
 		return nil, syscall.EACCES
