@@ -19,8 +19,8 @@ github.com/cyverse/irodsfs-common v0.0.0-20220620233922-11e9e6a7ab2e h1:b6+I/KrZ
 github.com/cyverse/irodsfs-common v0.0.0-20220620233922-11e9e6a7ab2e/go.mod h1:KpKdpK94+AJ5D8cMEZEm5RT+AGGiLBk5ocWalrq+h9I=
 github.com/cyverse/irodsfs-monitor v0.0.0-20210917223838-2f6d5cbbde0a h1:8GgM3Dw+qwJ436tpHlQbq5exsvfCzFEehuWLlZTPtcE=
 github.com/cyverse/irodsfs-monitor v0.0.0-20210917223838-2f6d5cbbde0a/go.mod h1:8UE1mT26+0vAsqS9UJ6Q/vlKq3da6FLdt5p6Tt1AIC4=
-github.com/cyverse/irodsfs-pool v0.5.2-0.20220620234049-9b5906a462be h1:8IiMoNocb5ddLcYZwFpqPiZQZ2yMVvxuatIWexbvem4=
-github.com/cyverse/irodsfs-pool v0.5.2-0.20220620234049-9b5906a462be/go.mod h1:hWWAXXIANJ4A2Vt92HBy3YF4O9h1/ZrZmLqVVaN39k0=
+github.com/cyverse/irodsfs-pool v0.5.2-0.20220621001826-d978116ece01 h1:GwEg+htfrLLk2LBBqYKwHL+wlj1FuDm+L4u+3HBai5Y=
+github.com/cyverse/irodsfs-pool v0.5.2-0.20220621001826-d978116ece01/go.mod h1:hWWAXXIANJ4A2Vt92HBy3YF4O9h1/ZrZmLqVVaN39k0=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

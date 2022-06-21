@@ -209,6 +209,7 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 	flag.StringVar(&mappingFilePath, "mapping", "", "Set Path Mapping YAML File")
 	flag.StringVar(&configFilePath, "config", "", "Set Config YAML File")
 	flag.BoolVar(&config.Foreground, "f", false, "Run in foreground")
+	flag.BoolVar(&config.Debug, "d", false, "Run in debug mode")
 	flag.BoolVar(&config.AllowOther, "allow_other", false, "Allow access from other users")
 	flag.BoolVar(&config.ChildProcess, ChildProcessArgument, false, "")
 	flag.StringVar(&config.Host, "host", "", "Set iRODS host")
@@ -247,6 +248,10 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 	flag.IntVar(&config.ProfileServicePort, "profile_port", commons.ProfileServicePortDefault, "Set profile service port")
 
 	flag.Parse()
+
+	if config.Debug {
+		log.SetLevel(log.DebugLevel)
+	}
 
 	if version {
 		info, err := commons.GetVersionJSON()
