@@ -327,10 +327,6 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 		}
 	}
 
-	if config.Debug {
-		log.SetLevel(log.DebugLevel)
-	}
-
 	if len(mappingFilePath) > 0 {
 		// inputPath can be a local file
 		mappingFileAbsPath, err := filepath.Abs(mappingFilePath)

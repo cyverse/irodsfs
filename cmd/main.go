@@ -318,6 +318,10 @@ func run(config *commons.Config, isChildProcess bool) error {
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
+	if config.Debug {
+		log.SetLevel(log.DebugLevel)
+	}
+
 	// profile
 	if config.Profile {
 		go func() {
