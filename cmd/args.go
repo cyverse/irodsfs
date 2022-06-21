@@ -249,10 +249,6 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 
 	flag.Parse()
 
-	if config.Debug {
-		log.SetLevel(log.DebugLevel)
-	}
-
 	if version {
 		info, err := commons.GetVersionJSON()
 		if err != nil {
@@ -329,6 +325,10 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 				return nil, logWriter, true, fmt.Errorf("failed to unmarshal YAML - %v", err)
 			}
 		}
+	}
+
+	if config.Debug {
+		log.SetLevel(log.DebugLevel)
 	}
 
 	if len(mappingFilePath) > 0 {
