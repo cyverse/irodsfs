@@ -294,26 +294,39 @@ func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest)
 		handle.writer = nil
 	}
 
-	// Lock
-	handle.mutex.Lock()
-	defer handle.mutex.Unlock()
+	closeFunc := func() {
+		//return
+		// Lock
+		handle.mutex.Lock()
+		defer handle.mutex.Unlock()
 
-	err := handle.fileHandle.Close()
-	if err != nil {
-		logger.Errorf("failed to close - %s", handle.file.path)
-		return syscall.EREMOTEIO
+		err := handle.fileHandle.Close()
+		if err != nil {
+			logger.Errorf("failed to close - %s", handle.file.path)
+			//return syscall.EREMOTEIO
+			return
+		}
+
+		// remove the handle from file handle map
+		handle.fs.fileHandleMap.Remove(handle.fileHandle.GetID())
+
+		// Report
+		if handle.fs.instanceReportClient != nil {
+			err = handle.fs.instanceReportClient.DoneFileAccess(handle.fileHandle)
+			if err != nil {
+				logger.WithError(err).Error("failed to report the file transfer to monitoring service")
+				return
+				//return err
+			}
+		}
 	}
 
-	// remove the handle from file handle map
-	handle.fs.fileHandleMap.Remove(handle.fileHandle.GetID())
-
-	// Report
-	if handle.fs.instanceReportClient != nil {
-		err = handle.fs.instanceReportClient.DoneFileAccess(handle.fileHandle)
-		if err != nil {
-			logger.WithError(err).Error("failed to report the file transfer to monitoring service")
-			return err
-		}
+	openMode := handle.fileHandle.GetOpenMode()
+	if openMode.IsReadOnly() {
+		// close it asynchronously
+		go closeFunc()
+	} else {
+		closeFunc()
 	}
 
 	return nil
