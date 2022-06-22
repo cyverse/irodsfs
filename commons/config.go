@@ -83,8 +83,7 @@ type Config struct {
 
 	TempRootPath string `yaml:"temp_root_path,omitempty"`
 
-	PoolHost string `yaml:"pool_host,omitempty"`
-	PoolPort int    `yaml:"pool_port,omitempty"`
+	PoolAddress string `yaml:"pool_address,omitempty"`
 
 	AuthScheme          string `yaml:"authscheme"`
 	CACertificateFile   string `yaml:"ssl_ca_cert_file"`
@@ -130,8 +129,7 @@ func NewDefaultConfig() *Config {
 		GID:          gid,
 		SystemUser:   systemUser,
 
-		PoolHost: "",
-		PoolPort: 0,
+		PoolAddress: "",
 
 		TempRootPath: GetDefaultTempRootPath(),
 
@@ -179,8 +177,7 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		GID:          gid,
 		SystemUser:   systemUser,
 
-		PoolHost: "",
-		PoolPort: 0,
+		PoolAddress: "",
 
 		TempRootPath: GetDefaultTempRootPath(),
 
