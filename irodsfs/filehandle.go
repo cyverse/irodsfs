@@ -42,15 +42,11 @@ func NewFileHandle(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle)
 		writer = irodsfscommon_io.NewNilWriter(fileHandle)
 
 		// reader
-		if len(file.fs.config.PoolHost) > 0 {
-			reader = irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
+		if len(file.fs.config.TempRootPath) > 0 {
+			syncReader := irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
+			reader = irodsfscommon_io.NewAsyncBlockReader(syncReader, iRODSIOBlockSize, iRODSReadWriteSize, file.fs.config.TempRootPath)
 		} else {
-			if len(file.fs.config.TempRootPath) > 0 {
-				syncReader := irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
-				reader = irodsfscommon_io.NewAsyncBlockReader(syncReader, iRODSIOBlockSize, iRODSReadWriteSize, file.fs.config.TempRootPath)
-			} else {
-				reader = irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
-			}
+			reader = irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
 		}
 	} else if openMode.IsWriteOnly() {
 		// writer
