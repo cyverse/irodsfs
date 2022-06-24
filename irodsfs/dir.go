@@ -7,12 +7,12 @@ import (
 	"sync"
 	"syscall"
 
-	fuse "bazil.org/fuse"
-	fusefs "bazil.org/fuse/fs"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
 	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
+	fuse "github.com/seaweedfs/fuse"
+	fusefs "github.com/seaweedfs/fuse/fs"
 
 	log "github.com/sirupsen/logrus"
 )

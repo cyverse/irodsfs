@@ -26,7 +26,7 @@ func CheckFuse() CheckFUSEStatus {
 		// check if FUSE device exists
 		return CheckDevFuse()
 	} else if runtime.GOOS == "darwin" {
-		// cannot run on MacOS, bazil.org/fuse does not support
+		// cannot run on MacOS, support is dropped by fuse library
 		return CheckFUSEStatusCannotRun
 	} else if runtime.GOOS == "windows" {
 		// no fuse on Windows

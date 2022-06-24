@@ -6,10 +6,10 @@ import (
 	"sync"
 	"syscall"
 
-	fuse "bazil.org/fuse"
 	irodsfscommon_io "github.com/cyverse/irodsfs-common/io"
 	irodsfscommon_irods "github.com/cyverse/irodsfs-common/irods"
 	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
+	fuse "github.com/seaweedfs/fuse"
 
 	log "github.com/sirupsen/logrus"
 )

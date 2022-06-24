@@ -3,7 +3,7 @@ package irodsfs
 import (
 	"sync"
 
-	fusefs "bazil.org/fuse/fs"
+	fusefs "github.com/seaweedfs/fuse/fs"
 )
 
 // FileMetaUpdater holds updates on file metadata temporarily.

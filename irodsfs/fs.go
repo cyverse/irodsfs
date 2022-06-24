@@ -5,8 +5,6 @@ import (
 	"syscall"
 	"time"
 
-	"bazil.org/fuse"
-	fusefs "bazil.org/fuse/fs"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsfs_common_irods "github.com/cyverse/irodsfs-common/irods"
@@ -15,6 +13,8 @@ import (
 	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 	monitor_types "github.com/cyverse/irodsfs-monitor/types"
 	irodspoolclient "github.com/cyverse/irodsfs-pool/client"
+	fuse "github.com/seaweedfs/fuse"
+	fusefs "github.com/seaweedfs/fuse/fs"
 
 	"github.com/cyverse/irodsfs/commons"
 	log "github.com/sirupsen/logrus"
