@@ -2,7 +2,10 @@ package commons
 
 import (
 	"fmt"
+	"net/url"
 	"os"
+	"path"
+	"strings"
 	"time"
 
 	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
@@ -83,7 +86,7 @@ type Config struct {
 
 	TempRootPath string `yaml:"temp_root_path,omitempty"`
 
-	PoolAddress string `yaml:"pool_address,omitempty"`
+	PoolEndpoint string `yaml:"pool_endpoint,omitempty"`
 
 	AuthScheme          string `yaml:"authscheme"`
 	CACertificateFile   string `yaml:"ssl_ca_cert_file"`
@@ -129,7 +132,7 @@ func NewDefaultConfig() *Config {
 		GID:          gid,
 		SystemUser:   systemUser,
 
-		PoolAddress: "",
+		PoolEndpoint: "",
 
 		TempRootPath: GetDefaultTempRootPath(),
 
@@ -177,7 +180,7 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		GID:          gid,
 		SystemUser:   systemUser,
 
-		PoolAddress: "",
+		PoolEndpoint: "",
 
 		TempRootPath: GetDefaultTempRootPath(),
 
@@ -395,5 +398,36 @@ func (config *Config) Validate() error {
 		}
 	}
 
+	if len(config.PoolEndpoint) > 0 {
+		_, _, err := ParsePoolServiceEndpoint(config.PoolEndpoint)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+// ParsePoolServiceEndpoint parses endpoint string
+func ParsePoolServiceEndpoint(endpoint string) (string, string, error) {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return "", "", fmt.Errorf("could not parse endpoint: %v", err)
+	}
+
+	scheme := strings.ToLower(u.Scheme)
+	switch scheme {
+	case "tcp":
+		return "tcp", u.Host, nil
+	case "unix":
+		path := path.Join("/", u.Path)
+		return "unix", path, nil
+	case "":
+		if len(u.Host) > 0 {
+			return "tcp", u.Host, nil
+		}
+		return "", "", fmt.Errorf("unknown host: %s", u.Host)
+	default:
+		return "", "", fmt.Errorf("unsupported protocol: %s", scheme)
+	}
 }

@@ -895,3 +895,12 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 		return nil, nil, syscall.EREMOTEIO
 	}
 }
+
+/*
+func (dir *Dir) Symlink(ctx context.Context, req *fuse.SymlinkRequest) (fusefs.Node, error) {
+}
+
+func (dir *Dir) Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (string, error) {
+
+}
+*/

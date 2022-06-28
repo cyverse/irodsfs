@@ -241,7 +241,7 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 	flag.IntVar(&config.UID, "uid", -1, "Set UID of file/directory owner")
 	flag.IntVar(&config.GID, "gid", -1, "Set GID of file/directory owner")
 	flag.StringVar(&config.SystemUser, "sys_user", "", "Set System User of file/directory owner")
-	flag.StringVar(&config.PoolAddress, "pool_addr", "", "Set iRODS FUSE Lite Pool Service address")
+	flag.StringVar(&config.PoolEndpoint, "pool_endpoint", "", "Set iRODS FUSE Lite Pool Service endpoint")
 	flag.StringVar(&config.TempRootPath, "temp_root", commons.GetDefaultTempRootPath(), "Set temp file root path")
 	flag.BoolVar(&config.Profile, "profile", false, "Enable profiling")
 	flag.IntVar(&config.ProfileServicePort, "profile_port", commons.ProfileServicePortDefault, "Set profile service port")

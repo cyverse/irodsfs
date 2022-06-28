@@ -50,7 +50,7 @@ func NewFileHandle(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle)
 		}
 	} else if openMode.IsWriteOnly() {
 		// writer
-		if len(file.fs.config.PoolAddress) > 0 {
+		if len(file.fs.config.PoolEndpoint) > 0 {
 			writer = irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
 		} else {
 			if len(file.fs.config.TempRootPath) > 0 {

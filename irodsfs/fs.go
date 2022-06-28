@@ -119,14 +119,14 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 
 	logger.Info("Initializing an iRODS file system client")
 	var fsClient irodsfs_common_irods.IRODSFSClient = nil
-	if len(config.PoolAddress) > 0 {
+	if len(config.PoolEndpoint) > 0 {
 		// use pool driver
 		logger.Info("Initializing irodsfs-pool fs client")
-		poolClient := irodspoolclient.NewPoolServiceClient(config.PoolAddress, time.Duration(config.OperationTimeout), config.InstanceID)
+		poolClient := irodspoolclient.NewPoolServiceClient(config.PoolEndpoint, time.Duration(config.OperationTimeout), config.InstanceID)
 		err = poolClient.Connect()
 		if err != nil {
-			logger.WithError(err).Error("failed to connect to irodsfs-pool server %s", config.PoolAddress)
-			return nil, fmt.Errorf("failed to connect to irodsfs-pool server %s - %v", config.PoolAddress, err)
+			logger.WithError(err).Error("failed to connect to irodsfs-pool server %s", config.PoolEndpoint)
+			return nil, fmt.Errorf("failed to connect to irodsfs-pool server %s - %v", config.PoolEndpoint, err)
 		}
 
 		fsClient, err = poolClient.NewSession(account, FSName)
@@ -178,7 +178,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 			MetadataCacheCleanupTime: time.Duration(config.MetadataCacheCleanupTime).String(),
 			BufferSizeMax:            0,
 
-			PoolAddress: config.PoolAddress,
+			PoolAddress: config.PoolEndpoint,
 
 			InstanceID: config.InstanceID,
 
