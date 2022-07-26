@@ -51,6 +51,13 @@ func mapFileACL(vpathEntry *irodsfs_common_vpath.VPathEntry, file *File, irodsEn
 		return 0o400
 	}
 
+	if file.fs.config.NoPermissionCheck {
+		// skip perform permission check
+		// give the highest permission, but this doesn't mean that the user can write data
+		// since iRODS will check permission
+		return 0o700
+	}
+
 	if irodsEntry.Owner == file.fs.config.ClientUser {
 		// mine
 		return 0o700

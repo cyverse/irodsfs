@@ -49,6 +49,13 @@ func mapDirACL(vpathEntry *irodsfs_common_vpath.VPathEntry, dir *Dir, irodsEntry
 		return 0o500
 	}
 
+	if dir.fs.config.NoPermissionCheck {
+		// skip perform permission check
+		// give the highest permission, but this doesn't mean that the user can write data
+		// since iRODS will check permission
+		return 0o700
+	}
+
 	if irodsEntry.Owner == dir.fs.config.ClientUser {
 		// mine
 		return 0o700
@@ -57,10 +64,13 @@ func mapDirACL(vpathEntry *irodsfs_common_vpath.VPathEntry, dir *Dir, irodsEntry
 	logger.Debugf("Checking ACL information of the Entry for %s and user %s", irodsEntry.Path, dir.fs.config.ClientUser)
 	defer logger.Debugf("Checked ACL information of the Entry for %s and user %s", irodsEntry.Path, dir.fs.config.ClientUser)
 
+	logger.Infof("Checking ACL info for %s", irodsEntry.Path)
 	accesses, err := dir.fs.fsClient.ListDirACLs(irodsEntry.Path)
 	if err != nil {
 		logger.Errorf("failed to get ACL information of the Entry for %s", irodsEntry.Path)
 	}
+
+	logger.Infof("Checked ACL info for %s, %d ACL entries", irodsEntry.Path, len(accesses))
 
 	var highestPermission os.FileMode = 0o500
 	for _, access := range accesses {
@@ -182,6 +192,7 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 		attr.Atime = irodsEntry.ModifyTime
 		attr.Size = 0
 		attr.Mode = os.ModeDir | mapDirACL(vpathEntry, dir, irodsEntry)
+
 		return nil
 	}
 
@@ -403,6 +414,16 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 
 			dirEntries = append(dirEntries, dirEntry)
 			logger.Debugf("Entry - %s %s", irodsPath, irodsEntry.Name)
+		}
+
+		if !dir.fs.config.NoPermissionCheck && !vpathEntry.ReadOnly {
+			// list ACLs
+			// this caches all ACLs of entries in irodsPath, so make future ACL queries fast
+			_, err = dir.fs.fsClient.ListACLsForEntries(irodsPath)
+			if err != nil {
+				logger.WithError(err).Errorf("failed to list ACLs - %s", irodsPath)
+				return nil, syscall.EREMOTEIO
+			}
 		}
 
 		return dirEntries, nil

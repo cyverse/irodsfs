@@ -71,18 +71,19 @@ type MetadataCacheTimeoutSetting struct {
 
 // Config holds the parameters list which can be configured
 type Config struct {
-	Host         string                              `yaml:"host"`
-	Port         int                                 `yaml:"port"`
-	ProxyUser    string                              `yaml:"proxy_user,omitempty"`
-	ClientUser   string                              `yaml:"client_user"`
-	Zone         string                              `yaml:"zone"`
-	Password     string                              `yaml:"password,omitempty"`
-	Resource     string                              `yaml:"resource,omitempty"`
-	PathMappings []irodsfs_common_vpath.VPathMapping `yaml:"path_mappings"`
-	UID          int                                 `yaml:"uid"`
-	GID          int                                 `yaml:"gid"`
-	SystemUser   string                              `yaml:"system_user"`
-	MountPath    string                              `yaml:"mount_path,omitempty"`
+	Host              string                              `yaml:"host"`
+	Port              int                                 `yaml:"port"`
+	ProxyUser         string                              `yaml:"proxy_user,omitempty"`
+	ClientUser        string                              `yaml:"client_user"`
+	Zone              string                              `yaml:"zone"`
+	Password          string                              `yaml:"password,omitempty"`
+	Resource          string                              `yaml:"resource,omitempty"`
+	PathMappings      []irodsfs_common_vpath.VPathMapping `yaml:"path_mappings"`
+	NoPermissionCheck bool                                `yaml:"no_permission_check"`
+	UID               int                                 `yaml:"uid"`
+	GID               int                                 `yaml:"gid"`
+	SystemUser        string                              `yaml:"system_user"`
+	MountPath         string                              `yaml:"mount_path,omitempty"`
 
 	TempRootPath string `yaml:"temp_root_path,omitempty"`
 
@@ -125,12 +126,13 @@ func NewDefaultConfig() *Config {
 	systemUser, uid, gid, _ := utils.GetCurrentSystemUser()
 
 	return &Config{
-		Port:         PortDefault,
-		Resource:     "",
-		PathMappings: []irodsfs_common_vpath.VPathMapping{},
-		UID:          uid,
-		GID:          gid,
-		SystemUser:   systemUser,
+		Port:              PortDefault,
+		Resource:          "",
+		PathMappings:      []irodsfs_common_vpath.VPathMapping{},
+		NoPermissionCheck: false,
+		UID:               uid,
+		GID:               gid,
+		SystemUser:        systemUser,
 
 		PoolEndpoint: "",
 
@@ -173,12 +175,13 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 	systemUser, uid, gid, _ := utils.GetCurrentSystemUser()
 
 	config := Config{
-		Port:         PortDefault,
-		Resource:     "",
-		PathMappings: []irodsfs_common_vpath.VPathMapping{},
-		UID:          uid,
-		GID:          gid,
-		SystemUser:   systemUser,
+		Port:              PortDefault,
+		Resource:          "",
+		PathMappings:      []irodsfs_common_vpath.VPathMapping{},
+		NoPermissionCheck: false,
+		UID:               uid,
+		GID:               gid,
+		SystemUser:        systemUser,
 
 		PoolEndpoint: "",
 

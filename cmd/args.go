@@ -222,6 +222,7 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 	flag.StringVar(&config.Password, "password", "", "Set iRODS client password")
 	flag.StringVar(&config.Password, "p", "", "Set iRODS client password (shorthand form)")
 	flag.StringVar(&config.Resource, "resource", "", "Set iRODS resource")
+	flag.BoolVar(&config.NoPermissionCheck, "no_permission", false, "No permission check")
 	flag.IntVar(&config.ReadAheadMax, "readahead", commons.ReadAheadMaxDefault, "Set read-ahead size")
 	flag.IntVar(&config.ConnectionMax, "connection_max", commons.ConnectionMaxDefault, "Set max data transfer connections")
 	flag.StringVar(&operationTimeout, "operation_timeout", "", "Set filesystem operation timeout")
