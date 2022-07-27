@@ -32,6 +32,10 @@ const (
 	AuthSchemePAM              string = "pam"
 	AuthSchemeNative           string = "native"
 	AuthSchemeDefault          string = AuthSchemeNative
+	CSNegotiationRequireTCP    string = "CS_NEG_REFUSE"
+	CSNegotiationRequireSSL    string = "CS_NEG_REQUIRE"
+	CSNegotiationDontCare      string = "CS_NEG_DONT_CARE"
+	CSNegotiationDefault       string = CSNegotiationRequireTCP
 	EncryptionKeySizeDefault   int    = 32
 	EncryptionAlgorithmDefault string = "AES-256-CBC"
 	SaltSizeDefault            int    = 8
@@ -89,12 +93,14 @@ type Config struct {
 
 	PoolEndpoint string `yaml:"pool_endpoint,omitempty"`
 
-	AuthScheme          string `yaml:"authscheme"`
-	CACertificateFile   string `yaml:"ssl_ca_cert_file"`
-	EncryptionKeySize   int    `yaml:"ssl_encryption_key_size"`
-	EncryptionAlgorithm string `yaml:"ssl_encryption_algorithm"`
-	SaltSize            int    `yaml:"ssl_encryption_salt_size"`
-	HashRounds          int    `yaml:"ssl_encryption_hash_rounds"`
+	AuthScheme              string `yaml:"authscheme"`
+	ClientServerNegotiation bool   `yaml:"cs_negotiation"`
+	CSNegotiationPolicy     string `yaml:"cs_negotiation_policy"`
+	CACertificateFile       string `yaml:"ssl_ca_cert_file"`
+	EncryptionKeySize       int    `yaml:"ssl_encryption_key_size"`
+	EncryptionAlgorithm     string `yaml:"ssl_encryption_algorithm"`
+	SaltSize                int    `yaml:"ssl_encryption_salt_size"`
+	HashRounds              int    `yaml:"ssl_encryption_hash_rounds"`
 
 	ReadAheadMax                          int                           `yaml:"read_ahead_max"`
 	OperationTimeout                      irodsfs_common_utils.Duration `yaml:"operation_timeout"`
@@ -138,11 +144,13 @@ func NewDefaultConfig() *Config {
 
 		TempRootPath: GetDefaultTempRootPath(),
 
-		AuthScheme:          AuthSchemeDefault,
-		EncryptionKeySize:   EncryptionKeySizeDefault,
-		EncryptionAlgorithm: EncryptionAlgorithmDefault,
-		SaltSize:            SaltSizeDefault,
-		HashRounds:          HashRoundsDefault,
+		AuthScheme:              AuthSchemeDefault,
+		ClientServerNegotiation: false,
+		CSNegotiationPolicy:     CSNegotiationRequireTCP,
+		EncryptionKeySize:       EncryptionKeySizeDefault,
+		EncryptionAlgorithm:     EncryptionAlgorithmDefault,
+		SaltSize:                SaltSizeDefault,
+		HashRounds:              HashRoundsDefault,
 
 		ReadAheadMax:                          ReadAheadMaxDefault,
 		OperationTimeout:                      irodsfs_common_utils.Duration(OperationTimeoutDefault),
@@ -187,11 +195,13 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 
 		TempRootPath: GetDefaultTempRootPath(),
 
-		AuthScheme:          AuthSchemeDefault,
-		EncryptionKeySize:   EncryptionKeySizeDefault,
-		EncryptionAlgorithm: EncryptionAlgorithmDefault,
-		SaltSize:            SaltSizeDefault,
-		HashRounds:          HashRoundsDefault,
+		AuthScheme:              AuthSchemeDefault,
+		ClientServerNegotiation: false,
+		CSNegotiationPolicy:     CSNegotiationRequireTCP,
+		EncryptionKeySize:       EncryptionKeySizeDefault,
+		EncryptionAlgorithm:     EncryptionAlgorithmDefault,
+		SaltSize:                SaltSizeDefault,
+		HashRounds:              HashRoundsDefault,
 
 		ReadAheadMax:                          ReadAheadMaxDefault,
 		OperationTimeout:                      irodsfs_common_utils.Duration(OperationTimeoutDefault),
@@ -377,6 +387,12 @@ func (config *Config) Validate() error {
 
 	if config.AuthScheme != AuthSchemePAM && config.AuthScheme != AuthSchemeNative {
 		return fmt.Errorf("unknown auth scheme - %v", config.AuthScheme)
+	}
+
+	if config.ClientServerNegotiation {
+		if len(config.CSNegotiationPolicy) == 0 {
+			return fmt.Errorf("CS negotiation policy must be given")
+		}
 	}
 
 	if config.AuthScheme == AuthSchemePAM {

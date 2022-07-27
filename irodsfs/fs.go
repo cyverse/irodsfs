@@ -92,6 +92,19 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		}
 
 		account.SetSSLConfiguration(sslConfig)
+		account.SetCSNegotiation(true, irodsclient_types.CSNegotiationRequire(commons.CSNegotiationRequireSSL))
+	} else if config.ClientServerNegotiation {
+		if len(config.CACertificateFile) > 0 {
+			sslConfig, err := irodsclient_types.CreateIRODSSSLConfig(config.CACertificateFile, config.EncryptionKeySize,
+				config.EncryptionAlgorithm, config.SaltSize, config.HashRounds)
+			if err != nil {
+				logger.WithError(err).Error("failed to create IRODS SSL Config")
+				return nil, fmt.Errorf("failed to create IRODS SSL Config - %v", err)
+			}
+
+			account.SetSSLConfiguration(sslConfig)
+			account.SetCSNegotiation(config.ClientServerNegotiation, irodsclient_types.CSNegotiationRequire(config.CSNegotiationPolicy))
+		}
 	}
 
 	cacheTimeoutSettings := []irodsclient_fs.MetadataCacheTimeoutSetting{}
