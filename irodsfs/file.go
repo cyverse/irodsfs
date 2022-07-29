@@ -226,7 +226,9 @@ func (file *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *f
 	} else if req.Valid.Atime() || req.Valid.AtimeNow() || req.Valid.Mtime() || req.Valid.MtimeNow() {
 		// changing date
 		// not supported
-		return syscall.EOPNOTSUPP
+		//return syscall.EOPNOTSUPP
+		// but do not return EOPNOTSUPP since it will cause various errors in fs clients
+		return nil
 	} else if req.Valid.Gid() || req.Valid.Uid() {
 		// changing ownership
 		// not supported
