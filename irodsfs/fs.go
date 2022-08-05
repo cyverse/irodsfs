@@ -13,8 +13,9 @@ import (
 	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 	monitor_types "github.com/cyverse/irodsfs-monitor/types"
 	irodspoolclient "github.com/cyverse/irodsfs-pool/client"
-	fuse "github.com/seaweedfs/fuse"
-	fusefs "github.com/seaweedfs/fuse/fs"
+
+	fusefs "github.com/hanwen/go-fuse/v2/fs"
+	fuse "github.com/hanwen/go-fuse/v2/fuse"
 
 	"github.com/cyverse/irodsfs/commons"
 	log "github.com/sirupsen/logrus"
@@ -25,34 +26,34 @@ const (
 	Subtype string = "irodsfs"
 )
 
-// GetFuseMountOptions returns fuse mount options
-func GetFuseMountOptions(config *commons.Config) []fuse.MountOption {
-	options := []fuse.MountOption{
-		fuse.FSName(FSName),
-		fuse.Subtype(Subtype),
-		fuse.AsyncRead(),
-		fuse.WritebackCache(),
-		fuse.MaxReadahead(uint32(config.ReadAheadMax)),
-	}
+// GetFuseOptions returns fuse options
+func GetFuseOptions(config *commons.Config) *fusefs.Options {
+	options := &fusefs.Options{}
 
-	// handle allow other
-	if config.AllowOther {
-		options = append(options, fuse.AllowOther())
-	}
+	options.AllowOther = config.AllowOther
+	options.AttrTimeout = (*time.Duration)(&config.MetadataCacheTimeout)
+	options.Debug = config.Debug
+	options.EntryTimeout = (*time.Duration)(&config.MetadataCacheTimeout)
+	options.NegativeTimeout = (*time.Duration)(&config.MetadataCacheTimeout)
+	options.UID = uint32(config.UID)
+	options.GID = uint32(config.GID)
+	options.MaxReadAhead = config.ReadAheadMax
+	options.FsName = FSName
+	options.Name = Subtype
+	options.SingleThreaded = false
 
 	return options
 }
 
 // IRODSFS is a file system object
 type IRODSFS struct {
-	config          *commons.Config
-	fuseConnection  *fuse.Conn
-	fuse            *fusefs.Server
-	vpathManager    *irodsfs_common_vpath.VPathManager
-	fileMetaUpdater *FileMetaUpdater
-	fsClient        irodsfs_common_irods.IRODSFSClient
-	fileHandleMap   *FileHandleMap
-	userGroupsMap   map[string]*irodsclient_types.IRODSUser
+	config *commons.Config
+
+	fuseServer    *fuse.Server
+	vpathManager  *irodsfs_common_vpath.VPathManager
+	fsClient      irodsfs_common_irods.IRODSFSClient
+	fileHandleMap *FileHandleMap
+	userGroupsMap map[string]*irodsclient_types.IRODSUser
 
 	uid uint32
 	gid uint32
@@ -164,9 +165,6 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		return nil, fmt.Errorf("failed to create Virtual Path Manager - %v", err)
 	}
 
-	logger.Info("Initializing File Meta Updater")
-	fileMetaUpdater := NewFileMetaUpdater()
-
 	logger.Info("Initializing File Handle Map")
 	fileHandleMap := NewFileHandleMap()
 
@@ -217,13 +215,12 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	}
 
 	return &IRODSFS{
-		config:          config,
-		fuse:            nil,
-		vpathManager:    vpathManager,
-		fileMetaUpdater: fileMetaUpdater,
-		fsClient:        fsClient,
-		fileHandleMap:   fileHandleMap,
-		userGroupsMap:   userGroupsMap,
+		config:        config,
+		fuseServer:    nil,
+		vpathManager:  vpathManager,
+		fsClient:      fsClient,
+		fileHandleMap: fileHandleMap,
+		userGroupsMap: userGroupsMap,
 
 		uid: uint32(config.UID),
 		gid: uint32(config.GID),
@@ -248,13 +245,19 @@ func (fs *IRODSFS) ConnectToFuse() error {
 
 	logger.Infof("Connecting to FUSE, mount on %s", fs.config.MountPath)
 
-	fuseConn, err := fuse.Mount(fs.config.MountPath, GetFuseMountOptions(fs.config)...)
+	rootDir, err := fs.Root()
+	if err != nil {
+		logger.WithError(err).Error("failed to create a root directory")
+		return err
+	}
+
+	fuseServer, err := fusefs.Mount(fs.config.MountPath, rootDir, GetFuseOptions(fs.config))
 	if err != nil {
 		logger.WithError(err).Error("failed to connect to FUSE")
 		return err
 	}
 
-	fs.fuseConnection = fuseConn
+	fs.fuseServer = fuseServer
 
 	logger.Infof("Connected to FUSE, mount on %s", fs.config.MountPath)
 	return nil
@@ -270,23 +273,12 @@ func (fs *IRODSFS) StartFuse() error {
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	if fs.fuseConnection == nil {
-		logger.Error("failed to start FUSE server without connection")
-		return fmt.Errorf("failed to start FUSE server without connection")
+	if fs.fuseServer == nil {
+		logger.Error("failed to start FUSE server")
+		return fmt.Errorf("failed to start FUSE server")
 	}
 
-	fuseServer := fusefs.New(fs.fuseConnection, nil)
-	fs.fuse = fuseServer
-
-	if err := fuseServer.Serve(fs); err != nil {
-		if fs.killFUSE {
-			// suppress error
-			return nil
-		}
-
-		logger.WithError(err).Error("failed to start FUSE server")
-		return err
-	}
+	fs.fuseServer.Wait()
 	return nil
 }
 
@@ -303,8 +295,8 @@ func (fs *IRODSFS) StopFuse() {
 	fs.killFUSE = true
 
 	logger.Info("Closing fuse connection")
-	fs.fuseConnection.Close()
-	fs.fuseConnection = nil
+	fs.fuseServer.Unmount()
+	fs.fuseServer = nil
 }
 
 // Destroy destroys the file system
@@ -345,21 +337,11 @@ func (fs *IRODSFS) Destroy() {
 		fs.fsClient = nil
 	}
 
-	if fs.fuseConnection != nil {
-		logger.Info("> Closing fuse connection")
-		fs.fuseConnection.Close()
-		fs.fuseConnection = nil
-	}
-
-	// try to unmount (error may occur but ignore it)
-	logger.Info("> Unmounting mountpath")
-	commons.UnmountFuse(fs.config.MountPath)
-
 	logger.Info("Destroyed FileSystem")
 }
 
 // Root returns root directory node
-func (fs *IRODSFS) Root() (fusefs.Node, error) {
+func (fs *IRODSFS) Root() (*Dir, error) {
 	if fs.terminated {
 		return nil, syscall.ECONNABORTED
 	}

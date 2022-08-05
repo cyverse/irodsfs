@@ -21,7 +21,7 @@ import (
 
 const (
 	PortDefault                     int           = 1247
-	ReadAheadMaxDefault             int           = 1024 * 64 // 64KB
+	ReadAheadMaxDefault             int           = 1024 * 128 // 128KB
 	ConnectionMaxDefault            int           = 10
 	OperationTimeoutDefault         time.Duration = 5 * time.Minute
 	ConnectionLifespanDefault       time.Duration = 1 * time.Hour

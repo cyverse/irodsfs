@@ -7,9 +7,9 @@ require (
 	github.com/cyverse/irodsfs-common v0.0.0-20220830234055-461b37ec8353
 	github.com/cyverse/irodsfs-monitor v0.0.0-20220809235922-daf13261a2dc
 	github.com/cyverse/irodsfs-pool v0.5.15
+	github.com/hanwen/go-fuse/v2 v2.1.0
 	github.com/pkg/profile v1.6.0
 	github.com/rs/xid v1.3.0
-	github.com/seaweedfs/fuse v1.2.2
 	github.com/sirupsen/logrus v1.8.1
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0

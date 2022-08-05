@@ -11,41 +11,98 @@ import (
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
 	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
-	fuse "github.com/seaweedfs/fuse"
-	fusefs "github.com/seaweedfs/fuse/fs"
+	fusefs "github.com/hanwen/go-fuse/v2/fs"
+	fuse "github.com/hanwen/go-fuse/v2/fuse"
 
 	log "github.com/sirupsen/logrus"
 )
 
 // Dir is a directory node
 type Dir struct {
+	fusefs.Inode
+
 	fs      *IRODSFS
-	inodeID int64
+	entryID int64
 	path    string
-	mutex   sync.RWMutex // for accessing Path
+	mutex   sync.RWMutex
 }
 
 // NewDir creates a new Dir
-func NewDir(fs *IRODSFS, inodeID int64, path string) *Dir {
+func NewDir(fs *IRODSFS, entryID int64, path string) *Dir {
 	return &Dir{
 		fs:      fs,
-		inodeID: inodeID,
+		entryID: entryID,
 		path:    path,
-		mutex:   sync.RWMutex{},
 	}
 }
 
-func mapDirACL(vpathEntry *irodsfs_common_vpath.VPathEntry, dir *Dir, irodsEntry *irodsclient_fs.Entry) os.FileMode {
+func (dir *Dir) newSubDirInode(ctx context.Context, entryID int64, path string) (*Dir, *fusefs.Inode) {
+	subDir := NewDir(dir.fs, entryID, path)
+	return subDir, dir.NewInode(ctx, subDir, subDir.getStableAttr())
+}
+
+func (dir *Dir) newSubFileInode(ctx context.Context, entryID int64, path string) (*File, *fusefs.Inode) {
+	subFile := NewFile(dir.fs, entryID, path)
+	return subFile, dir.NewInode(ctx, subFile, subFile.getStableAttr())
+}
+
+func (dir *Dir) getStableAttr() fusefs.StableAttr {
+	return fusefs.StableAttr{
+		Mode: fuse.S_IFDIR,
+		Ino:  uint64(dir.entryID),
+		Gen:  0,
+	}
+}
+
+func (dir *Dir) setAttrOut(vpathEntry *irodsfs_common_vpath.VPathEntry, out *fuse.Attr) {
+	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
+		// vpath
+		out.Ino = uint64(vpathEntry.VirtualDirEntry.ID)
+		out.Uid = dir.fs.uid
+		out.Gid = dir.fs.gid
+		out.Ctime = uint64(vpathEntry.VirtualDirEntry.CreateTime.UnixMilli())
+		out.Mtime = uint64(vpathEntry.VirtualDirEntry.ModifyTime.UnixMilli())
+		out.Atime = uint64(vpathEntry.VirtualDirEntry.ModifyTime.UnixMilli())
+		out.Size = uint64(vpathEntry.VirtualDirEntry.Size)
+		out.Mode = uint32(fuse.S_IFDIR | 0o400)
+	} else if vpathEntry.Type == irodsfs_common_vpath.VPathIRODS {
+		// irods
+		out.Ino = uint64(vpathEntry.IRODSEntry.ID)
+		out.Uid = dir.fs.uid
+		out.Gid = dir.fs.gid
+		out.Ctime = uint64(vpathEntry.IRODSEntry.CreateTime.UnixMilli())
+		out.Mtime = uint64(vpathEntry.IRODSEntry.ModifyTime.UnixMilli())
+		out.Atime = uint64(vpathEntry.IRODSEntry.ModifyTime.UnixMilli())
+		out.Size = uint64(vpathEntry.IRODSEntry.Size)
+		out.Mode = uint32(fuse.S_IFDIR | dir.getACL(vpathEntry.IRODSEntry, vpathEntry.ReadOnly))
+	}
+}
+
+func (dir *Dir) getPermission(level irodsclient_types.IRODSAccessLevelType) os.FileMode {
+	switch level {
+	case irodsclient_types.IRODSAccessLevelOwner, irodsclient_types.IRODSAccessLevelWrite:
+		return 0o700
+	case irodsclient_types.IRODSAccessLevelRead:
+		return 0o500
+	case irodsclient_types.IRODSAccessLevelNone:
+		return 0o0
+	default:
+		return 0o0
+	}
+}
+
+func (dir *Dir) getACL(irodsEntry *irodsclient_fs.Entry, readonly bool) os.FileMode {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
-		"function": "mapDirACL",
+		"struct":   "Dir",
+		"function": "getACL",
 	})
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	// we don't actually check permissions for reading file when vpathEntry is read only
 	// because files with no-access for the user will not be visible
-	if vpathEntry.ReadOnly {
+	if readonly {
 		return 0o500
 	}
 
@@ -64,50 +121,32 @@ func mapDirACL(vpathEntry *irodsfs_common_vpath.VPathEntry, dir *Dir, irodsEntry
 	logger.Debugf("Checking ACL information of the Entry for %s and user %s", irodsEntry.Path, dir.fs.config.ClientUser)
 	defer logger.Debugf("Checked ACL information of the Entry for %s and user %s", irodsEntry.Path, dir.fs.config.ClientUser)
 
-	logger.Infof("Checking ACL info for %s", irodsEntry.Path)
 	accesses, err := dir.fs.fsClient.ListDirACLs(irodsEntry.Path)
 	if err != nil {
 		logger.Errorf("failed to get ACL information of the Entry for %s", irodsEntry.Path)
 	}
 
-	logger.Infof("Checked ACL info for %s, %d ACL entries", irodsEntry.Path, len(accesses))
-
 	var highestPermission os.FileMode = 0o500
 	for _, access := range accesses {
 		if access.UserType == irodsclient_types.IRODSUserRodsUser && access.UserName == dir.fs.config.ClientUser {
-			// found
-			switch access.AccessLevel {
-			case irodsclient_types.IRODSAccessLevelOwner:
-				// highest, don't need to continue
-				return 0o700
-			case irodsclient_types.IRODSAccessLevelWrite:
-				if highestPermission < 0o700 {
-					highestPermission = 0o700
-				}
-			case irodsclient_types.IRODSAccessLevelRead:
-				if highestPermission < 0o500 {
-					highestPermission = 0o500
-				}
-			case irodsclient_types.IRODSAccessLevelNone:
-				// nothing
+			perm := dir.getPermission(access.AccessLevel)
+			if perm == 0o700 {
+				return perm
+			}
+
+			if perm > highestPermission {
+				highestPermission = perm
 			}
 		} else if access.UserType == irodsclient_types.IRODSUserRodsGroup {
 			if _, ok := dir.fs.userGroupsMap[access.UserName]; ok {
 				// my group
-				switch access.AccessLevel {
-				case irodsclient_types.IRODSAccessLevelOwner:
-					// highest, don't need to continue
-					return 0o700
-				case irodsclient_types.IRODSAccessLevelWrite:
-					if highestPermission < 0o700 {
-						highestPermission = 0o700
-					}
-				case irodsclient_types.IRODSAccessLevelRead:
-					if highestPermission < 0o500 {
-						highestPermission = 0o500
-					}
-				case irodsclient_types.IRODSAccessLevelNone:
-					// nothing
+				perm := dir.getPermission(access.AccessLevel)
+				if perm == 0o700 {
+					return perm
+				}
+
+				if perm > highestPermission {
+					highestPermission = perm
 				}
 			}
 		}
@@ -117,8 +156,9 @@ func mapDirACL(vpathEntry *irodsfs_common_vpath.VPathEntry, dir *Dir, irodsEntry
 	return highestPermission
 }
 
-// Attr returns stat of file entry
-func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
+// We can set attr from Lookup
+// Getattr returns stat of file entry
+func (dir *Dir) Getattr(ctx context.Context, fh fusefs.FileHandle, out *fuse.AttrOut) syscall.Errno {
 	if dir.fs.terminated {
 		return syscall.ECONNABORTED
 	}
@@ -126,20 +166,17 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"struct":   "Dir",
-		"function": "Attr",
+		"function": "Getattr",
 	})
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
-
-	// apply pending update if exists
-	dir.fs.fileMetaUpdater.Apply(dir)
 
 	dir.mutex.RLock()
 	defer dir.mutex.RUnlock()
 
 	operID := dir.fs.GetNextOperationID()
-	logger.Infof("Calling Attr (%d) - %s", operID, dir.path)
-	defer logger.Infof("Called Attr (%d) - %s", operID, dir.path)
+	logger.Infof("Calling Getattr (%d) - %s", operID, dir.path)
+	defer logger.Infof("Called Getattr (%d) - %s", operID, dir.path)
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(dir.path)
 	if vpathEntry == nil {
@@ -149,21 +186,13 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 
 	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
 		if vpathEntry.Path == dir.path {
-			attr.Inode = uint64(vpathEntry.VirtualDirEntry.ID)
-			attr.Uid = dir.fs.uid
-			attr.Gid = dir.fs.gid
-			attr.Ctime = vpathEntry.VirtualDirEntry.CreateTime
-			attr.Mtime = vpathEntry.VirtualDirEntry.ModifyTime
-			attr.Atime = vpathEntry.VirtualDirEntry.ModifyTime
-			attr.Size = uint64(vpathEntry.VirtualDirEntry.Size)
-
-			attr.Mode = os.ModeDir | 0o400
-			return nil
+			dir.setAttrOut(vpathEntry, &out.Attr)
+			return fusefs.OK
 		}
 		return syscall.ENOENT
 	} else if vpathEntry.Type == irodsfs_common_vpath.VPathIRODS {
 		if vpathEntry.IRODSEntry.Type != irodsclient_fs.DirectoryEntry {
-			logger.Errorf("failed to get dir attribute from a data object")
+			logger.Errorf("failed to get dir attributes")
 			return syscall.EREMOTEIO
 		}
 
@@ -176,7 +205,7 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 		irodsEntry, err := dir.fs.fsClient.Stat(irodsPath)
 		if err != nil {
 			if irodsclient_types.IsFileNotFoundError(err) {
-				logger.WithError(err).Debugf("failed to find a file - %s", irodsPath)
+				logger.WithError(err).Debugf("failed to find a dir - %s", irodsPath)
 				return syscall.ENOENT
 			}
 
@@ -184,16 +213,9 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 			return syscall.EREMOTEIO
 		}
 
-		attr.Inode = uint64(irodsEntry.ID)
-		attr.Uid = dir.fs.uid
-		attr.Gid = dir.fs.gid
-		attr.Ctime = irodsEntry.CreateTime
-		attr.Mtime = irodsEntry.ModifyTime
-		attr.Atime = irodsEntry.ModifyTime
-		attr.Size = 0
-		attr.Mode = os.ModeDir | mapDirACL(vpathEntry, dir, irodsEntry)
-
-		return nil
+		newVPathEntry := irodsfs_common_vpath.NewVPathEntryFromIRODSFSEntry(dir.path, irodsEntry, vpathEntry.ReadOnly)
+		dir.setAttrOut(newVPathEntry, &out.Attr)
+		return fusefs.OK
 	}
 
 	logger.Errorf("unknown VPath Entry type : %s", vpathEntry.Type)
@@ -201,7 +223,7 @@ func (dir *Dir) Attr(ctx context.Context, attr *fuse.Attr) error {
 }
 
 // Setattr sets dir attributes
-func (dir *Dir) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
+func (dir *Dir) Setattr(ctx context.Context, fh fusefs.FileHandle, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
 	if dir.fs.terminated {
 		return syscall.ECONNABORTED
 	}
@@ -214,31 +236,42 @@ func (dir *Dir) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fus
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	if req.Valid.Mode() {
+	if _, ok := in.GetMode(); ok {
 		// chmod
 		// not supported
-		//return syscall.EOPNOTSUPP
-		// but do not return EOPNOTSUPP since it will cuase various errors in fs clients, eg. GIT
-		return nil
-	} else if req.Valid.Atime() || req.Valid.AtimeNow() || req.Valid.Mtime() || req.Valid.MtimeNow() {
+		return syscall.EOPNOTSUPP
+	} else if _, ok := in.GetATime(); ok {
 		// changing date
 		// not supported
-		//return syscall.EOPNOTSUPP
-		// but do not return EOPNOTSUPP since it will cuase various errors in fs clients, eg. GIT
-		return nil
-	} else if req.Valid.Gid() || req.Valid.Uid() {
+		return syscall.EOPNOTSUPP
+	} else if _, ok := in.GetCTime(); ok {
+		// changing date
+		// not supported
+		return syscall.EOPNOTSUPP
+	} else if _, ok := in.GetMTime(); ok {
+		// changing date
+		// not supported
+		return syscall.EOPNOTSUPP
+	} else if _, ok := in.GetGID(); ok {
 		// changing ownership
 		// not supported
-		//return syscall.EOPNOTSUPP
-		// but do not return EOPNOTSUPP since it will cuase various errors in fs clients, eg. GIT
-		return nil
+		return syscall.EOPNOTSUPP
+	} else if _, ok := in.GetUID(); ok {
+		// changing ownership
+		// not supported
+		return syscall.EOPNOTSUPP
+	} else if size, ok := in.GetSize(); ok {
+		// is this to truncate a file?
+		// not supported
+		logger.Errorf("cannot handle truncation of a directory - %s, size %d", dir.path, size)
+		return syscall.EOPNOTSUPP
 	}
 
-	return nil
+	return fusefs.OK
 }
 
 // Lookup returns a node for the path
-func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
+func (dir *Dir) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fusefs.Inode, syscall.Errno) {
 	if dir.fs.terminated {
 		return nil, syscall.ECONNABORTED
 	}
@@ -250,9 +283,6 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 	})
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
-
-	// apply pending update if exists
-	dir.fs.fileMetaUpdater.Apply(dir)
 
 	dir.mutex.RLock()
 	defer dir.mutex.RUnlock()
@@ -271,11 +301,9 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 
 	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
 		if vpathEntry.Path == targetPath {
-			return &Dir{
-				fs:      dir.fs,
-				inodeID: vpathEntry.VirtualDirEntry.ID,
-				path:    targetPath,
-			}, nil
+			subDir, subDirInode := dir.newSubDirInode(ctx, vpathEntry.VirtualDirEntry.ID, targetPath)
+			subDir.setAttrOut(vpathEntry, &out.Attr)
+			return subDirInode, fusefs.OK
 		}
 		return nil, syscall.ENOENT
 	} else if vpathEntry.Type == irodsfs_common_vpath.VPathIRODS {
@@ -299,9 +327,14 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 		switch irodsEntry.Type {
 		case irodsclient_fs.FileEntry:
 			newVPathEntry := irodsfs_common_vpath.NewVPathEntryFromIRODSFSEntry(targetPath, irodsEntry, vpathEntry.ReadOnly)
-			return NewFile(dir.fs, irodsEntry.ID, targetPath, newVPathEntry), nil
+			subFile, subFileInode := dir.newSubFileInode(ctx, irodsEntry.ID, targetPath)
+			subFile.setAttrOut(newVPathEntry, &out.Attr)
+			return subFileInode, fusefs.OK
 		case irodsclient_fs.DirectoryEntry:
-			return NewDir(dir.fs, irodsEntry.ID, targetPath), nil
+			newVPathEntry := irodsfs_common_vpath.NewVPathEntryFromIRODSFSEntry(targetPath, irodsEntry, vpathEntry.ReadOnly)
+			subDir, subDirInode := dir.newSubDirInode(ctx, irodsEntry.ID, targetPath)
+			subDir.setAttrOut(newVPathEntry, &out.Attr)
+			return subDirInode, fusefs.OK
 		default:
 			logger.Errorf("unknown entry type - %s", irodsEntry.Type)
 			return nil, syscall.EREMOTEIO
@@ -312,8 +345,70 @@ func (dir *Dir) Lookup(ctx context.Context, name string) (fusefs.Node, error) {
 	}
 }
 
-// ReadDirAll returns directory entries
-func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
+// Opendir validates the existance of a dir
+func (dir *Dir) Opendir(ctx context.Context) syscall.Errno {
+	if dir.fs.terminated {
+		return syscall.ECONNABORTED
+	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "Dir",
+		"function": "Opendir",
+	})
+
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+
+	dir.mutex.RLock()
+	defer dir.mutex.RUnlock()
+
+	operID := dir.fs.GetNextOperationID()
+	logger.Infof("Calling Opendir (%d) - %s", operID, dir.path)
+	defer logger.Infof("Called Opendir (%d) - %s", operID, dir.path)
+
+	vpathEntry := dir.fs.vpathManager.GetClosestEntry(dir.path)
+	if vpathEntry == nil {
+		logger.Errorf("failed to get VPath Entry for %s", dir.path)
+		return syscall.EREMOTEIO
+	}
+
+	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
+		if vpathEntry.Path == dir.path {
+			return fusefs.OK
+		}
+		return syscall.ENOENT
+	} else if vpathEntry.Type == irodsfs_common_vpath.VPathIRODS {
+		irodsPath, err := vpathEntry.GetIRODSPath(dir.path)
+		if err != nil {
+			logger.WithError(err).Errorf("failed to get IRODS path")
+			return syscall.EREMOTEIO
+		}
+
+		irodsEntry, err := dir.fs.fsClient.Stat(irodsPath)
+		if err != nil {
+			if irodsclient_types.IsFileNotFoundError(err) {
+				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
+				return syscall.ENOENT
+			}
+
+			logger.WithError(err).Errorf("failed to stat - %s", irodsPath)
+			return syscall.EREMOTEIO
+		}
+
+		if irodsEntry.Type != irodsclient_fs.DirectoryEntry {
+			logger.Errorf("entry type is not a directory - %s", irodsEntry.Type)
+			return syscall.EREMOTEIO
+		}
+
+		return fusefs.OK
+	} else {
+		logger.Errorf("unknown VPath Entry type : %s", vpathEntry.Type)
+		return syscall.EREMOTEIO
+	}
+}
+
+// Readdir returns directory entries
+func (dir *Dir) Readdir(ctx context.Context) (fusefs.DirStream, syscall.Errno) {
 	if dir.fs.terminated {
 		return nil, syscall.ECONNABORTED
 	}
@@ -321,20 +416,17 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"struct":   "Dir",
-		"function": "ReadDirAll",
+		"function": "Readdir",
 	})
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
-
-	// apply pending update if exists
-	dir.fs.fileMetaUpdater.Apply(dir)
 
 	dir.mutex.RLock()
 	defer dir.mutex.RUnlock()
 
 	operID := dir.fs.GetNextOperationID()
-	logger.Infof("Calling ReadDirAll (%d) - %s", operID, dir.path)
-	defer logger.Infof("Called ReadDirAll (%d) - %s", operID, dir.path)
+	logger.Infof("Calling Readdir (%d) - %s", operID, dir.path)
+	defer logger.Infof("Called Readdir (%d) - %s", operID, dir.path)
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(dir.path)
 	if vpathEntry == nil {
@@ -344,44 +436,44 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 
 	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
 		if vpathEntry.Path == dir.path {
-			dirEntries := []fuse.Dirent{}
+			dirEntries := make([]fuse.DirEntry, len(vpathEntry.VirtualDirEntry.DirEntries))
 
-			for _, entry := range vpathEntry.VirtualDirEntry.DirEntries {
+			for idx, entry := range vpathEntry.VirtualDirEntry.DirEntries {
 				if entry.Type == irodsfs_common_vpath.VPathVirtualDir {
-					dirEntry := fuse.Dirent{
-						Inode: uint64(entry.VirtualDirEntry.ID),
-						Type:  fuse.DT_Dir,
-						Name:  entry.VirtualDirEntry.Name,
+					dirEntry := fuse.DirEntry{
+						Ino:  uint64(entry.VirtualDirEntry.ID),
+						Mode: fuse.S_IFDIR,
+						Name: entry.VirtualDirEntry.Name,
 					}
 
-					dirEntries = append(dirEntries, dirEntry)
+					dirEntries[idx] = dirEntry
 				} else if entry.Type == irodsfs_common_vpath.VPathIRODS {
-					entryType := fuse.DT_File
+					entryType := uint32(fuse.S_IFREG)
 
 					switch entry.IRODSEntry.Type {
 					case irodsclient_fs.FileEntry:
-						entryType = fuse.DT_File
+						entryType = fuse.S_IFREG
 					case irodsclient_fs.DirectoryEntry:
-						entryType = fuse.DT_Dir
+						entryType = fuse.S_IFDIR
 					default:
 						logger.Errorf("unknown entry type - %s", entry.Type)
 						return nil, syscall.EREMOTEIO
 					}
 
-					dirEntry := fuse.Dirent{
-						Inode: uint64(entry.IRODSEntry.ID),
-						Type:  entryType,
-						Name:  irodsfs_common_utils.GetFileName(entry.Path),
+					dirEntry := fuse.DirEntry{
+						Ino:  uint64(entry.IRODSEntry.ID),
+						Mode: entryType,
+						Name: irodsfs_common_utils.GetFileName(entry.Path),
 					}
 
-					dirEntries = append(dirEntries, dirEntry)
+					dirEntries[idx] = dirEntry
 				} else {
 					logger.Errorf("unknown VPath Entry type : %s", entry.Type)
 					return nil, syscall.EREMOTEIO
 				}
 			}
 
-			return dirEntries, nil
+			return fusefs.NewListDirStream(dirEntries), fusefs.OK
 		}
 		return nil, syscall.ENOENT
 	} else if vpathEntry.Type == irodsfs_common_vpath.VPathIRODS {
@@ -397,29 +489,28 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 			return nil, syscall.EREMOTEIO
 		}
 
-		dirEntries := []fuse.Dirent{}
+		dirEntries := make([]fuse.DirEntry, len(irodsEntries))
 
-		for _, irodsEntry := range irodsEntries {
-			entryType := fuse.DT_File
+		for idx, irodsEntry := range irodsEntries {
+			entryType := uint32(fuse.S_IFREG)
 
 			switch irodsEntry.Type {
 			case irodsclient_fs.FileEntry:
-				entryType = fuse.DT_File
+				entryType = fuse.S_IFREG
 			case irodsclient_fs.DirectoryEntry:
-				entryType = fuse.DT_Dir
+				entryType = fuse.S_IFDIR
 			default:
 				logger.Errorf("unknown entry type - %s", irodsEntry.Type)
 				return nil, syscall.EREMOTEIO
 			}
 
-			dirEntry := fuse.Dirent{
-				Inode: uint64(irodsEntry.ID),
-				Type:  entryType,
-				Name:  irodsEntry.Name,
+			dirEntry := fuse.DirEntry{
+				Ino:  uint64(irodsEntry.ID),
+				Mode: entryType,
+				Name: irodsEntry.Name,
 			}
 
-			dirEntries = append(dirEntries, dirEntry)
-			logger.Debugf("Entry - %s %s", irodsPath, irodsEntry.Name)
+			dirEntries[idx] = dirEntry
 		}
 
 		if !dir.fs.config.NoPermissionCheck && !vpathEntry.ReadOnly {
@@ -433,15 +524,15 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 			}
 		}
 
-		return dirEntries, nil
+		return fusefs.NewListDirStream(dirEntries), fusefs.OK
 	} else {
 		logger.Errorf("unknown VPath Entry type : %s", vpathEntry.Type)
 		return nil, syscall.EREMOTEIO
 	}
 }
 
-// Remove removes a node for the path
-func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
+// Rmdir removes a dir
+func (dir *Dir) Rmdir(ctx context.Context, name string) syscall.Errno {
 	if dir.fs.terminated {
 		return syscall.ECONNABORTED
 	}
@@ -449,22 +540,19 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"struct":   "Dir",
-		"function": "Remove",
+		"function": "Rmdir",
 	})
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	// apply pending update if exists
-	dir.fs.fileMetaUpdater.Apply(dir)
+	targetPath := irodsfs_common_utils.JoinPath(dir.path, name)
 
-	dir.mutex.RLock()
-	defer dir.mutex.RUnlock()
-
-	targetPath := irodsfs_common_utils.JoinPath(dir.path, req.Name)
+	dir.mutex.Lock()
+	defer dir.mutex.Unlock()
 
 	operID := dir.fs.GetNextOperationID()
-	logger.Infof("Calling Remove (%d) - %s", operID, targetPath)
-	defer logger.Infof("Called Remove (%d) - %s", operID, targetPath)
+	logger.Infof("Calling Rmdir (%d) - %s", operID, targetPath)
+	defer logger.Infof("Called Rmdir (%d) - %s", operID, targetPath)
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(targetPath)
 	if vpathEntry == nil {
@@ -476,20 +564,115 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 		// failed to remove. read only
 		err := fmt.Errorf("failed to remove mapped entry - %s", vpathEntry.Path)
 		logger.Error(err)
-		return syscall.EACCES
+		return syscall.EPERM
 	}
 
 	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
 		// failed to remove. read only
 		err := fmt.Errorf("failed to remove an entry on a read-only directory - %s", vpathEntry.Path)
 		logger.Error(err)
-		return syscall.EACCES
+		return syscall.EPERM
 	} else if vpathEntry.Type == irodsfs_common_vpath.VPathIRODS {
 		if vpathEntry.ReadOnly {
 			// failed to remove. read only
 			err := fmt.Errorf("failed to remove an entry on a read-only directory - %s", vpathEntry.Path)
 			logger.Error(err)
-			return syscall.EACCES
+			return syscall.EPERM
+		}
+
+		irodsPath, err := vpathEntry.GetIRODSPath(targetPath)
+		if err != nil {
+			logger.WithError(err).Errorf("failed to get IRODS path")
+			return syscall.EREMOTEIO
+		}
+
+		irodsEntry, err := dir.fs.fsClient.Stat(irodsPath)
+		if err != nil {
+			if irodsclient_types.IsFileNotFoundError(err) {
+				logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
+				return syscall.ENOENT
+			}
+
+			logger.WithError(err).Errorf("failed to stat - %s", irodsPath)
+			return syscall.EREMOTEIO
+		}
+
+		switch irodsEntry.Type {
+		case irodsclient_fs.FileEntry:
+			logger.WithError(err).Errorf("failed to remove a file - %s", irodsPath)
+			return syscall.EREMOTEIO
+		case irodsclient_fs.DirectoryEntry:
+			err = dir.fs.fsClient.RemoveDir(irodsPath, false, true)
+			if err != nil {
+				if irodsclient_types.IsFileNotFoundError(err) {
+					logger.WithError(err).Errorf("failed to find a dir - %s", irodsPath)
+					return syscall.ENOENT
+				} else if irodsclient_types.IsCollectionNotEmptyError(err) {
+					logger.WithError(err).Errorf("the dir is not empty - %s", irodsPath)
+					return syscall.ENOTEMPTY
+				}
+
+				logger.WithError(err).Errorf("failed to remove a dir - %s", irodsPath)
+				return syscall.EREMOTEIO
+			}
+			return fusefs.OK
+		default:
+			logger.Errorf("unknown entry type - %s", irodsEntry.Type)
+			return syscall.EREMOTEIO
+		}
+	} else {
+		logger.Errorf("unknown VPath Entry type : %s", vpathEntry.Type)
+		return syscall.EREMOTEIO
+	}
+}
+
+// Unlink removes a file for the path
+func (dir *Dir) Unlink(ctx context.Context, name string) error {
+	if dir.fs.terminated {
+		return syscall.ECONNABORTED
+	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "Dir",
+		"function": "Unlink",
+	})
+
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+
+	dir.mutex.Lock()
+	defer dir.mutex.Unlock()
+
+	targetPath := irodsfs_common_utils.JoinPath(dir.path, name)
+
+	operID := dir.fs.GetNextOperationID()
+	logger.Infof("Calling Unlink (%d) - %s", operID, targetPath)
+	defer logger.Infof("Called Unlink (%d) - %s", operID, targetPath)
+
+	vpathEntry := dir.fs.vpathManager.GetClosestEntry(targetPath)
+	if vpathEntry == nil {
+		logger.Errorf("failed to get VPath Entry for %s", targetPath)
+		return syscall.EREMOTEIO
+	}
+
+	if vpathEntry.Path == targetPath {
+		// failed to remove. read only
+		err := fmt.Errorf("failed to remove mapped entry - %s", vpathEntry.Path)
+		logger.Error(err)
+		return syscall.EPERM
+	}
+
+	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
+		// failed to remove. read only
+		err := fmt.Errorf("failed to remove an entry on a read-only directory - %s", vpathEntry.Path)
+		logger.Error(err)
+		return syscall.EPERM
+	} else if vpathEntry.Type == irodsfs_common_vpath.VPathIRODS {
+		if vpathEntry.ReadOnly {
+			// failed to remove. read only
+			err := fmt.Errorf("failed to remove an entry on a read-only directory - %s", vpathEntry.Path)
+			logger.Error(err)
+			return syscall.EPERM
 		}
 
 		irodsPath, err := vpathEntry.GetIRODSPath(targetPath)
@@ -523,20 +706,8 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 			}
 			return nil
 		case irodsclient_fs.DirectoryEntry:
-			err = dir.fs.fsClient.RemoveDir(irodsPath, false, true)
-			if err != nil {
-				if irodsclient_types.IsFileNotFoundError(err) {
-					logger.WithError(err).Errorf("failed to find a dir - %s", irodsPath)
-					return syscall.ENOENT
-				} else if irodsclient_types.IsCollectionNotEmptyError(err) {
-					logger.WithError(err).Errorf("the dir is not empty - %s", irodsPath)
-					return syscall.ENOTEMPTY
-				}
-
-				logger.WithError(err).Errorf("failed to remove a dir - %s", irodsPath)
-				return syscall.EREMOTEIO
-			}
-			return nil
+			logger.WithError(err).Errorf("failed to remove a dir - %s", irodsPath)
+			return syscall.EREMOTEIO
 		default:
 			logger.Errorf("unknown entry type - %s", irodsEntry.Type)
 			return syscall.EREMOTEIO
@@ -547,8 +718,8 @@ func (dir *Dir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 	}
 }
 
-// Mkdir makes a directory node for the path
-func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node, error) {
+// Mkdir makes a dir for the path
+func (dir *Dir) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.EntryOut) (*fusefs.Inode, syscall.Errno) {
 	if dir.fs.terminated {
 		return nil, syscall.ECONNABORTED
 	}
@@ -561,13 +732,10 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	// apply pending update if exists
-	dir.fs.fileMetaUpdater.Apply(dir)
+	dir.mutex.Lock()
+	defer dir.mutex.Unlock()
 
-	dir.mutex.RLock()
-	defer dir.mutex.RUnlock()
-
-	targetPath := irodsfs_common_utils.JoinPath(dir.path, req.Name)
+	targetPath := irodsfs_common_utils.JoinPath(dir.path, name)
 
 	operID := dir.fs.GetNextOperationID()
 	logger.Infof("Calling Mkdir (%d) - %s", operID, targetPath)
@@ -583,19 +751,19 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 		// failed to create. read only
 		err := fmt.Errorf("failed to recreate mapped entry - %s", vpathEntry.Path)
 		logger.Error(err)
-		return nil, syscall.EACCES
+		return nil, syscall.EPERM
 	}
 
 	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
 		// failed to create. read only
 		err := fmt.Errorf("failed to make a new entry on a read-only directory  - %s", vpathEntry.Path)
 		logger.Error(err)
-		return nil, syscall.EACCES
+		return nil, syscall.EPERM
 	} else if vpathEntry.Type == irodsfs_common_vpath.VPathIRODS {
 		if vpathEntry.ReadOnly {
 			err := fmt.Errorf("failed to make a new entry on a read-only directory - %s", vpathEntry.Path)
 			logger.Error(err)
-			return nil, syscall.EACCES
+			return nil, syscall.EPERM
 		}
 
 		irodsPath, err := vpathEntry.GetIRODSPath(targetPath)
@@ -610,17 +778,17 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 			return nil, syscall.EREMOTEIO
 		}
 
-		entry, err := dir.fs.fsClient.Stat(irodsPath)
+		irodsEntry, err := dir.fs.fsClient.Stat(irodsPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to stat - %s", irodsPath)
 			return nil, syscall.EREMOTEIO
 		}
 
-		return &Dir{
-			fs:      dir.fs,
-			inodeID: entry.ID,
-			path:    targetPath,
-		}, nil
+		newVPathEntry := irodsfs_common_vpath.NewVPathEntryFromIRODSFSEntry(targetPath, irodsEntry, vpathEntry.ReadOnly)
+		subDir, subDirInode := dir.newSubDirInode(ctx, irodsEntry.ID, targetPath)
+		subDir.setAttrOut(newVPathEntry, &out.Attr)
+
+		return subDirInode, fusefs.OK
 	} else {
 		logger.Errorf("unknown VPath Entry type : %s", vpathEntry.Type)
 		return nil, syscall.EREMOTEIO
@@ -628,7 +796,7 @@ func (dir *Dir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fusefs.Node,
 }
 
 // Rename renames a node for the path
-func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fusefs.Node) error {
+func (dir *Dir) Rename(ctx context.Context, name string, newParent fusefs.InodeEmbedder, newName string, flags uint32) syscall.Errno {
 	if dir.fs.terminated {
 		return syscall.ECONNABORTED
 	}
@@ -641,20 +809,17 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	// apply pending update if exists
-	dir.fs.fileMetaUpdater.Apply(dir)
+	dir.mutex.Lock()
+	defer dir.mutex.Unlock()
 
-	dir.mutex.RLock()
-	defer dir.mutex.RUnlock()
+	targetSrcPath := irodsfs_common_utils.JoinPath(dir.path, name)
 
-	targetSrcPath := irodsfs_common_utils.JoinPath(dir.path, req.OldName)
+	newdir := newParent.(*Dir)
 
-	newdir := newDir.(*Dir)
+	newdir.mutex.Lock()
+	defer newdir.mutex.Unlock()
 
-	newdir.mutex.RLock()
-	defer newdir.mutex.RUnlock()
-
-	targetDestPath := irodsfs_common_utils.JoinPath(newdir.path, req.NewName)
+	targetDestPath := irodsfs_common_utils.JoinPath(newdir.path, newName)
 
 	operID := dir.fs.GetNextOperationID()
 	logger.Infof("Calling Rename (%d) - %s to %s", operID, targetSrcPath, targetDestPath)
@@ -676,39 +841,39 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 		// failed to remove. read only
 		err := fmt.Errorf("failed to rename a read-only entry - %s", vpathSrcEntry.Path)
 		logger.Error(err)
-		return syscall.EACCES
+		return syscall.EPERM
 	}
 
 	if vpathDestEntry.Path == targetDestPath {
 		// failed to remove. read only
 		err := fmt.Errorf("failed to remove a read-only entry - %s", vpathDestEntry.Path)
 		logger.Error(err)
-		return syscall.EACCES
+		return syscall.EPERM
 	}
 
 	if vpathSrcEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
 		// failed to remove. read only
 		err := fmt.Errorf("failed to rename a read-only entry - %s", vpathSrcEntry.Path)
 		logger.Error(err)
-		return syscall.EACCES
+		return syscall.EPERM
 	} else if vpathDestEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
 		// failed to remove. read only
 		err := fmt.Errorf("failed to rename a read-only entry - %s", vpathDestEntry.Path)
 		logger.Error(err)
-		return syscall.EACCES
+		return syscall.EPERM
 	} else if vpathSrcEntry.Type == irodsfs_common_vpath.VPathIRODS && vpathDestEntry.Type == irodsfs_common_vpath.VPathIRODS {
 		if vpathSrcEntry.ReadOnly {
 			// failed to remove. read only
 			err := fmt.Errorf("failed to remove a read-only entry - %s", vpathSrcEntry.Path)
 			logger.Error(err)
-			return syscall.EACCES
+			return syscall.EPERM
 		}
 
 		if vpathDestEntry.ReadOnly {
 			// failed to remove. read only
 			err := fmt.Errorf("failed to remove a read-only entry - %s", vpathDestEntry.Path)
 			logger.Error(err)
-			return syscall.EACCES
+			return syscall.EPERM
 		}
 
 		irodsSrcPath, err := vpathSrcEntry.GetIRODSPath(targetSrcPath)
@@ -755,11 +920,7 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 			// report update to fileHandleMap
 			dir.fs.fileHandleMap.RenameDir(irodsSrcPath, irodsDestPath)
 
-			// report update of path
-			if irodsEntry.ID > 0 {
-				dir.fs.fileMetaUpdater.Add(irodsEntry.ID, targetDestPath)
-			}
-			return nil
+			return fusefs.OK
 		case irodsclient_fs.FileEntry:
 			destEntry, err := dir.fs.fsClient.Stat(irodsDestPath)
 			if err != nil {
@@ -768,7 +929,7 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 					return syscall.EREMOTEIO
 				}
 			} else {
-				// no error
+				// no error - file exists
 				if destEntry.ID > 0 {
 					// delete first
 					err = dir.fs.fsClient.RemoveFile(irodsDestPath, true)
@@ -794,12 +955,7 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 
 			// report update to fileHandleMap
 			dir.fs.fileHandleMap.Rename(irodsSrcPath, irodsDestPath)
-
-			// report update of path
-			if irodsEntry.ID > 0 {
-				dir.fs.fileMetaUpdater.Add(irodsEntry.ID, targetDestPath)
-			}
-			return nil
+			return fusefs.OK
 		default:
 			logger.Errorf("unknown entry type - %s", irodsEntry.Type)
 			return syscall.EREMOTEIO
@@ -811,9 +967,9 @@ func (dir *Dir) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fuse
 }
 
 // Create creates a file for the path and returns file handle
-func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (fusefs.Node, fusefs.Handle, error) {
+func (dir *Dir) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (*fusefs.Inode, fusefs.FileHandle, uint32, syscall.Errno) {
 	if dir.fs.terminated {
-		return nil, nil, syscall.ECONNABORTED
+		return nil, nil, 0, syscall.ECONNABORTED
 	}
 
 	logger := log.WithFields(log.Fields{
@@ -824,111 +980,129 @@ func (dir *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	// apply pending update if exists
-	dir.fs.fileMetaUpdater.Apply(dir)
+	targetPath := irodsfs_common_utils.JoinPath(dir.path, name)
 
-	dir.mutex.RLock()
-	defer dir.mutex.RUnlock()
-
-	targetPath := irodsfs_common_utils.JoinPath(dir.path, req.Name)
+	dir.mutex.Lock()
+	defer dir.mutex.Unlock()
 
 	operID := dir.fs.GetNextOperationID()
 	logger.Infof("Calling Create (%d) - %s", operID, targetPath)
 	defer logger.Infof("Called Create (%d) - %s", operID, targetPath)
 
 	var openMode string
+	fuseFlag := uint32(0)
 
-	if req.Flags.IsWriteOnly() {
+	if flags&uint32(os.O_WRONLY) == uint32(os.O_WRONLY) {
 		openMode = string(irodsclient_types.FileOpenModeWriteOnly)
 
-		if req.Flags&fuse.OpenAppend == fuse.OpenAppend {
+		if flags&uint32(os.O_APPEND) == uint32(os.O_APPEND) {
 			// append
 			openMode = string(irodsclient_types.FileOpenModeAppend)
-		} else if req.Flags&fuse.OpenTruncate == fuse.OpenTruncate {
+		} else if flags&uint32(os.O_TRUNC) == uint32(os.O_TRUNC) {
 			// truncate
 			openMode = string(irodsclient_types.FileOpenModeWriteTruncate)
 		}
-		resp.Flags |= fuse.OpenDirectIO
-	} else if req.Flags.IsReadWrite() {
+
+		// if we use Direct_IO, it will disable kernel cache, read-ahead, shared mmap
+		//fuseFlag |= fuse.FOPEN_DIRECT_IO
+	} else if flags&uint32(os.O_RDWR) == uint32(os.O_RDWR) {
 		openMode = string(irodsclient_types.FileOpenModeReadWrite)
 	} else {
-		logger.Errorf("unknown file open mode - %s", req.Flags.String())
-		return nil, nil, syscall.EACCES
+		logger.Errorf("unknown file open mode - 0o%o", flags)
+		return nil, nil, 0, syscall.EPERM
 	}
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(targetPath)
 	if vpathEntry == nil {
 		logger.Errorf("failed to get VPath Entry for %s", targetPath)
-		return nil, nil, syscall.EREMOTEIO
+		return nil, nil, 0, syscall.EREMOTEIO
 	}
 
 	if vpathEntry.Path == targetPath {
 		// failed to create. read only
 		err := fmt.Errorf("failed to recreate mapped entry - %s", vpathEntry.Path)
 		logger.Error(err)
-		return nil, nil, syscall.EACCES
+		return nil, nil, 0, syscall.EPERM
 	}
 
 	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
 		// failed to create. read only
 		err := fmt.Errorf("failed to make a new entry on a read-only directory - %s", vpathEntry.Path)
 		logger.Error(err)
-		return nil, nil, syscall.EACCES
+		return nil, nil, 0, syscall.EPERM
 	} else if vpathEntry.Type == irodsfs_common_vpath.VPathIRODS {
 		if vpathEntry.ReadOnly {
 			// failed to create. read only
 			err := fmt.Errorf("failed to make a new entry on a read-only directory - %s", vpathEntry.Path)
 			logger.Error(err)
-			return nil, nil, syscall.EACCES
+			return nil, nil, 0, syscall.EPERM
 		}
 
 		irodsPath, err := vpathEntry.GetIRODSPath(targetPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to get IRODS path")
-			return nil, nil, syscall.EREMOTEIO
+			return nil, nil, 0, syscall.EREMOTEIO
 		}
 
 		handle, err := dir.fs.fsClient.CreateFile(irodsPath, "", openMode)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to create a file - %s", irodsPath)
-			return nil, nil, syscall.EREMOTEIO
+			return nil, nil, 0, syscall.EREMOTEIO
 		}
 
 		irodsEntry, err := dir.fs.fsClient.Stat(irodsPath)
 		if err != nil {
 			if irodsclient_types.IsFileNotFoundError(err) {
 				logger.WithError(err).Infof("failed to find a file - %s", irodsPath)
-				return nil, nil, syscall.EREMOTEIO
+				return nil, nil, 0, syscall.EREMOTEIO
 			}
 
 			logger.WithError(err).Errorf("failed to stat - %s", irodsPath)
-			return nil, nil, syscall.EREMOTEIO
+			return nil, nil, 0, syscall.EREMOTEIO
 		}
 
 		newVPathEntry := irodsfs_common_vpath.NewVPathEntryFromIRODSFSEntry(targetPath, irodsEntry, vpathEntry.ReadOnly)
-		file := NewFile(dir.fs, irodsEntry.ID, targetPath, newVPathEntry)
+		subFile, subFileInode := dir.newSubFileInode(ctx, irodsEntry.ID, targetPath)
+		subFile.setAttrOut(newVPathEntry, &out.Attr)
 
 		if dir.fs.instanceReportClient != nil {
 			dir.fs.instanceReportClient.StartFileAccess(handle)
 		}
 
-		fileHandle := NewFileHandle(file, handle)
+		fileHandle := NewFileHandle(subFile, handle)
 
 		// add to file handle map
 		dir.fs.fileHandleMap.Add(fileHandle)
 
-		return file, fileHandle, nil
+		return subFileInode, fileHandle, fuseFlag, fusefs.OK
 	} else {
 		logger.Errorf("unknown VPath Entry type : %s", vpathEntry.Type)
-		return nil, nil, syscall.EREMOTEIO
+		return nil, nil, 0, syscall.EREMOTEIO
 	}
 }
 
 /*
-func (dir *Dir) Symlink(ctx context.Context, req *fuse.SymlinkRequest) (fusefs.Node, error) {
+func (dir *Dir) Statfs(ctx context.Context, out *fuse.StatfsOut) syscall.Errno {
 }
 
-func (dir *Dir) Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (string, error) {
+func (dir *Dir) Getxattr(ctx context.Context, attr string, dest []byte) (uint32, syscall.Errno) {
+}
 
+func (dir *Dir) Setxattr(ctx context.Context, attr string, data []byte, flags uint32) syscall.Errno {
+}
+
+func (dir *Dir) Removexattr(ctx context.Context, attr string) syscall.Errno {
+}
+
+func (dir *Dir) Listxattr(ctx context.Context, dest []byte) (uint32, syscall.Errno) {
+}
+
+func (dir *Dir) Link(ctx context.Context, target InodeEmbedder, name string, out *fuse.EntryOut) (node *Inode, errno syscall.Errno) {
+}
+
+func (dir *Dir) Symlink(ctx context.Context, target, name string, out *fuse.EntryOut) (node *Inode, errno syscall.Errno) {
+}
+
+func (dir *Dir) Readlink(ctx context.Context) ([]byte, syscall.Errno) {
 }
 */

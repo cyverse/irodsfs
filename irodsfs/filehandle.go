@@ -9,7 +9,8 @@ import (
 	irodsfscommon_io "github.com/cyverse/irodsfs-common/io"
 	irodsfscommon_irods "github.com/cyverse/irodsfs-common/irods"
 	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
-	fuse "github.com/seaweedfs/fuse"
+	fusefs "github.com/hanwen/go-fuse/v2/fs"
+	fuse "github.com/hanwen/go-fuse/v2/fuse"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -84,10 +85,63 @@ func NewFileHandle(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle)
 	}
 }
 
-// Read reads file content
-func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
+// Getattr returns stat of file entry
+func (handle *FileHandle) Getattr(ctx context.Context, out *fuse.AttrOut) syscall.Errno {
 	if handle.fs.terminated {
 		return syscall.ECONNABORTED
+	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "FileHandle",
+		"function": "Getattr",
+	})
+
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+
+	operID := handle.fs.GetNextOperationID()
+	logger.Infof("Calling Getattr (%d) - %s", operID, handle.file.path)
+	defer logger.Infof("Called Getattr (%d) - %s", operID, handle.file.path)
+
+	return handle.file.Getattr(ctx, handle, out)
+}
+
+// Setattr sets file attributes
+func (handle *FileHandle) Setattr(ctx context.Context, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
+	if handle.fs.terminated {
+		return syscall.ECONNABORTED
+	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "FileHandle",
+		"function": "Setattr",
+	})
+
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+
+	operID := handle.fs.GetNextOperationID()
+	logger.Infof("Calling Setattr (%d) - %s", operID, handle.file.path)
+	defer logger.Infof("Called Setattr (%d) - %s", operID, handle.file.path)
+
+	if size, ok := in.GetSize(); ok {
+		// truncate file
+		errno := handle.Truncate(ctx, size)
+		if errno != fusefs.OK {
+			return errno
+		}
+
+		out.Size = size
+		return fusefs.OK
+	}
+
+	return handle.file.Setattr(ctx, handle, in, out)
+}
+
+// Read reads file content
+func (handle *FileHandle) Read(ctx context.Context, dest []byte, offset int64) (fuse.ReadResult, syscall.Errno) {
+	if handle.fs.terminated {
+		return nil, syscall.ECONNABORTED
 	}
 
 	logger := log.WithFields(log.Fields{
@@ -98,43 +152,43 @@ func (handle *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp 
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	logger.Debugf("Calling Read - %s, %d Offset, %d Bytes", handle.file.path, req.Offset, req.Size)
-	defer logger.Debugf("Called Read - %s, %d Offset, %d Bytes", handle.file.path, req.Offset, req.Size)
+	size := len(dest)
+
+	logger.Debugf("Calling Read - %s, %d Offset, %d Bytes", handle.file.path, offset, size)
+	defer logger.Debugf("Called Read - %s, %d Offset, %d Bytes", handle.file.path, offset, size)
 
 	if handle.fileHandle == nil {
 		logger.Errorf("failed to get a file handle - %s", handle.file.path)
-		return syscall.EBADFD
+		return nil, syscall.EBADFD
 	}
 
 	if !handle.fileHandle.IsReadMode() {
 		logger.Errorf("failed to read file opened with writeonly mode - %s", handle.file.path)
-		return syscall.EBADFD
+		return nil, syscall.EBADFD
 	}
 
 	if handle.reader == nil {
 		logger.Errorf("failed read file from nil reader - %s", handle.file.path)
-		return syscall.EBADFD
+		return nil, syscall.EBADFD
 	}
 
-	if req.Offset > handle.fileHandle.GetEntry().Size {
-		resp.Data = resp.Data[:0]
-		return nil
+	if offset > handle.fileHandle.GetEntry().Size {
+		return fuse.ReadResultData(dest[:0]), fusefs.OK
 	}
 
-	readLen, err := handle.reader.ReadAt(resp.Data[:req.Size], req.Offset)
+	readLen, err := handle.reader.ReadAt(dest, offset)
 	if err != nil && err != io.EOF {
-		logger.WithError(err).Errorf("failed to read data for file %s, offset %d, length %d", handle.file.path, req.Offset, req.Size)
-		return syscall.EREMOTEIO
+		logger.WithError(err).Errorf("failed to read data for file %s, offset %d, length %d", handle.file.path, offset, size)
+		return nil, syscall.EREMOTEIO
 	}
 
-	resp.Data = resp.Data[:readLen]
-	return nil
+	return fuse.ReadResultData(dest[:readLen]), fusefs.OK
 }
 
 // Write writes file content
-func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
+func (handle *FileHandle) Write(ctx context.Context, data []byte, offset int64) (written uint32, errno syscall.Errno) {
 	if handle.fs.terminated {
-		return syscall.ECONNABORTED
+		return 0, syscall.ECONNABORTED
 	}
 
 	logger := log.WithFields(log.Fields{
@@ -145,40 +199,45 @@ func (handle *FileHandle) Write(ctx context.Context, req *fuse.WriteRequest, res
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	logger.Debugf("Calling Write - %s, %d Bytes", handle.file.path, len(req.Data))
-	defer logger.Debugf("Called Write - %s, %d Bytes", handle.file.path, len(req.Data))
+	size := len(data)
+
+	logger.Debugf("Calling Write - %s, %d Offset, %d Bytes", handle.file.path, offset, size)
+	defer logger.Debugf("Called Write - %s, %d Offset, %d Bytes", handle.file.path, offset, size)
 
 	if handle.fileHandle == nil {
 		logger.Errorf("failed to get a file handle - %s", handle.file.path)
-		return syscall.EBADFD
+		return 0, syscall.EBADFD
 	}
 
 	if !handle.fileHandle.IsWriteMode() {
 		logger.Errorf("failed to write file opened with readonly mode - %s", handle.file.path)
-		return syscall.EBADFD
+		return 0, syscall.EBADFD
 	}
 
 	if handle.writer == nil {
 		logger.Errorf("failed to write file opened with readonly mode - %s", handle.file.path)
-		return syscall.EBADFD
+		return 0, syscall.EBADFD
 	}
 
-	if len(req.Data) == 0 || req.Offset < 0 {
-		return nil
+	if size == 0 {
+		return 0, fusefs.OK
 	}
 
-	writeLen, err := handle.writer.WriteAt(req.Data, req.Offset)
+	if offset < 0 {
+		return 0, syscall.EBADFD
+	}
+
+	writeLen, err := handle.writer.WriteAt(data, offset)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to write data for file %s, offset %d, length %d", handle.file.path, req.Offset, len(req.Data))
-		return syscall.EREMOTEIO
+		logger.WithError(err).Errorf("failed to write data for file %s, offset %d, length %d", handle.file.path, offset, size)
+		return 0, syscall.EREMOTEIO
 	}
 
-	resp.Size = writeLen
-	return nil
+	return uint32(writeLen), fusefs.OK
 }
 
 // Truncate truncates file content
-func (handle *FileHandle) Truncate(ctx context.Context, size int64) error {
+func (handle *FileHandle) Truncate(ctx context.Context, size uint64) syscall.Errno {
 	if handle.fs.terminated {
 		return syscall.ECONNABORTED
 	}
@@ -204,21 +263,17 @@ func (handle *FileHandle) Truncate(ctx context.Context, size int64) error {
 		return syscall.EBADFD
 	}
 
-	if size < 0 {
-		size = 0
-	}
-
-	err := handle.fileHandle.Truncate(size)
+	err := handle.fileHandle.Truncate(int64(size))
 	if err != nil {
 		logger.WithError(err).Errorf("failed to truncate data for file %s, size %d", handle.file.path, size)
 		return syscall.EREMOTEIO
 	}
 
-	return nil
+	return fusefs.OK
 }
 
 // Flush flushes content changes
-func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) error {
+func (handle *FileHandle) Flush(ctx context.Context) syscall.Errno {
 	if handle.fs.terminated {
 		return syscall.ECONNABORTED
 	}
@@ -248,11 +303,31 @@ func (handle *FileHandle) Flush(ctx context.Context, req *fuse.FlushRequest) err
 		}
 	}
 
-	return nil
+	return fusefs.OK
+}
+
+// Fsync flushes content changes
+func (handle *FileHandle) Fsync(ctx context.Context, flags uint32) syscall.Errno {
+	if handle.fs.terminated {
+		return syscall.ECONNABORTED
+	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "FileHandle",
+		"function": "Fsync",
+	})
+
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+
+	logger.Debugf("Calling Fsync - %s", handle.file.path)
+	defer logger.Debugf("Called Fsync - %s", handle.file.path)
+
+	return fusefs.OK
 }
 
 // Release closes file handle
-func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest) error {
+func (handle *FileHandle) Release(ctx context.Context) syscall.Errno {
 	if handle.fs.terminated {
 		return syscall.ECONNABORTED
 	}
@@ -331,5 +406,22 @@ func (handle *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest)
 		closeFunc()
 	}
 
-	return nil
+	return fusefs.OK
 }
+
+/*
+func (handle *FileHandle) Getlk(ctx context.Context, owner uint64, lk *fuse.FileLock, flags uint32, out *fuse.FileLock) syscall.Errno {
+}
+
+func (handle *FileHandle) Setlk(ctx context.Context, owner uint64, lk *fuse.FileLock, flags uint32) syscall.Errno {
+}
+
+func (handle *FileHandle) Setlkw(ctx context.Context, owner uint64, lk *fuse.FileLock, flags uint32) syscall.Errno {
+}
+
+func (handle *FileHandle) Lseek(ctx context.Context, off uint64, whence uint32) (uint64, syscall.Errno) {
+}
+
+func (handle *FileHandle) Allocate(ctx context.Context, off uint64, size uint64, mode uint32) syscall.Errno {
+}
+*/
