@@ -32,7 +32,9 @@ func GetFuseOptions(config *commons.Config) *fusefs.Options {
 
 	options.AllowOther = config.AllowOther
 	options.AttrTimeout = (*time.Duration)(&config.MetadataCacheTimeout)
-	options.Debug = false
+	if config.Debug && config.Foreground {
+		options.Debug = true
+	}
 	options.EntryTimeout = (*time.Duration)(&config.MetadataCacheTimeout)
 	options.NegativeTimeout = (*time.Duration)(&config.MetadataCacheTimeout)
 	options.UID = uint32(config.UID)
@@ -41,7 +43,6 @@ func GetFuseOptions(config *commons.Config) *fusefs.Options {
 	options.FsName = FSName
 	options.Name = Subtype
 	options.SingleThreaded = false
-
 	return options
 }
 
