@@ -274,6 +274,7 @@ func childMain() {
 	// output to log file
 	var logWriter io.WriteCloser
 	if len(config.LogPath) > 0 && config.LogPath != "-" {
+		logger.Infof("Set log output to %s", config.LogPath)
 		logWriter = getLogWriter(config.LogPath)
 		log.SetOutput(logWriter)
 	}
