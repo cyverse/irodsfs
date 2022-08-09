@@ -289,7 +289,7 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 				return nil, logWriter, true, err
 			}
 
-			err = yaml.Unmarshal(yamlBytes, &config)
+			err = yaml.Unmarshal(yamlBytes, config)
 			if err != nil {
 				return nil, logWriter, true, fmt.Errorf("failed to unmarshal YAML - %v", err)
 			}
@@ -299,30 +299,14 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 			// read config
 			configFileAbsPath, err := filepath.Abs(configFilePath)
 			if err != nil {
-				logger.WithError(err).Errorf("failed to access the local yaml file %s", configFilePath)
+				logger.WithError(err).Errorf("failed to access the local config file %s", configFilePath)
 				return nil, logWriter, true, err
 			}
 
-			fileinfo, err := os.Stat(configFileAbsPath)
+			err = commons.LoadConfigFile(configFileAbsPath, config)
 			if err != nil {
-				logger.WithError(err).Errorf("failed to access the local yaml file %s", configFileAbsPath)
+				logger.WithError(err).Errorf("failed to load config from a file %s", configFileAbsPath)
 				return nil, logWriter, true, err
-			}
-
-			if fileinfo.IsDir() {
-				logger.WithError(err).Errorf("local yaml file %s is not a file", configFileAbsPath)
-				return nil, logWriter, true, fmt.Errorf("local yaml file %s is not a file", configFileAbsPath)
-			}
-
-			yamlBytes, err := ioutil.ReadFile(configFileAbsPath)
-			if err != nil {
-				logger.WithError(err).Errorf("failed to read the local yaml file %s", configFileAbsPath)
-				return nil, logWriter, true, err
-			}
-
-			err = yaml.Unmarshal(yamlBytes, &config)
-			if err != nil {
-				return nil, logWriter, true, fmt.Errorf("failed to unmarshal YAML - %v", err)
 			}
 		}
 	}

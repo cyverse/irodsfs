@@ -2,12 +2,15 @@ package commons
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
+	irodsclient_icommands "github.com/cyverse/go-irodsclient/utils/icommands"
 	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
 	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 
@@ -449,4 +452,144 @@ func ParsePoolServiceEndpoint(endpoint string) (string, string, error) {
 	default:
 		return "", "", fmt.Errorf("unsupported protocol: %s", scheme)
 	}
+}
+
+func LoadConfigFile(path string, config *Config) error {
+	// path must exist
+	_, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+
+	// check if it is iRODS FUSE Lite Config YAML or iCommands JSON file
+	if isICommandsEnvDir(path) {
+		// read from iCommands JSON File
+		iCommandsEnvMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager(path, 0)
+		if err != nil {
+			return err
+		}
+
+		err = iCommandsEnvMgr.Load(os.Getppid())
+		if err != nil {
+			return err
+		}
+
+		loadedAccount, err := iCommandsEnvMgr.ToIRODSAccount()
+		if err != nil {
+			return err
+		}
+
+		// Fill more
+		config.AuthScheme = string(loadedAccount.AuthenticationScheme)
+		config.CSNegotiationPolicy = string(loadedAccount.CSNegotiationPolicy)
+		config.ClientServerNegotiation = loadedAccount.ClientServerNegotiation
+		config.Host = loadedAccount.Host
+		config.Port = loadedAccount.Port
+		config.ClientUser = loadedAccount.ClientUser
+		config.Zone = loadedAccount.ClientZone
+		config.ProxyUser = loadedAccount.ProxyUser
+		config.Password = loadedAccount.Password
+		config.Resource = loadedAccount.DefaultResource
+		config.CACertificateFile = loadedAccount.SSLConfiguration.CACertificateFile
+		config.EncryptionKeySize = loadedAccount.SSLConfiguration.EncryptionKeySize
+		config.EncryptionAlgorithm = loadedAccount.SSLConfiguration.EncryptionAlgorithm
+		config.SaltSize = loadedAccount.SSLConfiguration.SaltSize
+		config.HashRounds = loadedAccount.SSLConfiguration.HashRounds
+		if iCommandsEnvMgr.Session != nil {
+			if len(iCommandsEnvMgr.Session.CurrentWorkingDir) > 0 {
+				config.PathMappings = []irodsfs_common_vpath.VPathMapping{
+					{
+						IRODSPath:           iCommandsEnvMgr.Session.CurrentWorkingDir,
+						MappingPath:         "/",
+						ResourceType:        irodsfs_common_vpath.VPathMappingDirectory,
+						ReadOnly:            false,
+						CreateDir:           false,
+						IgnoreNotExistError: false,
+					},
+				}
+			}
+		}
+
+		if len(config.PathMappings) == 0 {
+			iRODSHomePath := fmt.Sprintf("/%s/home/%s", config.Zone, config.ClientUser)
+			config.PathMappings = []irodsfs_common_vpath.VPathMapping{
+				{
+					IRODSPath:           iRODSHomePath,
+					MappingPath:         "/",
+					ResourceType:        irodsfs_common_vpath.VPathMappingDirectory,
+					ReadOnly:            false,
+					CreateDir:           false,
+					IgnoreNotExistError: false,
+				},
+			}
+		}
+
+		return nil
+	} else if isYAMLFile(path) {
+		yamlBytes, err := ioutil.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("failed to read the local yaml file %s", path)
+		}
+
+		err = yaml.Unmarshal(yamlBytes, config)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal YAML - %v", err)
+		}
+
+		err = config.CorrectSystemUser()
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	return fmt.Errorf("failed to read the local file %s, unknown format", path)
+}
+
+func isICommandsEnvDir(filePath string) bool {
+	st, err := os.Stat(filePath)
+	if err != nil {
+		return false
+	}
+
+	if !st.IsDir() {
+		return false
+	}
+
+	envFilePath := filepath.Join(filePath, "irods_environment.json")
+	passFilePath := filepath.Join(filePath, ".irodsA")
+
+	stEnv, err := os.Stat(envFilePath)
+	if err != nil {
+		return false
+	}
+
+	if stEnv.IsDir() {
+		return false
+	}
+
+	stPass, err := os.Stat(passFilePath)
+	if err != nil {
+		return false
+	}
+
+	if stPass.IsDir() {
+		return false
+	}
+
+	return true
+}
+
+func isYAMLFile(filePath string) bool {
+	st, err := os.Stat(filePath)
+	if err != nil {
+		return false
+	}
+
+	if st.IsDir() {
+		return false
+	}
+
+	ext := filepath.Ext(filePath)
+	return ext == ".yaml" || ext == ".yml"
 }
