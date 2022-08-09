@@ -99,7 +99,8 @@ Test access the mount.
 ls /mount/irods
 ```
 
-### Mount an iRODS Collection using config YAML file
+### Mount an iRODS Collection using a config YAML file
+
 An iRODS user `iychoi` mounts a collection `/iplant/home/iychoi` in iRODS Server `data.cyverse.org` on a local directory `/mount/irods`.
 
 - iRODS User: `iychoi`
@@ -217,6 +218,22 @@ path_mappings:
 Then run `irodsfs` with `-config` option.
 ```shell script
 ./bin/irodsfs -config config.yaml /mount/irods
+```
+
+After mounting, `irodsfs` will be executed in the background.
+
+Test access the mount.
+```shell script
+ls /mount/irods
+```
+
+### Mount User's iRODS Home Collection using iCommands config (~/.irods)
+
+An iRODS user `iychoi` has iCommands config in `~/.irods`. 
+
+Run `irodsfs` with `-config` option.
+```shell script
+./bin/irodsfs -config ~/.irods /mount/irods
 ```
 
 After mounting, `irodsfs` will be executed in the background.
