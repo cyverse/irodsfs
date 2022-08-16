@@ -217,15 +217,21 @@ func (dir *Dir) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fus
 	if req.Valid.Mode() {
 		// chmod
 		// not supported
-		return syscall.EOPNOTSUPP
+		//return syscall.EOPNOTSUPP
+		// but do not return EOPNOTSUPP since it will cuase various errors in fs clients, eg. GIT
+		return nil
 	} else if req.Valid.Atime() || req.Valid.AtimeNow() || req.Valid.Mtime() || req.Valid.MtimeNow() {
 		// changing date
 		// not supported
-		return syscall.EOPNOTSUPP
+		//return syscall.EOPNOTSUPP
+		// but do not return EOPNOTSUPP since it will cuase various errors in fs clients, eg. GIT
+		return nil
 	} else if req.Valid.Gid() || req.Valid.Uid() {
 		// changing ownership
 		// not supported
-		return syscall.EOPNOTSUPP
+		//return syscall.EOPNOTSUPP
+		// but do not return EOPNOTSUPP since it will cuase various errors in fs clients, eg. GIT
+		return nil
 	}
 
 	return nil
