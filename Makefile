@@ -16,6 +16,7 @@ build:
 
 .PHONY: build-release
 build-release:
+	rm -rf release
 	mkdir -p release
 	CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -ldflags=${LDFLAGS} -o release/irodsfs ./cmd/
 	cd release && tar cvf irodsfs_i386_linux_${VERSION}.tar irodsfs && cd ..
