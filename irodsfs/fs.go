@@ -31,12 +31,13 @@ func GetFuseOptions(config *commons.Config) *fusefs.Options {
 	options := &fusefs.Options{}
 
 	options.AllowOther = config.AllowOther
-	options.AttrTimeout = (*time.Duration)(&config.MetadataCacheTimeout)
 	if config.Debug && config.Foreground {
 		options.Debug = true
 	}
-	options.EntryTimeout = (*time.Duration)(&config.MetadataCacheTimeout)
-	options.NegativeTimeout = (*time.Duration)(&config.MetadataCacheTimeout)
+
+	options.AttrTimeout = nil
+	options.EntryTimeout = nil
+	options.NegativeTimeout = nil
 	options.UID = uint32(config.UID)
 	options.GID = uint32(config.GID)
 	options.MaxReadAhead = config.ReadAheadMax

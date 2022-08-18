@@ -33,6 +33,7 @@ func NewDir(fs *IRODSFS, entryID int64, path string) *Dir {
 		fs:      fs,
 		entryID: entryID,
 		path:    path,
+		mutex:   sync.RWMutex{},
 	}
 }
 
@@ -171,12 +172,12 @@ func (dir *Dir) Getattr(ctx context.Context, fh fusefs.FileHandle, out *fuse.Att
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	dir.mutex.RLock()
-	defer dir.mutex.RUnlock()
-
 	operID := dir.fs.GetNextOperationID()
 	logger.Infof("Calling Getattr (%d) - %s", operID, dir.path)
 	defer logger.Infof("Called Getattr (%d) - %s", operID, dir.path)
+
+	dir.mutex.RLock()
+	defer dir.mutex.RUnlock()
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(dir.path)
 	if vpathEntry == nil {
@@ -236,36 +237,39 @@ func (dir *Dir) Setattr(ctx context.Context, fh fusefs.FileHandle, in *fuse.SetA
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	if _, ok := in.GetMode(); ok {
-		// chmod
-		// not supported
-		return syscall.EOPNOTSUPP
-	} else if _, ok := in.GetATime(); ok {
-		// changing date
-		// not supported
-		return syscall.EOPNOTSUPP
-	} else if _, ok := in.GetCTime(); ok {
-		// changing date
-		// not supported
-		return syscall.EOPNOTSUPP
-	} else if _, ok := in.GetMTime(); ok {
-		// changing date
-		// not supported
-		return syscall.EOPNOTSUPP
-	} else if _, ok := in.GetGID(); ok {
-		// changing ownership
-		// not supported
-		return syscall.EOPNOTSUPP
-	} else if _, ok := in.GetUID(); ok {
-		// changing ownership
-		// not supported
-		return syscall.EOPNOTSUPP
-	} else if size, ok := in.GetSize(); ok {
-		// is this to truncate a file?
-		// not supported
-		logger.Errorf("cannot handle truncation of a directory - %s, size %d", dir.path, size)
-		return syscall.EOPNOTSUPP
-	}
+	// do not return EOPNOTSUPP as it causes client errors, like git clone
+	/*
+		if _, ok := in.GetMode(); ok {
+			// chmod
+			// not supported
+			return syscall.EOPNOTSUPP
+		} else if _, ok := in.GetATime(); ok {
+			// changing date
+			// not supported
+			return syscall.EOPNOTSUPP
+		} else if _, ok := in.GetCTime(); ok {
+			// changing date
+			// not supported
+			return syscall.EOPNOTSUPP
+		} else if _, ok := in.GetMTime(); ok {
+			// changing date
+			// not supported
+			return syscall.EOPNOTSUPP
+		} else if _, ok := in.GetGID(); ok {
+			// changing ownership
+			// not supported
+			return syscall.EOPNOTSUPP
+		} else if _, ok := in.GetUID(); ok {
+			// changing ownership
+			// not supported
+			return syscall.EOPNOTSUPP
+		} else if size, ok := in.GetSize(); ok {
+			// is this to truncate a file?
+			// not supported
+			logger.Errorf("cannot handle truncation of a directory - %s, size %d", dir.path, size)
+			return syscall.EOPNOTSUPP
+		}
+	*/
 
 	return fusefs.OK
 }
@@ -284,14 +288,14 @@ func (dir *Dir) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*f
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	dir.mutex.RLock()
-	defer dir.mutex.RUnlock()
-
 	targetPath := irodsfs_common_utils.JoinPath(dir.path, name)
 
 	operID := dir.fs.GetNextOperationID()
 	logger.Infof("Calling Lookup (%d) - %s", operID, targetPath)
 	defer logger.Infof("Called Lookup (%d) - %s", operID, targetPath)
+
+	dir.mutex.RLock()
+	defer dir.mutex.RUnlock()
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(targetPath)
 	if vpathEntry == nil {
@@ -359,12 +363,14 @@ func (dir *Dir) Opendir(ctx context.Context) syscall.Errno {
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	dir.mutex.RLock()
-	defer dir.mutex.RUnlock()
-
 	operID := dir.fs.GetNextOperationID()
 	logger.Infof("Calling Opendir (%d) - %s", operID, dir.path)
 	defer logger.Infof("Called Opendir (%d) - %s", operID, dir.path)
+
+	// we must not lock here.
+	// rename locks mutex and calls opendir, so goes deadlock
+	//dir.mutex.RLock()
+	//defer dir.mutex.RUnlock()
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(dir.path)
 	if vpathEntry == nil {
@@ -421,12 +427,12 @@ func (dir *Dir) Readdir(ctx context.Context) (fusefs.DirStream, syscall.Errno) {
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	dir.mutex.RLock()
-	defer dir.mutex.RUnlock()
-
 	operID := dir.fs.GetNextOperationID()
 	logger.Infof("Calling Readdir (%d) - %s", operID, dir.path)
 	defer logger.Infof("Called Readdir (%d) - %s", operID, dir.path)
+
+	dir.mutex.RLock()
+	defer dir.mutex.RUnlock()
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(dir.path)
 	if vpathEntry == nil {
@@ -547,12 +553,12 @@ func (dir *Dir) Rmdir(ctx context.Context, name string) syscall.Errno {
 
 	targetPath := irodsfs_common_utils.JoinPath(dir.path, name)
 
-	dir.mutex.Lock()
-	defer dir.mutex.Unlock()
-
 	operID := dir.fs.GetNextOperationID()
 	logger.Infof("Calling Rmdir (%d) - %s", operID, targetPath)
 	defer logger.Infof("Called Rmdir (%d) - %s", operID, targetPath)
+
+	dir.mutex.Lock()
+	defer dir.mutex.Unlock()
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(targetPath)
 	if vpathEntry == nil {
@@ -640,14 +646,14 @@ func (dir *Dir) Unlink(ctx context.Context, name string) error {
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	dir.mutex.Lock()
-	defer dir.mutex.Unlock()
-
 	targetPath := irodsfs_common_utils.JoinPath(dir.path, name)
 
 	operID := dir.fs.GetNextOperationID()
 	logger.Infof("Calling Unlink (%d) - %s", operID, targetPath)
 	defer logger.Infof("Called Unlink (%d) - %s", operID, targetPath)
+
+	dir.mutex.Lock()
+	defer dir.mutex.Unlock()
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(targetPath)
 	if vpathEntry == nil {
@@ -732,14 +738,14 @@ func (dir *Dir) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.E
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	dir.mutex.Lock()
-	defer dir.mutex.Unlock()
-
 	targetPath := irodsfs_common_utils.JoinPath(dir.path, name)
 
 	operID := dir.fs.GetNextOperationID()
 	logger.Infof("Calling Mkdir (%d) - %s", operID, targetPath)
 	defer logger.Infof("Called Mkdir (%d) - %s", operID, targetPath)
+
+	dir.mutex.Lock()
+	defer dir.mutex.Unlock()
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(targetPath)
 	if vpathEntry == nil {
@@ -795,6 +801,49 @@ func (dir *Dir) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.E
 	}
 }
 
+func (dir *Dir) renameNode(srcPath string, destPath string, node *fusefs.Inode) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "Dir",
+		"function": "renameNode",
+	})
+
+	switch fsnode := node.Operations().(type) {
+	case *Dir:
+		relPath, err := irodsfs_common_utils.GetRelativePath(srcPath, fsnode.path)
+		if err != nil {
+			return err
+		}
+
+		newPath := irodsfs_common_utils.JoinPath(destPath, relPath)
+		logger.Debugf("renaming a dir node %s to %s", fsnode.path, newPath)
+
+		fsnode.path = newPath
+
+		// recurse
+		for _, childNode := range fsnode.Children() {
+			err := dir.renameNode(srcPath, destPath, childNode)
+			if err != nil {
+				return err
+			}
+		}
+	case *File:
+		relPath, err := irodsfs_common_utils.GetRelativePath(srcPath, fsnode.path)
+		if err != nil {
+			return err
+		}
+
+		newPath := irodsfs_common_utils.JoinPath(destPath, relPath)
+		logger.Debugf("renaming a file node %s to %s", fsnode.path, newPath)
+
+		fsnode.path = newPath
+	default:
+		return fmt.Errorf("unknown node type")
+	}
+
+	return nil
+}
+
 // Rename renames a node for the path
 func (dir *Dir) Rename(ctx context.Context, name string, newParent fusefs.InodeEmbedder, newName string, flags uint32) syscall.Errno {
 	if dir.fs.terminated {
@@ -809,21 +858,27 @@ func (dir *Dir) Rename(ctx context.Context, name string, newParent fusefs.InodeE
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	dir.mutex.Lock()
-	defer dir.mutex.Unlock()
-
 	targetSrcPath := irodsfs_common_utils.JoinPath(dir.path, name)
 
-	newdir := newParent.(*Dir)
-
-	newdir.mutex.Lock()
-	defer newdir.mutex.Unlock()
+	newdir, ok := newParent.(*Dir)
+	if !ok || newdir == nil {
+		logger.Error("failed to convert newParent to Dir type")
+		return syscall.EREMOTEIO
+	}
 
 	targetDestPath := irodsfs_common_utils.JoinPath(newdir.path, newName)
 
 	operID := dir.fs.GetNextOperationID()
 	logger.Infof("Calling Rename (%d) - %s to %s", operID, targetSrcPath, targetDestPath)
 	defer logger.Infof("Called Rename (%d) - %s to %s", operID, targetSrcPath, targetDestPath)
+
+	dir.mutex.Lock()
+	defer dir.mutex.Unlock()
+
+	if newdir != dir {
+		newdir.mutex.Lock()
+		defer newdir.mutex.Unlock()
+	}
 
 	vpathSrcEntry := dir.fs.vpathManager.GetClosestEntry(targetSrcPath)
 	if vpathSrcEntry == nil {
@@ -917,6 +972,15 @@ func (dir *Dir) Rename(ctx context.Context, name string, newParent fusefs.InodeE
 				return syscall.EREMOTEIO
 			}
 
+			// update
+			childNode := dir.GetChild(name)
+			if childNode == nil {
+				logger.Errorf("failed to update the dir node - %s", irodsSrcPath)
+				return syscall.EREMOTEIO
+			}
+
+			dir.renameNode(targetSrcPath, targetDestPath, childNode)
+
 			// report update to fileHandleMap
 			dir.fs.fileHandleMap.RenameDir(irodsSrcPath, irodsDestPath)
 
@@ -953,8 +1017,18 @@ func (dir *Dir) Rename(ctx context.Context, name string, newParent fusefs.InodeE
 				return syscall.EREMOTEIO
 			}
 
+			// update
+			childNode := dir.GetChild(name)
+			if childNode == nil {
+				logger.Errorf("failed to update the file node - %s", irodsSrcPath)
+				return syscall.EREMOTEIO
+			}
+
+			dir.renameNode(targetSrcPath, targetDestPath, childNode)
+
 			// report update to fileHandleMap
 			dir.fs.fileHandleMap.Rename(irodsSrcPath, irodsDestPath)
+
 			return fusefs.OK
 		default:
 			logger.Errorf("unknown entry type - %s", irodsEntry.Type)
@@ -982,12 +1056,12 @@ func (dir *Dir) Create(ctx context.Context, name string, flags uint32, mode uint
 
 	targetPath := irodsfs_common_utils.JoinPath(dir.path, name)
 
-	dir.mutex.Lock()
-	defer dir.mutex.Unlock()
-
 	operID := dir.fs.GetNextOperationID()
 	logger.Infof("Calling Create (%d) - %s", operID, targetPath)
 	defer logger.Infof("Called Create (%d) - %s", operID, targetPath)
+
+	dir.mutex.Lock()
+	defer dir.mutex.Unlock()
 
 	var openMode string
 	fuseFlag := uint32(0)

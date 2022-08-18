@@ -33,6 +33,7 @@ func NewFile(fs *IRODSFS, entryID int64, path string) *File {
 		fs:      fs,
 		entryID: entryID,
 		path:    path,
+		mutex:   sync.RWMutex{},
 	}
 }
 
@@ -167,11 +168,6 @@ func (file *File) Getattr(ctx context.Context, fh fusefs.FileHandle, out *fuse.A
 		logger.Errorf("failed to get file attribute from a virtual dir mapping")
 		return syscall.EREMOTEIO
 	} else if vpathEntry.Type == irodsfs_common_vpath.VPathIRODS {
-		if vpathEntry.IRODSEntry.Type != irodsclient_fs.FileEntry {
-			logger.Errorf("failed to get file attributes")
-			return syscall.EREMOTEIO
-		}
-
 		irodsPath, err := vpathEntry.GetIRODSPath(file.path)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to get IRODS path")
@@ -216,36 +212,35 @@ func (file *File) Setattr(ctx context.Context, fh fusefs.FileHandle, in *fuse.Se
 	logger.Infof("Calling Setattr (%d) - %s", operID, file.path)
 	defer logger.Infof("Called Setattr (%d) - %s", operID, file.path)
 
-	if _, ok := in.GetMode(); ok {
-		// chmod
-		// not supported
-		return syscall.EOPNOTSUPP
-	} else if _, ok := in.GetATime(); ok {
-		// changing date
-		// not supported but return OK to not cause various errors in linux commands
-		return fusefs.OK
-	} else if _, ok := in.GetCTime(); ok {
-		// changing date
-		// not supported but return OK to not cause various errors in linux commands
-		return fusefs.OK
-	} else if _, ok := in.GetMTime(); ok {
-		// changing date
-		// not supported but return OK to not cause various errors in linux commands
-		return fusefs.OK
-	} else if _, ok := in.GetGID(); ok {
-		// changing ownership
-		// not supported
-		return syscall.EOPNOTSUPP
-	} else if _, ok := in.GetUID(); ok {
-		// changing ownership
-		// not supported
-<<<<<<< HEAD
-		//return syscall.EOPNOTSUPP
-		// but do not return EOPNOTSUPP since it will cause various errors in fs clients
-		return nil
-=======
-		return syscall.EOPNOTSUPP
-	} else if size, ok := in.GetSize(); ok {
+	// do not return EOPNOTSUPP as it causes client errors, like git clone
+	/*
+		if _, ok := in.GetMode(); ok {
+			// chmod
+			// not supported
+			return syscall.EOPNOTSUPP
+		} else if _, ok := in.GetATime(); ok {
+			// changing date
+			// not supported but return OK to not cause various errors in linux commands
+			return fusefs.OK
+		} else if _, ok := in.GetCTime(); ok {
+			// changing date
+			// not supported but return OK to not cause various errors in linux commands
+			return fusefs.OK
+		} else if _, ok := in.GetMTime(); ok {
+			// changing date
+			// not supported but return OK to not cause various errors in linux commands
+			return fusefs.OK
+		} else if _, ok := in.GetGID(); ok {
+			// changing ownership
+			// not supported
+			return syscall.EOPNOTSUPP
+		} else if _, ok := in.GetUID(); ok {
+			// changing ownership
+			// not supported
+			return syscall.EOPNOTSUPP
+		}
+	*/
+	if size, ok := in.GetSize(); ok {
 		// truncate file
 		errno := file.Truncate(ctx, size)
 		if errno != fusefs.OK {
@@ -254,7 +249,6 @@ func (file *File) Setattr(ctx context.Context, fh fusefs.FileHandle, in *fuse.Se
 
 		out.Size = size
 		return fusefs.OK
->>>>>>> port to go-fuse
 	}
 
 	return fusefs.OK
