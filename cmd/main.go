@@ -15,6 +15,7 @@ import (
 
 	"github.com/cyverse/irodsfs/commons"
 	"github.com/cyverse/irodsfs/irodsfs"
+	"github.com/cyverse/irodsfs/utils"
 
 	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
 
@@ -202,17 +203,17 @@ func parentMain() {
 	}
 
 	// check fuse
-	fuseCheckResult := commons.CheckFuse()
+	fuseCheckResult := utils.CheckFuse()
 	switch fuseCheckResult {
-	case commons.CheckFUSEStatusFound:
+	case utils.CheckFUSEStatusFound:
 		// okay
 		logger.Info("Found FUSE Device. Starting iRODS FUSE Lite.")
-	case commons.CheckFUSEStatusUnknown:
+	case utils.CheckFUSEStatusUnknown:
 		// try to go
 		logger.Info("It is not sure whether FUSE is running. Starting iRODS FUSE Lite, anyway.")
-	case commons.CheckFUSEStatusNotFound:
+	case utils.CheckFUSEStatusNotFound:
 		logger.Fatal("FUSE is not running. Terminating iRODS FUSE Lite.")
-	case commons.CheckFUSEStatusCannotRun:
+	case utils.CheckFUSEStatusCannotRun:
 		logger.Fatal("FUSE is not supported. Terminating iRODS FUSE Lite.")
 	}
 
