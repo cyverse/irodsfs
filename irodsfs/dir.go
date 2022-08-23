@@ -425,6 +425,7 @@ func (dir *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 		if !dir.fs.config.NoPermissionCheck && !vpathEntry.ReadOnly {
 			// list ACLs
 			// this caches all ACLs of entries in irodsPath, so make future ACL queries fast
+			logger.Debugf("Caching ACLs for entries in a dir - %s", irodsPath)
 			_, err = dir.fs.fsClient.ListACLsForEntries(irodsPath)
 			if err != nil {
 				logger.WithError(err).Errorf("failed to list ACLs - %s", irodsPath)
