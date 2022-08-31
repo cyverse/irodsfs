@@ -36,38 +36,40 @@ func NewFileHandle(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle)
 	var writer irodsfscommon_io.Writer
 	var reader irodsfscommon_io.Reader
 
+	fsClient := file.fs.fsClient
+
 	openMode := fileHandle.GetOpenMode()
 	if openMode.IsReadOnly() {
 		// writer
-		writer = irodsfscommon_io.NewNilWriter(fileHandle)
+		writer = irodsfscommon_io.NewNilWriter(fsClient, fileHandle)
 
 		// reader
 		if len(file.fs.config.TempRootPath) > 0 {
-			syncReader := irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
+			syncReader := irodsfscommon_io.NewSyncReader(fsClient, fileHandle, file.fs.instanceReportClient)
 			reader = irodsfscommon_io.NewAsyncBlockReader(syncReader, iRODSIOBlockSize, iRODSReadWriteSize, file.fs.config.TempRootPath)
 		} else {
-			reader = irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
+			reader = irodsfscommon_io.NewSyncReader(fsClient, fileHandle, file.fs.instanceReportClient)
 		}
 	} else if openMode.IsWriteOnly() {
 		// writer
 		if len(file.fs.config.PoolEndpoint) > 0 {
-			writer = irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
+			writer = irodsfscommon_io.NewSyncWriter(fsClient, fileHandle, file.fs.instanceReportClient)
 		} else {
 			if len(file.fs.config.TempRootPath) > 0 {
-				syncWriter := irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
+				syncWriter := irodsfscommon_io.NewSyncWriter(fsClient, fileHandle, file.fs.instanceReportClient)
 				asyncWriter := irodsfscommon_io.NewAsyncWriter(syncWriter, iRODSIOBlockSize, file.fs.config.TempRootPath)
 				writer = irodsfscommon_io.NewSyncBufferedWriter(asyncWriter, iRODSWriteBufferSize)
 			} else {
-				syncWriter := irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
+				syncWriter := irodsfscommon_io.NewSyncWriter(fsClient, fileHandle, file.fs.instanceReportClient)
 				writer = irodsfscommon_io.NewSyncBufferedWriter(syncWriter, iRODSIOBlockSize)
 			}
 		}
 
 		// reader
-		reader = irodsfscommon_io.NewNilReader(fileHandle)
+		reader = irodsfscommon_io.NewNilReader(fsClient, fileHandle)
 	} else {
-		writer = irodsfscommon_io.NewSyncWriter(fileHandle, file.fs.instanceReportClient)
-		reader = irodsfscommon_io.NewSyncReader(fileHandle, file.fs.instanceReportClient)
+		writer = irodsfscommon_io.NewSyncWriter(fsClient, fileHandle, file.fs.instanceReportClient)
+		reader = irodsfscommon_io.NewSyncReader(fsClient, fileHandle, file.fs.instanceReportClient)
 	}
 
 	return &FileHandle{
