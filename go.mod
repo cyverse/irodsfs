@@ -6,7 +6,7 @@ require (
 	github.com/cyverse/go-irodsclient v0.9.8
 	github.com/cyverse/irodsfs-common v0.0.0-20220830234055-461b37ec8353
 	github.com/cyverse/irodsfs-monitor v0.0.0-20220809235922-daf13261a2dc
-	github.com/cyverse/irodsfs-pool v0.5.13
+	github.com/cyverse/irodsfs-pool v0.5.15
 	github.com/pkg/profile v1.6.0
 	github.com/rs/xid v1.3.0
 	github.com/seaweedfs/fuse v1.2.2
