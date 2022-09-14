@@ -26,4 +26,4 @@ jobs:
         project_path: "./cmd/"
         binary_name: "irodsfs"
         extra_files: LICENSE README.md
-        ldflags: "-X ${PKG}/commons.clientVersion=${GITHUB_REF} -X ${PKG}/commons.gitCommit=${GITHUB_SHA} -X ${PKG}/commons.buildDate=${BUILD_DATE}"
+        ldflags: "-X ${{ env.PKG }}/commons.clientVersion=${{ github.ref_name }} -X ${{ env.PKG }}/commons.gitCommit=${{ github.sha }} -X ${{ env.PKG }}/commons.buildDate=${{ env.BUILD_DATE }}"
