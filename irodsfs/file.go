@@ -51,9 +51,7 @@ func (file *File) setAttrOut(vpathEntry *irodsfs_common_vpath.VPathEntry, out *f
 		out.Ino = uint64(vpathEntry.IRODSEntry.ID)
 		out.Uid = file.fs.uid
 		out.Gid = file.fs.gid
-		out.Ctime = uint64(vpathEntry.IRODSEntry.CreateTime.UnixMilli())
-		out.Mtime = uint64(vpathEntry.IRODSEntry.ModifyTime.UnixMilli())
-		out.Atime = uint64(vpathEntry.IRODSEntry.ModifyTime.UnixMilli())
+		out.SetTimes(&vpathEntry.IRODSEntry.ModifyTime, &vpathEntry.IRODSEntry.ModifyTime, &vpathEntry.IRODSEntry.ModifyTime)
 		out.Size = uint64(vpathEntry.IRODSEntry.Size)
 		out.Mode = uint32(fuse.S_IFREG | file.getACL(vpathEntry.IRODSEntry, vpathEntry.ReadOnly))
 	}
