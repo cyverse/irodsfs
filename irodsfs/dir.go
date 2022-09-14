@@ -61,9 +61,7 @@ func (dir *Dir) setAttrOut(vpathEntry *irodsfs_common_vpath.VPathEntry, out *fus
 		out.Ino = uint64(vpathEntry.VirtualDirEntry.ID)
 		out.Uid = dir.fs.uid
 		out.Gid = dir.fs.gid
-		out.Ctime = uint64(vpathEntry.VirtualDirEntry.CreateTime.UnixMilli())
-		out.Mtime = uint64(vpathEntry.VirtualDirEntry.ModifyTime.UnixMilli())
-		out.Atime = uint64(vpathEntry.VirtualDirEntry.ModifyTime.UnixMilli())
+		out.SetTimes(&vpathEntry.VirtualDirEntry.ModifyTime, &vpathEntry.VirtualDirEntry.ModifyTime, &vpathEntry.VirtualDirEntry.ModifyTime)
 		out.Size = uint64(vpathEntry.VirtualDirEntry.Size)
 		out.Mode = uint32(fuse.S_IFDIR | 0o400)
 	} else if vpathEntry.Type == irodsfs_common_vpath.VPathIRODS {
@@ -71,9 +69,7 @@ func (dir *Dir) setAttrOut(vpathEntry *irodsfs_common_vpath.VPathEntry, out *fus
 		out.Ino = uint64(vpathEntry.IRODSEntry.ID)
 		out.Uid = dir.fs.uid
 		out.Gid = dir.fs.gid
-		out.Ctime = uint64(vpathEntry.IRODSEntry.CreateTime.UnixMilli())
-		out.Mtime = uint64(vpathEntry.IRODSEntry.ModifyTime.UnixMilli())
-		out.Atime = uint64(vpathEntry.IRODSEntry.ModifyTime.UnixMilli())
+		out.SetTimes(&vpathEntry.IRODSEntry.ModifyTime, &vpathEntry.IRODSEntry.ModifyTime, &vpathEntry.IRODSEntry.ModifyTime)
 		out.Size = uint64(vpathEntry.IRODSEntry.Size)
 		out.Mode = uint32(fuse.S_IFDIR | dir.getACL(vpathEntry.IRODSEntry, vpathEntry.ReadOnly))
 	}
