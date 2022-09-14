@@ -11,6 +11,7 @@ import (
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
 	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
+	"github.com/hanwen/go-fuse/v2/fs"
 	fusefs "github.com/hanwen/go-fuse/v2/fs"
 	fuse "github.com/hanwen/go-fuse/v2/fuse"
 
@@ -633,7 +634,7 @@ func (dir *Dir) Rmdir(ctx context.Context, name string) syscall.Errno {
 }
 
 // Unlink removes a file for the path
-func (dir *Dir) Unlink(ctx context.Context, name string) error {
+func (dir *Dir) Unlink(ctx context.Context, name string) syscall.Errno {
 	if dir.fs.terminated {
 		return syscall.ECONNABORTED
 	}
@@ -710,7 +711,7 @@ func (dir *Dir) Unlink(ctx context.Context, name string) error {
 				logger.WithError(err).Errorf("failed to remove a file - %s", irodsPath)
 				return syscall.EREMOTEIO
 			}
-			return nil
+			return fs.OK
 		case irodsclient_fs.DirectoryEntry:
 			logger.WithError(err).Errorf("failed to remove a dir - %s", irodsPath)
 			return syscall.EREMOTEIO
