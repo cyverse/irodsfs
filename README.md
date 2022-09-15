@@ -5,16 +5,11 @@ FUSE implementation of iRODS Client written in Golang
 Users are able to `mount` an `iRODS Collection` (multiple `Collections` or `DataObjects` are also available) on the directory hierarchy. Doing so, data stored on `iRODS` can be accessed via the directory hierarchy as if they are in local disks.
 
 ## Download pre-built binaries
-Pre-built binaries can be found in `Release` tab in the source repository.
-iRODS FUSE Lite only works on Linux systems. It does not run on MacOS (osx).
-The binary can run on any Linux distros (e.g., Ubuntu 18.x, Ubuntu 20.x, CentOS 7, or CentOS 8).
+Pre-built binaries can be found in `Release` in the repository. Checkout tarballs attached as assets in a release.
 
-Links for iRODS FUSE Lite `v0.7.8`:
+iRODS FUSE Lite only works on Linux systems. MacOS (osx) is not supported as FUSE library is not open-source anymore. The binaries run on any Linux distros (e.g., Ubuntu 18.x, Ubuntu 20.x, CentOS 7, or CentOS 8) without requiring any dependencies. Use correct release binaries for your OS and architecture.
 
-- Linux/amd64: [irodsfs_amd64_linux_v0.7.8.tar](https://github.com/cyverse/irodsfs/releases/download/v0.7.8/irodsfs_amd64_linux_v0.7.8.tar)
-- Linux/arm64: [irodsfs_arm64_linux_v0.7.8.tar](https://github.com/cyverse/irodsfs/releases/download/v0.7.8/irodsfs_arm64_linux_v0.7.8.tar)
-- Linux/i386: [irodsfs_arm_linux_v0.7.8.tar](https://github.com/cyverse/irodsfs/releases/download/v0.7.8/irodsfs_arm_linux_v0.7.8.tar)
-- Linux/arm32: [irodsfs_arm_linux_v0.7.8.tar](https://github.com/cyverse/irodsfs/releases/download/v0.7.8/irodsfs_arm_linux_v0.7.8.tar)
+Links for iRODS FUSE Lite: [https://github.com/cyverse/irodsfs/releases](https://github.com/cyverse/irodsfs/releases)
 
 ## Build from source
 
