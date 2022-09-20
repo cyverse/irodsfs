@@ -306,6 +306,9 @@ func childMain() {
 
 	if logWriter != nil {
 		logWriter.Close()
+	}
+
+	if !config.RetainLogFile && len(config.LogPath) > 0 && config.LogPath != "-" {
 		// delete if it is successful close
 		os.Remove(config.LogPath)
 	}

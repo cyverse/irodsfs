@@ -116,8 +116,9 @@ type Config struct {
 	StartNewTransaction                   bool                          `yaml:"start_new_transaction"`
 	InvalidateParentEntryCacheImmediately bool                          `yaml:"invalidate_parent_entry_cache_immediately"`
 
-	LogPath    string `yaml:"log_path,omitempty"`
-	MonitorURL string `yaml:"monitor_url,omitempty"`
+	LogPath       string `yaml:"log_path,omitempty"`
+	RetainLogFile bool   `yaml:"retain_logfile,omitempty"`
+	MonitorURL    string `yaml:"monitor_url,omitempty"`
 
 	Profile            bool `yaml:"profile,omitempty"`
 	ProfileServicePort int  `yaml:"profile_service_port,omitempty"`
@@ -166,8 +167,9 @@ func NewDefaultConfig() *Config {
 		StartNewTransaction:                   true,
 		InvalidateParentEntryCacheImmediately: false,
 
-		LogPath:    GetDefaultLogFilePath(),
-		MonitorURL: "",
+		LogPath:       GetDefaultLogFilePath(),
+		RetainLogFile: false,
+		MonitorURL:    "",
 
 		Profile:            false,
 		ProfileServicePort: ProfileServicePortDefault,
@@ -217,8 +219,9 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 		StartNewTransaction:                   true,
 		InvalidateParentEntryCacheImmediately: false,
 
-		LogPath:    GetDefaultLogFilePath(),
-		MonitorURL: "",
+		LogPath:       GetDefaultLogFilePath(),
+		RetainLogFile: false,
+		MonitorURL:    "",
 
 		Profile:            false,
 		ProfileServicePort: ProfileServicePortDefault,

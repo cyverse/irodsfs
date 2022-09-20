@@ -199,6 +199,7 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 	var metadataCacheTimeout string
 	var metadataCacheCleanupTime string
 	var notransaction bool
+	var retainLogFile bool
 
 	config := commons.NewDefaultConfig()
 
@@ -232,6 +233,7 @@ func processArguments() (*commons.Config, io.WriteCloser, bool, error) {
 	flag.BoolVar(&notransaction, "notransaction", false, "No transaction")
 	flag.Var(&fuseOptions, "o", "Other fuse options")
 	flag.StringVar(&config.LogPath, "log", commons.GetDefaultLogFilePath(), "Set log file path")
+	flag.BoolVar(&retainLogFile, "retain_logfile", false, "Do not delete log file on close")
 	flag.StringVar(&config.MonitorURL, "monitor", "", "Set monitoring service URL")
 	flag.StringVar(&config.AuthScheme, "auth_scheme", commons.AuthSchemeDefault, "Set authentication scheme (eg. native or pam)")
 	flag.StringVar(&config.CACertificateFile, "ssl_ca_cert", "", "Set SSL CA cert file when auth_scheme is pam")
