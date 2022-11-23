@@ -467,10 +467,12 @@ func LoadConfigFile(path string, config *Config) error {
 	// check if it is iRODS FUSE Lite Config YAML or iCommands JSON file
 	if isICommandsEnvDir(path) {
 		// read from iCommands JSON File
-		iCommandsEnvMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager(path, 0)
+		iCommandsEnvMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager()
 		if err != nil {
 			return err
 		}
+
+		iCommandsEnvMgr.SetEnvironmentFilePath(path)
 
 		err = iCommandsEnvMgr.Load(os.Getppid())
 		if err != nil {
