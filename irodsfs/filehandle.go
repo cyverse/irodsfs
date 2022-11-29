@@ -45,9 +45,10 @@ func NewFileHandle(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle)
 		writer = irodsfscommon_io.NewNilWriter(fsClient, fileHandle)
 
 		// reader
-		if len(file.fs.config.TempRootPath) > 0 {
+		tempRootDirPath := file.fs.config.GetTempRootDirPath()
+		if len(tempRootDirPath) > 0 {
 			syncReader := irodsfscommon_io.NewSyncReader(fsClient, fileHandle, file.fs.instanceReportClient)
-			reader = irodsfscommon_io.NewAsyncBlockReader(syncReader, iRODSIOBlockSize, iRODSReadWriteSize, file.fs.config.TempRootPath)
+			reader = irodsfscommon_io.NewAsyncBlockReader(syncReader, iRODSIOBlockSize, iRODSReadWriteSize, tempRootDirPath)
 		} else {
 			reader = irodsfscommon_io.NewSyncReader(fsClient, fileHandle, file.fs.instanceReportClient)
 		}
@@ -56,9 +57,10 @@ func NewFileHandle(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle)
 		if len(file.fs.config.PoolEndpoint) > 0 {
 			writer = irodsfscommon_io.NewSyncWriter(fsClient, fileHandle, file.fs.instanceReportClient)
 		} else {
-			if len(file.fs.config.TempRootPath) > 0 {
+			tempRootDirPath := file.fs.config.GetTempRootDirPath()
+			if len(tempRootDirPath) > 0 {
 				syncWriter := irodsfscommon_io.NewSyncWriter(fsClient, fileHandle, file.fs.instanceReportClient)
-				asyncWriter := irodsfscommon_io.NewAsyncWriter(syncWriter, iRODSIOBlockSize, file.fs.config.TempRootPath)
+				asyncWriter := irodsfscommon_io.NewAsyncWriter(syncWriter, iRODSIOBlockSize, tempRootDirPath)
 				writer = irodsfscommon_io.NewSyncBufferedWriter(asyncWriter, iRODSWriteBufferSize)
 			} else {
 				syncWriter := irodsfscommon_io.NewSyncWriter(fsClient, fileHandle, file.fs.instanceReportClient)

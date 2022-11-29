@@ -2,7 +2,6 @@ package commons
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
@@ -10,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	irodsclient_icommands "github.com/cyverse/go-irodsclient/utils/icommands"
 	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
 	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 
@@ -29,21 +27,16 @@ const (
 	MetadataCacheTimeoutDefault     time.Duration = 5 * time.Minute
 	MetadataCacheCleanupTimeDefault time.Duration = 5 * time.Minute
 
-	LogFilePathPrefixDefault   string = "/tmp/irodsfs"
-	LogFilePathChildDefault    string = "/tmp/irodsfs_child.log"
-	TempRootPathPrefixDefault  string = "/tmp/irodsfs_temp"
 	AuthSchemePAM              string = "pam"
 	AuthSchemeNative           string = "native"
 	AuthSchemeDefault          string = AuthSchemeNative
-	CSNegotiationRequireTCP    string = "CS_NEG_REFUSE"
-	CSNegotiationRequireSSL    string = "CS_NEG_REQUIRE"
-	CSNegotiationDontCare      string = "CS_NEG_DONT_CARE"
-	CSNegotiationDefault       string = CSNegotiationRequireTCP
+	CSNegotiationDefault       string = "CS_NEG_REFUSE" // Require TCP
 	EncryptionKeySizeDefault   int    = 32
 	EncryptionAlgorithmDefault string = "AES-256-CBC"
 	SaltSizeDefault            int    = 8
 	HashRoundsDefault          int    = 16
-	ProfileServicePortDefault  int    = 11021
+
+	ProfileServicePortDefault int = 11021
 )
 
 var (
@@ -59,14 +52,16 @@ func getInstanceID() string {
 	return instanceID
 }
 
-// GetDefaultLogFilePath returns default log file path
-func GetDefaultLogFilePath() string {
-	return fmt.Sprintf("%s_%s.log", LogFilePathPrefixDefault, getInstanceID())
+func getLogFilename() string {
+	return fmt.Sprintf("%s.log", getInstanceID())
 }
 
-// GetDefaultTempRootPath returns default temp root path
-func GetDefaultTempRootPath() string {
-	return fmt.Sprintf("%s_%s", TempRootPathPrefixDefault, getInstanceID())
+func GetDefaultDataRootDirPath() string {
+	dirPath, err := os.Getwd()
+	if err != nil {
+		return "/var/lib/irodsfs"
+	}
+	return dirPath
 }
 
 // MetadataCacheTimeoutSetting defines cache timeout for path
@@ -92,7 +87,9 @@ type Config struct {
 	SystemUser        string                              `yaml:"system_user"`
 	MountPath         string                              `yaml:"mount_path,omitempty"`
 
-	TempRootPath string `yaml:"temp_root_path,omitempty"`
+	DataRootPath string `yaml:"data_root_path,omitempty"`
+
+	LogPath string `yaml:"log_path,omitempty"`
 
 	PoolEndpoint string `yaml:"pool_endpoint,omitempty"`
 
@@ -116,9 +113,7 @@ type Config struct {
 	StartNewTransaction                   bool                          `yaml:"start_new_transaction"`
 	InvalidateParentEntryCacheImmediately bool                          `yaml:"invalidate_parent_entry_cache_immediately"`
 
-	LogPath       string `yaml:"log_path,omitempty"`
-	RetainLogFile bool   `yaml:"retain_logfile,omitempty"`
-	MonitorURL    string `yaml:"monitor_url,omitempty"`
+	MonitorURL string `yaml:"monitor_url,omitempty"`
 
 	Profile            bool `yaml:"profile,omitempty"`
 	ProfileServicePort int  `yaml:"profile_service_port,omitempty"`
@@ -131,12 +126,17 @@ type Config struct {
 	InstanceID string `yaml:"instanceid,omitempty"`
 }
 
-// NewDefaultConfig creates DefaultConfig
+// NewDefaultConfig returns a default config
 func NewDefaultConfig() *Config {
 	systemUser, uid, gid, _ := utils.GetCurrentSystemUser()
 
 	return &Config{
+		Host:              "",
 		Port:              PortDefault,
+		ProxyUser:         "",
+		ClientUser:        "",
+		Zone:              "",
+		Password:          "",
 		Resource:          "",
 		PathMappings:      []irodsfs_common_vpath.VPathMapping{},
 		NoPermissionCheck: false,
@@ -144,13 +144,16 @@ func NewDefaultConfig() *Config {
 		GID:               gid,
 		SystemUser:        systemUser,
 
-		PoolEndpoint: "",
+		DataRootPath: GetDefaultDataRootDirPath(),
 
-		TempRootPath: GetDefaultTempRootPath(),
+		LogPath: "", // use default
+
+		PoolEndpoint: "",
 
 		AuthScheme:              AuthSchemeDefault,
 		ClientServerNegotiation: false,
-		CSNegotiationPolicy:     CSNegotiationRequireTCP,
+		CSNegotiationPolicy:     CSNegotiationDefault,
+		CACertificateFile:       "",
 		EncryptionKeySize:       EncryptionKeySizeDefault,
 		EncryptionAlgorithm:     EncryptionAlgorithmDefault,
 		SaltSize:                SaltSizeDefault,
@@ -167,9 +170,7 @@ func NewDefaultConfig() *Config {
 		StartNewTransaction:                   true,
 		InvalidateParentEntryCacheImmediately: false,
 
-		LogPath:       GetDefaultLogFilePath(),
-		RetainLogFile: false,
-		MonitorURL:    "",
+		MonitorURL: "",
 
 		Profile:            false,
 		ProfileServicePort: ProfileServicePortDefault,
@@ -185,66 +186,34 @@ func NewDefaultConfig() *Config {
 
 // NewConfigFromYAML creates Config from YAML
 func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
-	systemUser, uid, gid, _ := utils.GetCurrentSystemUser()
+	config := NewDefaultConfig()
 
-	config := Config{
-		Port:              PortDefault,
-		Resource:          "",
-		PathMappings:      []irodsfs_common_vpath.VPathMapping{},
-		NoPermissionCheck: false,
-		UID:               uid,
-		GID:               gid,
-		SystemUser:        systemUser,
-
-		PoolEndpoint: "",
-
-		TempRootPath: GetDefaultTempRootPath(),
-
-		AuthScheme:              AuthSchemeDefault,
-		ClientServerNegotiation: false,
-		CSNegotiationPolicy:     CSNegotiationRequireTCP,
-		EncryptionKeySize:       EncryptionKeySizeDefault,
-		EncryptionAlgorithm:     EncryptionAlgorithmDefault,
-		SaltSize:                SaltSizeDefault,
-		HashRounds:              HashRoundsDefault,
-
-		ReadAheadMax:                          ReadAheadMaxDefault,
-		OperationTimeout:                      irodsfs_common_utils.Duration(OperationTimeoutDefault),
-		ConnectionLifespan:                    irodsfs_common_utils.Duration(ConnectionLifespanDefault),
-		ConnectionIdleTimeout:                 irodsfs_common_utils.Duration(ConnectionIdleTimeoutDefault),
-		ConnectionMax:                         ConnectionMaxDefault,
-		MetadataCacheTimeout:                  irodsfs_common_utils.Duration(MetadataCacheTimeoutDefault),
-		MetadataCacheCleanupTime:              irodsfs_common_utils.Duration(MetadataCacheCleanupTimeDefault),
-		MetadataCacheTimeoutSettings:          []MetadataCacheTimeoutSetting{},
-		StartNewTransaction:                   true,
-		InvalidateParentEntryCacheImmediately: false,
-
-		LogPath:       GetDefaultLogFilePath(),
-		RetainLogFile: false,
-		MonitorURL:    "",
-
-		Profile:            false,
-		ProfileServicePort: ProfileServicePortDefault,
-
-		Foreground:   false,
-		Debug:        false,
-		AllowOther:   false,
-		ChildProcess: false,
-
-		InstanceID: getInstanceID(),
-	}
-
-	err := yaml.Unmarshal(yamlBytes, &config)
+	err := yaml.Unmarshal(yamlBytes, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal YAML - %v", err)
 	}
 
 	err = config.CorrectSystemUser()
 	if err != nil {
-		return nil, fmt.Errorf("failed to correct System User - %v", err)
+		return nil, err
 	}
 
-	return &config, nil
+	return config, nil
+}
+
+// NewConfigFromICommandsEnvironment creates Config from iCommands Environment dir path
+func NewConfigFromICommandsEnvironment(configPath string) (*Config, error) {
+	config, err := LoadICommandsEnvironmentFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	err = config.CorrectSystemUser()
+	if err != nil {
+		return nil, err
+	}
+
+	return config, nil
 }
 
 // CorrectSystemUser corrects system user configuration
@@ -260,46 +229,95 @@ func (config *Config) CorrectSystemUser() error {
 	return nil
 }
 
-// MakeTempRootDir makes temp root dir
-func (config *Config) MakeTempRootDir() error {
-	if len(config.TempRootPath) == 0 {
-		return nil
+// GetLogFilePath returns log file path
+func (config *Config) GetLogFilePath() string {
+	if len(config.LogPath) > 0 {
+		return config.LogPath
 	}
 
-	tempDirInfo, err := os.Stat(config.TempRootPath)
+	// default
+	return path.Join(config.DataRootPath, getLogFilename())
+}
+
+func (config *Config) GetTempRootDirPath() string {
+	dirname := fmt.Sprintf("%s/temp", getInstanceID())
+	return path.Join(config.DataRootPath, dirname)
+}
+
+// MakeLogDir makes a log dir required
+func (config *Config) MakeLogDir() error {
+	logFilePath := config.GetLogFilePath()
+	logDirPath := filepath.Dir(logFilePath)
+	err := config.makeDir(logDirPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			// make
-			mkdirErr := os.MkdirAll(config.TempRootPath, 0775)
-			if mkdirErr != nil {
-				return fmt.Errorf("making a temp root dir (%s) error - %v", config.TempRootPath, mkdirErr)
-			}
-
-			return nil
-		}
-
-		return fmt.Errorf("temp root dir (%s) error - %v", config.TempRootPath, err)
-	}
-
-	if !tempDirInfo.IsDir() {
-		return fmt.Errorf("temp root dir (%s) exist, but not a directory", config.TempRootPath)
-	}
-
-	tempDirPerm := tempDirInfo.Mode().Perm()
-	if tempDirPerm&0200 != 0200 {
-		return fmt.Errorf("temp root dir (%s) exist, but does not have write permission", config.TempRootPath)
+		return err
 	}
 
 	return nil
 }
 
-// RemoveTempRootDir removes temp root dir
-func (config *Config) RemoveTempRootDir() error {
-	if len(config.TempRootPath) == 0 {
-		return nil
+// MakeWorkDirs makes dirs required
+func (config *Config) MakeWorkDirs() error {
+	tempDirPath := config.GetTempRootDirPath()
+	err := config.makeDir(tempDirPath)
+	if err != nil {
+		return err
 	}
 
-	return os.RemoveAll(config.TempRootPath)
+	return nil
+}
+
+// CleanWorkDirs cleans dirs used
+func (config *Config) CleanWorkDirs() error {
+	tempDirPath := config.GetTempRootDirPath()
+	err := config.removeDir(tempDirPath)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// makeDir makes a dir for use
+func (config *Config) makeDir(path string) error {
+	if len(path) == 0 {
+		return fmt.Errorf("failed to create a dir with empty path")
+	}
+
+	dirInfo, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// make
+			mkdirErr := os.MkdirAll(path, 0775)
+			if mkdirErr != nil {
+				return fmt.Errorf("making a dir (%s) error - %v", path, mkdirErr)
+			}
+
+			return nil
+		}
+
+		return fmt.Errorf("stating a dir (%s) error - %v", path, err)
+	}
+
+	if !dirInfo.IsDir() {
+		return fmt.Errorf("a file (%s) exist, not a directory", path)
+	}
+
+	dirPerm := dirInfo.Mode().Perm()
+	if dirPerm&0200 != 0200 {
+		return fmt.Errorf("a dir (%s) exist, but does not have the write permission", path)
+	}
+
+	return nil
+}
+
+// removeDir removes a dir
+func (config *Config) removeDir(path string) error {
+	if len(path) == 0 {
+		return fmt.Errorf("failed to remove a dir with empty path")
+	}
+
+	return os.RemoveAll(path)
 }
 
 // Validate validates configuration
@@ -367,20 +385,8 @@ func (config *Config) Validate() error {
 		return fmt.Errorf("mountpoint (%s) must have write permission", config.MountPath)
 	}
 
-	if len(config.TempRootPath) > 0 {
-		tempDirInfo, err := os.Stat(config.TempRootPath)
-		if err != nil {
-			return fmt.Errorf("temp root dir (%s) error - %v", config.TempRootPath, err)
-		}
-
-		if !tempDirInfo.IsDir() {
-			return fmt.Errorf("temp root dir (%s) must be a directory", config.TempRootPath)
-		}
-
-		tempDirPerm := tempDirInfo.Mode().Perm()
-		if tempDirPerm&0200 != 0200 {
-			return fmt.Errorf("temp root (%s) must have write permission", config.TempRootPath)
-		}
+	if len(config.DataRootPath) == 0 {
+		return fmt.Errorf("data root dir must be given")
 	}
 
 	if config.ReadAheadMax < 0 {
@@ -457,135 +463,7 @@ func ParsePoolServiceEndpoint(endpoint string) (string, string, error) {
 	}
 }
 
-func LoadConfigFile(path string, config *Config) error {
-	// path must exist
-	_, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-
-	// check if it is iRODS FUSE Lite Config YAML or iCommands JSON file
-	if isICommandsEnvDir(path) {
-		// read from iCommands JSON File
-		iCommandsEnvMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager()
-		if err != nil {
-			return err
-		}
-
-		iCommandsEnvMgr.SetEnvironmentFilePath(path)
-
-		err = iCommandsEnvMgr.Load(os.Getppid())
-		if err != nil {
-			return err
-		}
-
-		loadedAccount, err := iCommandsEnvMgr.ToIRODSAccount()
-		if err != nil {
-			return err
-		}
-
-		// Fill more
-		config.AuthScheme = string(loadedAccount.AuthenticationScheme)
-		config.CSNegotiationPolicy = string(loadedAccount.CSNegotiationPolicy)
-		config.ClientServerNegotiation = loadedAccount.ClientServerNegotiation
-		config.Host = loadedAccount.Host
-		config.Port = loadedAccount.Port
-		config.ClientUser = loadedAccount.ClientUser
-		config.Zone = loadedAccount.ClientZone
-		config.ProxyUser = loadedAccount.ProxyUser
-		config.Password = loadedAccount.Password
-		config.Resource = loadedAccount.DefaultResource
-		config.CACertificateFile = loadedAccount.SSLConfiguration.CACertificateFile
-		config.EncryptionKeySize = loadedAccount.SSLConfiguration.EncryptionKeySize
-		config.EncryptionAlgorithm = loadedAccount.SSLConfiguration.EncryptionAlgorithm
-		config.SaltSize = loadedAccount.SSLConfiguration.SaltSize
-		config.HashRounds = loadedAccount.SSLConfiguration.HashRounds
-		if iCommandsEnvMgr.Session != nil {
-			if len(iCommandsEnvMgr.Session.CurrentWorkingDir) > 0 {
-				config.PathMappings = []irodsfs_common_vpath.VPathMapping{
-					{
-						IRODSPath:           iCommandsEnvMgr.Session.CurrentWorkingDir,
-						MappingPath:         "/",
-						ResourceType:        irodsfs_common_vpath.VPathMappingDirectory,
-						ReadOnly:            false,
-						CreateDir:           false,
-						IgnoreNotExistError: false,
-					},
-				}
-			}
-		}
-
-		if len(config.PathMappings) == 0 {
-			iRODSHomePath := fmt.Sprintf("/%s/home/%s", config.Zone, config.ClientUser)
-			config.PathMappings = []irodsfs_common_vpath.VPathMapping{
-				{
-					IRODSPath:           iRODSHomePath,
-					MappingPath:         "/",
-					ResourceType:        irodsfs_common_vpath.VPathMappingDirectory,
-					ReadOnly:            false,
-					CreateDir:           false,
-					IgnoreNotExistError: false,
-				},
-			}
-		}
-
-		return nil
-	} else if isYAMLFile(path) {
-		yamlBytes, err := ioutil.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("failed to read the local yaml file %s", path)
-		}
-
-		err = yaml.Unmarshal(yamlBytes, config)
-		if err != nil {
-			return fmt.Errorf("failed to unmarshal YAML - %v", err)
-		}
-
-		err = config.CorrectSystemUser()
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-
-	return fmt.Errorf("failed to read the local file %s, unknown format", path)
-}
-
-func isICommandsEnvDir(filePath string) bool {
-	st, err := os.Stat(filePath)
-	if err != nil {
-		return false
-	}
-
-	if !st.IsDir() {
-		return false
-	}
-
-	envFilePath := filepath.Join(filePath, "irods_environment.json")
-	passFilePath := filepath.Join(filePath, ".irodsA")
-
-	stEnv, err := os.Stat(envFilePath)
-	if err != nil {
-		return false
-	}
-
-	if stEnv.IsDir() {
-		return false
-	}
-
-	stPass, err := os.Stat(passFilePath)
-	if err != nil {
-		return false
-	}
-
-	if stPass.IsDir() {
-		return false
-	}
-
-	return true
-}
-
-func isYAMLFile(filePath string) bool {
+func IsYAMLFile(filePath string) bool {
 	st, err := os.Stat(filePath)
 	if err != nil {
 		return false

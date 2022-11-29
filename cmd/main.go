@@ -1,56 +1,42 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"os/exec"
 	"os/signal"
-	"strings"
-	"syscall"
+	"sync"
 
+	cmd_commons "github.com/cyverse/irodsfs/cmd/commons"
 	"github.com/cyverse/irodsfs/commons"
 	"github.com/cyverse/irodsfs/irodsfs"
 	"github.com/cyverse/irodsfs/utils"
-
-	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
+	"github.com/spf13/cobra"
 
 	"github.com/pkg/profile"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
 )
 
-const (
-	// InterProcessCommunicationFinishSuccess is the message that parent process receives when child process is executed successfully
-	InterProcessCommunicationFinishSuccess string = "<<COMMUNICATION_CLOSE_SUCCESS>>"
-	// InterProcessCommunicationFinishError is the message that parent process receives when child process fails to run
-	InterProcessCommunicationFinishError string = "<<COMMUNICATION_CLOSE_ERROR>>"
-)
-
-// NilWriter drains output
-type NilWriter struct{}
-
-// Write does nothing
-func (w *NilWriter) Write(p []byte) (n int, err error) {
-	return len(p), nil
+// rootCmd represents the base command when called without any subcommands
+var rootCmd = &cobra.Command{
+	Use:   "irodsfs [iRODS URL] mount_point",
+	Short: "Run iRODS FUSE Lite",
+	Long:  "Run iRODS FUSE Lite that mounts iRODS collections on the directory hierarchy.",
+	RunE:  processCommand,
 }
 
-func main() {
-	log.SetLevel(log.InfoLevel)
-	log.SetFormatter(&log.TextFormatter{
-		TimestampFormat: "2006-01-02 15:04:05.000000",
-	})
+func Execute() error {
+	return rootCmd.Execute()
+}
 
+func processCommand(command *cobra.Command, args []string) error {
 	// check if this is subprocess running in the background
 	isChildProc := false
+	childProcessArgument := fmt.Sprintf("-%s", cmd_commons.ChildProcessArgument)
 
-	childProcessArgument := fmt.Sprintf("-%s", ChildProcessArgument)
-	for _, arg := range os.Args[1:] {
-		if arg == childProcessArgument {
+	for _, arg := range os.Args {
+		if arg == childProcessArgument || arg[1:] == childProcessArgument {
 			// background
 			isChildProc = true
 			break
@@ -59,146 +45,56 @@ func main() {
 
 	if isChildProc {
 		// child process
-		childMain()
+		childMain(command, args)
 	} else {
 		// parent process
-		parentMain()
-	}
-}
-
-// RunFSDaemon runs irodsfs as a daemon
-func RunFSDaemon(irodsfsExec string, config *commons.Config) error {
-	return parentRun(irodsfsExec, config)
-}
-
-// parentRun executes irodsfs with the config given
-func parentRun(irodsfsExec string, config *commons.Config) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "parentRun",
-	})
-
-	defer irodsfs_common_utils.StackTraceFromPanic(logger)
-
-	// make temp dir if required
-	err := config.MakeTempRootDir()
-	if err != nil {
-		logger.WithError(err).Error("invalid configuration")
-		return err
-	}
-
-	err = config.Validate()
-	if err != nil {
-		logger.WithError(err).Error("invalid configuration")
-		return err
-	}
-
-	if !config.Foreground {
-		// run child process in background and pass parameters via stdin PIPE
-		// receives result from the child process
-		logger.Info("Running the process in the background mode")
-		childProcessArgument := fmt.Sprintf("-%s", ChildProcessArgument)
-		cmd := exec.Command(irodsfsExec, childProcessArgument)
-		subStdin, err := cmd.StdinPipe()
-		if err != nil {
-			logger.WithError(err).Error("failed to communicate to background process")
-			return err
-		}
-
-		subStdout, err := cmd.StdoutPipe()
-		if err != nil {
-			logger.WithError(err).Error("failed to communicate to background process")
-			return err
-		}
-
-		cmd.Stderr = cmd.Stdout
-
-		err = cmd.Start()
-		if err != nil {
-			logger.WithError(err).Errorf("failed to start a child process")
-			return err
-		}
-
-		logger.Infof("Process id = %d", cmd.Process.Pid)
-
-		logger.Info("Sending configuration data")
-		configBytes, err := yaml.Marshal(config)
-		if err != nil {
-			logger.WithError(err).Error("failed to serialize configuration")
-			return err
-		}
-
-		// send it to child
-		_, err = io.WriteString(subStdin, string(configBytes))
-		if err != nil {
-			logger.WithError(err).Error("failed to communicate to background process")
-			return err
-		}
-		subStdin.Close()
-		logger.Info("Successfully sent configuration data to background process")
-
-		childProcessFailed := false
-
-		// receive output from child
-		subOutputScanner := bufio.NewScanner(subStdout)
-		for {
-			if subOutputScanner.Scan() {
-				errMsg := strings.TrimSpace(subOutputScanner.Text())
-				if errMsg == InterProcessCommunicationFinishSuccess {
-					logger.Info("Successfully started background process")
-					break
-				} else if errMsg == InterProcessCommunicationFinishError {
-					logger.Error("failed to start background process")
-					childProcessFailed = true
-					break
-				} else {
-					logger.Info(errMsg)
-				}
-			} else {
-				// check err
-				if subOutputScanner.Err() != nil {
-					logger.Error(subOutputScanner.Err().Error())
-					childProcessFailed = true
-					break
-				}
-			}
-		}
-
-		subStdout.Close()
-
-		if childProcessFailed {
-			return fmt.Errorf("failed to start background process")
-		}
-	} else {
-		// foreground
-		err = run(config, false)
-		if err != nil {
-			logger.WithError(err).Error("failed to run iRODS FUSE Lite")
-			return err
-		}
+		parentMain(command, args)
 	}
 
 	return nil
 }
 
+func main() {
+	log.SetFormatter(&log.TextFormatter{
+		TimestampFormat: "2006-01-02 15:04:05.000000",
+		FullTimestamp:   true,
+	})
+
+	log.SetLevel(log.InfoLevel)
+
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "main",
+	})
+
+	// attach common flags
+	cmd_commons.SetCommonFlags(rootCmd)
+
+	err := Execute()
+	if err != nil {
+		logger.Fatal(err)
+		os.Exit(1)
+	}
+}
+
 // parentMain handles command-line parameters and run parent process
-func parentMain() {
+func parentMain(command *cobra.Command, args []string) {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "parentMain",
 	})
 
-	defer irodsfs_common_utils.StackTraceFromPanic(logger)
-
-	// parse argument
-	config, logWriter, exit, err := processArguments()
-	if err != nil {
-		logger.WithError(err).Error("failed to process arguments")
-		if exit {
-			logger.Fatal(err)
-		}
+	config, logWriter, cont, err := cmd_commons.ProcessCommonFlags(command, args)
+	if logWriter != nil {
+		defer logWriter.Close()
 	}
-	if exit {
+
+	if err != nil {
+		logger.Error(err)
+		os.Exit(1)
+	}
+
+	if !cont {
 		os.Exit(0)
 	}
 
@@ -212,90 +108,60 @@ func parentMain() {
 		// try to go
 		logger.Info("It is not sure whether FUSE is running. Starting iRODS FUSE Lite, anyway.")
 	case utils.CheckFUSEStatusNotFound:
-		logger.Fatal("FUSE is not running. Terminating iRODS FUSE Lite.")
+		logger.Error("FUSE is not running. Terminating iRODS FUSE Lite.")
+		os.Exit(1)
 	case utils.CheckFUSEStatusCannotRun:
-		logger.Fatal("FUSE is not supported. Terminating iRODS FUSE Lite.")
+		logger.Error("FUSE is not supported. Terminating iRODS FUSE Lite.")
+		os.Exit(1)
 	}
 
-	// run
-	err = parentRun(os.Args[0], config)
-	if err != nil {
-		logger.WithError(err).Error("failed to run the foreground process")
-		logger.Fatal(err)
-	}
+	if !config.Foreground {
+		// background
+		childStdin, childStdout, err := cmd_commons.RunChildProcess(os.Args[0])
+		if err != nil {
+			logger.WithError(err).Error("failed to run iRODS FUSE Lite child process")
+			os.Exit(1)
+		}
 
-	// clean up
-	if logWriter != nil {
-		logWriter.Close()
+		err = cmd_commons.ParentProcessSendConfigViaSTDIN(config, childStdin, childStdout)
+		if err != nil {
+			logger.WithError(err).Error("failed to send configuration to iRODS FUSE Lite child process")
+			os.Exit(1)
+		}
+	} else {
+		// run foreground
+		err = run(config, false)
+		if err != nil {
+			logger.WithError(err).Error("failed to run iRODS FUSE Lite")
+			os.Exit(1)
+		}
 	}
-
-	os.Exit(0)
 }
 
 // childMain runs child process
-func childMain() {
+func childMain(command *cobra.Command, args []string) {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "childMain",
 	})
 
-	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+	logger.Info("Start child process")
 
-	// output to default log file for child process
-	childLogWriter := getLogWriter(commons.LogFilePathChildDefault)
-	log.SetOutput(childLogWriter)
-
-	logger.Info("Start background process")
-
-	logger.Info("Check STDIN to communicate to parent process")
 	// read from stdin
-	_, err := os.Stdin.Stat()
+	config, logWriter, err := cmd_commons.ChildProcessReadConfigViaSTDIN()
+	if logWriter != nil {
+		defer logWriter.Close()
+	}
+
 	if err != nil {
-		logger.WithError(err).Error("failed to communicate to foreground process")
-		fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
+		logger.WithError(err).Error("failed to communicate to parent process")
+		cmd_commons.ReportChildProcessError()
 		os.Exit(1)
 	}
 
-	logger.Info("Reading configuration from STDIN")
-	configBytes, err := ioutil.ReadAll(os.Stdin)
-	if err != nil {
-		logger.WithError(err).Error("failed to read configuration")
-		fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
-		os.Exit(1)
-	}
-	logger.Info("Successfully read configuration from STDIN")
+	config.ChildProcess = true
 
-	config, err := commons.NewConfigFromYAML(configBytes)
-	if err != nil {
-		logger.WithError(err).Error("failed to read configuration")
-		fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
-		os.Exit(1)
-	}
-
-	// output to log file
-	var logWriter io.WriteCloser
-	if len(config.LogPath) > 0 && config.LogPath != "-" {
-		logger.Infof("Set log output to %s", config.LogPath)
-		logWriter = getLogWriter(config.LogPath)
-		log.SetOutput(logWriter)
-	}
-
-	// make temp dir if required
-	err = config.MakeTempRootDir()
-	if err != nil {
-		logger.WithError(err).Error("invalid configuration")
-		fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
-		os.Exit(1)
-	}
-
-	err = config.Validate()
-	if err != nil {
-		logger.WithError(err).Error("invalid configuration")
-		fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
-		os.Exit(1)
-	}
-
-	logger.Info("Run background process")
+	logger.Info("Run child process")
 
 	// background
 	err = run(config, true)
@@ -307,30 +173,41 @@ func childMain() {
 	if logWriter != nil {
 		logWriter.Close()
 	}
-
-	if !config.RetainLogFile && len(config.LogPath) > 0 && config.LogPath != "-" {
-		// delete if it is successful close
-		os.Remove(config.LogPath)
-	}
 }
 
-// run runs irodsfs
+// run runs iRODS FUSE Lite
 func run(config *commons.Config, isChildProcess bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "run",
 	})
 
-	defer irodsfs_common_utils.StackTraceFromPanic(logger)
-
 	if config.Debug {
 		log.SetLevel(log.DebugLevel)
 	}
 
+	versionInfo := commons.GetVersion()
+	logger.Infof("iRODS FUSE Lite version - %s, commit - %s", versionInfo.ClientVersion, versionInfo.GitCommit)
+
+	// make work dirs required
+	err := config.MakeWorkDirs()
+	if err != nil {
+		logger.WithError(err).Error("invalid configuration")
+		return err
+	}
+
+	err = config.Validate()
+	if err != nil {
+		logger.WithError(err).Error("invalid configuration")
+		return err
+	}
+
 	// profile
-	if config.Profile {
+	if config.Profile && config.ProfileServicePort > 0 {
 		go func() {
 			profileServiceAddr := fmt.Sprintf(":%d", config.ProfileServicePort)
+
+			logger.Infof("Starting profile service at %s", profileServiceAddr)
 			http.ListenAndServe(profileServiceAddr, nil)
 		}()
 
@@ -338,71 +215,62 @@ func run(config *commons.Config, isChildProcess bool) error {
 		defer prof.Stop()
 	}
 
-	versionInfo := commons.GetVersion()
-	logger.Infof("iRODS FUSE Lite version - %s, commit - %s", versionInfo.ClientVersion, versionInfo.GitCommit)
-
-	logger.Info("Creating a File System")
+	// run the filesystem
 	fs, err := irodsfs.NewFileSystem(config)
 	if err != nil {
-		logger.WithError(err).Error("failed to create filesystem")
+		logger.WithError(err).Error("failed to create the filesystem")
 		if isChildProcess {
-			fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
+			cmd_commons.ReportChildProcessError()
 		}
 		return err
 	}
 
-	logger.Info("Successfully created a File System")
-
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-
-	go func() {
-		receivedSignal := <-signalChan
-
-		logger.Infof("received signal (%s), terminating iRODS FUSE Lite", receivedSignal.String())
-		if isChildProcess {
-			fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
-		}
-
-		fs.StopFuse()
-	}()
-
-	logger.Info("Connecting to FUSE")
-
-	err = fs.ConnectToFuse()
+	err = fs.Start()
 	if err != nil {
-		logger.WithError(err).Error("failed to connect to FUSE, terminating iRODS FUSE Lite")
-
+		logger.WithError(err).Error("failed to start the filesystem")
 		if isChildProcess {
-			fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
+			cmd_commons.ReportChildProcessError()
 		}
 
-		fs.Destroy()
+		fs.Release()
 		return err
 	}
 
 	if isChildProcess {
-		fmt.Fprintln(os.Stdout, InterProcessCommunicationFinishSuccess)
-		if config.LogPath == "-" || len(config.LogPath) == 0 {
-			// stderr is not a local file, so is closed by parent
-			var nilWriter NilWriter
-			log.SetOutput(&nilWriter)
+		cmd_commons.ReportChildProcessStartSuccessfully()
+		if len(config.GetLogFilePath()) == 0 {
+			cmd_commons.SetNilLogWriter()
 		}
 	}
 
-	err = fs.StartFuse()
-	if err != nil {
-		logger.WithError(err).Error("failed to start FUSE, terminating iRODS FUSE Lite")
-		fs.Destroy()
-		return err
-	}
+	defer func() {
+		fs.Stop()
+		fs.Release()
 
-	// returns if mount fails, or stopped.
-	logger.Info("FUSE stopped, terminating iRODS FUSE Lite")
-	fs.Destroy()
+		// remove work dir
+		config.CleanWorkDirs()
 
-	// remote temp dir
-	config.RemoveTempRootDir()
+		os.Exit(0)
+	}()
+
+	// wait
+	waitForCtrlC()
 
 	return nil
+}
+
+func waitForCtrlC() {
+	var endWaiter sync.WaitGroup
+
+	endWaiter.Add(1)
+	signalChannel := make(chan os.Signal, 1)
+
+	signal.Notify(signalChannel, os.Interrupt)
+
+	go func() {
+		<-signalChannel
+		endWaiter.Done()
+	}()
+
+	endWaiter.Wait()
 }

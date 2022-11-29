@@ -63,10 +63,9 @@ type IRODSFS struct {
 	reportClient         irodsfs_common_report.IRODSFSReportClient
 	instanceReportClient irodsfs_common_report.IRODSFSInstanceReportClient
 
-	terminated bool
-	killFUSE   bool
-
 	operationIDCurrent uint64
+
+	terminated bool
 }
 
 // NewFileSystem creates a new file system
@@ -95,7 +94,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		}
 
 		account.SetSSLConfiguration(sslConfig)
-		account.SetCSNegotiation(true, irodsclient_types.CSNegotiationRequire(commons.CSNegotiationRequireSSL))
+		account.SetCSNegotiation(true, irodsclient_types.CSNegotiationRequireSSL)
 	} else if config.ClientServerNegotiation {
 		if len(config.CACertificateFile) > 0 {
 			sslConfig, err := irodsclient_types.CreateIRODSSSLConfig(config.CACertificateFile, config.EncryptionKeySize,
@@ -229,94 +228,22 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 
 		reportClient:         reportClient,
 		instanceReportClient: instanceReportClient,
-		terminated:           false,
 
 		operationIDCurrent: 0,
 	}, nil
 }
 
-// ConnectToFuse connects to FUSE, must be performed before calling StartFuse
-func (fs *IRODSFS) ConnectToFuse() error {
+// Release destroys the file system
+func (fs *IRODSFS) Release() {
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"struct":   "IRODSFS",
-		"function": "ConnectToFuse",
+		"function": "Release",
 	})
+
+	logger.Info("Releasing the iRODS FUSE Lite")
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
-
-	logger.Infof("Connecting to FUSE, mount on %s", fs.config.MountPath)
-
-	rootDir, err := fs.Root()
-	if err != nil {
-		logger.WithError(err).Error("failed to create a root directory")
-		return err
-	}
-
-	fuseServer, err := fusefs.Mount(fs.config.MountPath, rootDir, GetFuseOptions(fs.config))
-	if err != nil {
-		logger.WithError(err).Error("failed to connect to FUSE")
-		return err
-	}
-
-	fs.fuseServer = fuseServer
-
-	logger.Infof("Connected to FUSE, mount on %s", fs.config.MountPath)
-	return nil
-}
-
-// StartFuse starts fuse server, must be performed after calling ConnectToFuse
-func (fs *IRODSFS) StartFuse() error {
-	logger := log.WithFields(log.Fields{
-		"package":  "irodsfs",
-		"struct":   "IRODSFS",
-		"function": "StartFuse",
-	})
-
-	defer irodsfs_common_utils.StackTraceFromPanic(logger)
-
-	if fs.fuseServer == nil {
-		logger.Error("failed to start FUSE server")
-		return fmt.Errorf("failed to start FUSE server")
-	}
-
-	fs.fuseServer.Wait()
-	return nil
-}
-
-func (fs *IRODSFS) StopFuse() {
-	logger := log.WithFields(log.Fields{
-		"package":  "irodsfs",
-		"struct":   "IRODSFS",
-		"function": "StopFuse",
-	})
-
-	logger.Info("Stopping FileSystem")
-
-	// forcefully close the fuse connection
-	fs.killFUSE = true
-
-	logger.Info("Closing fuse connection")
-	fs.fuseServer.Unmount()
-	fs.fuseServer = nil
-}
-
-// Destroy destroys the file system
-func (fs *IRODSFS) Destroy() {
-	if fs.terminated {
-		// already terminated
-		return
-	}
-
-	fs.terminated = true
-
-	logger := log.WithFields(log.Fields{
-		"package":  "irodsfs",
-		"struct":   "IRODSFS",
-		"function": "Destroy",
-	})
-
-	logger.Info("Destroying FileSystem")
 
 	if fs.instanceReportClient != nil {
 		fs.instanceReportClient.Terminate()
@@ -333,13 +260,59 @@ func (fs *IRODSFS) Destroy() {
 		fs.fileHandleMap = nil
 	}
 
-	logger.Info("> Releasing resources")
 	if fs.fsClient != nil {
 		fs.fsClient.Release()
 		fs.fsClient = nil
 	}
+}
 
-	logger.Info("Destroyed FileSystem")
+// Start starts FUSE
+func (fs *IRODSFS) Start() error {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "IRODSFS",
+		"function": "Start",
+	})
+
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+
+	// mount
+	logger.Infof("Starting iRODS FUSE Lite, connecting to FUSE on %s", fs.config.MountPath)
+
+	rootDir, err := fs.Root()
+	if err != nil {
+		logger.WithError(err).Error("failed to create a root directory")
+		return err
+	}
+
+	fuseServer, err := fusefs.Mount(fs.config.MountPath, rootDir, GetFuseOptions(fs.config))
+	if err != nil {
+		logger.WithError(err).Error("failed to connect to FUSE")
+		return err
+	}
+
+	fs.fuseServer = fuseServer
+
+	logger.Infof("Connected to FUSE, mount on %s", fs.config.MountPath)
+
+	return nil
+}
+
+func (fs *IRODSFS) Stop() {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "IRODSFS",
+		"function": "Stop",
+	})
+
+	logger.Info("Stopping FUSE")
+
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+
+	fs.terminated = true
+
+	fs.fuseServer.Unmount()
+	fs.fuseServer = nil
 }
 
 // Root returns root directory node
