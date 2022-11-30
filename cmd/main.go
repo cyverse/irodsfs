@@ -35,10 +35,12 @@ func processCommand(command *cobra.Command, args []string) error {
 	childProcessArgument := fmt.Sprintf("-%s", cmd_commons.ChildProcessArgument)
 
 	for _, arg := range os.Args {
-		if arg == childProcessArgument || arg[1:] == childProcessArgument {
-			// background
-			isChildProc = true
-			break
+		if len(arg) >= len(childProcessArgument) {
+			if arg == childProcessArgument || arg[1:] == childProcessArgument {
+				// background
+				isChildProc = true
+				break
+			}
 		}
 	}
 
