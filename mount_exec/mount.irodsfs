@@ -55,7 +55,7 @@ def reorderArgs(argv):
                         if mountTimeout <= 0:
                             mountTimeout = 300
                     else:
-                        options.append("-%s" % fokv[0])
+                        options.append("--%s" % fokv[0])
                         options.append(fokv[1])
 
             skipCount = 1

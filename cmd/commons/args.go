@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -59,6 +60,8 @@ func SetCommonFlags(command *cobra.Command) {
 	command.Flags().Int("uid", -1, "Set UID of file/directory owner")
 	command.Flags().Int("gid", -1, "Set GID of file/directory owner")
 	command.Flags().String("sys_user", "", "Set System User of file/directory owner")
+
+	command.Flags().StringArrayP("fuse_option", "o", []string{}, "Set FUSE options")
 
 	command.Flags().String("data_root", "", "Set data root dir path")
 
@@ -444,6 +447,14 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 		if len(sysUser) > 0 {
 			config.SystemUser = sysUser
 		}
+	}
+
+	fuseOptionsFlag := command.Flags().Lookup("fuse_option")
+	if fuseOptionsFlag != nil {
+		fuseOptionsString := fuseOptionsFlag.Value.String()
+		fuseOptionsString = strings.Trim(fuseOptionsString, "[]")
+		fuseOptionsStringArray := strings.Split(fuseOptionsString, ",")
+		config.FuseOptions = fuseOptionsStringArray
 	}
 
 	dataRootFlag := command.Flags().Lookup("data_root")

@@ -30,6 +30,7 @@ const (
 func GetFuseOptions(config *commons.Config) *fusefs.Options {
 	options := &fusefs.Options{}
 
+	// TODO: handle fuse specific options in config.FuseOptions
 	options.AllowOther = config.AllowOther
 	if config.Debug && config.Foreground {
 		options.Debug = true

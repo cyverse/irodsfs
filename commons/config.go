@@ -123,7 +123,8 @@ type Config struct {
 	AllowOther   bool `yaml:"allow_other,omitempty"`
 	ChildProcess bool `yaml:"childprocess,omitempty"`
 
-	InstanceID string `yaml:"instanceid,omitempty"`
+	InstanceID  string   `yaml:"instanceid,omitempty"`
+	FuseOptions []string `yaml:"fuse_options,omitempty"`
 }
 
 // NewDefaultConfig returns a default config
@@ -180,7 +181,8 @@ func NewDefaultConfig() *Config {
 		AllowOther:   false,
 		ChildProcess: false,
 
-		InstanceID: getInstanceID(),
+		InstanceID:  getInstanceID(),
+		FuseOptions: []string{},
 	}
 }
 
