@@ -299,6 +299,10 @@ func (fs *IRODSFS) Start() error {
 }
 
 func (fs *IRODSFS) Stop() {
+	if fs.terminated {
+		return
+	}
+
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"struct":   "IRODSFS",
@@ -313,6 +317,10 @@ func (fs *IRODSFS) Stop() {
 
 	fs.fuseServer.Unmount()
 	fs.fuseServer = nil
+}
+
+func (fs *IRODSFS) Wait() {
+	fs.fuseServer.Wait()
 }
 
 // Root returns root directory node
