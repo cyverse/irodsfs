@@ -244,6 +244,10 @@ func (config *Config) GetTempRootDirPath() string {
 	return path.Join(config.DataRootPath, dirname)
 }
 
+func (config *Config) GetInstanceDataRootDirPath() string {
+	return path.Join(config.DataRootPath, getInstanceID())
+}
+
 // MakeLogDir makes a log dir required
 func (config *Config) MakeLogDir() error {
 	logFilePath := config.GetLogFilePath()
@@ -271,6 +275,12 @@ func (config *Config) MakeWorkDirs() error {
 func (config *Config) CleanWorkDirs() error {
 	tempDirPath := config.GetTempRootDirPath()
 	err := config.removeDir(tempDirPath)
+	if err != nil {
+		return err
+	}
+
+	instanceDataDirPath := config.GetInstanceDataRootDirPath()
+	err = config.removeDir(instanceDataDirPath)
 	if err != nil {
 		return err
 	}
