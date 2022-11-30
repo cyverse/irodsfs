@@ -2,7 +2,6 @@ package commons
 
 import (
 	"bufio"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -487,8 +486,8 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	// positional arguments
 	mountPath := ""
 	if len(args) == 0 {
-		flag.Usage()
-		return nil, logWriter, false, nil // stop here
+		PrintHelp(command)
+		return nil, logWriter, false, fmt.Errorf("mount point is not provided") // stop here
 	}
 
 	mountPath = args[len(args)-1]
