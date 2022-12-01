@@ -352,8 +352,12 @@ func (file *File) Getxattr(ctx context.Context, attr string, dest []byte) (uint3
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := file.fs.GetNextOperationID()
-	logger.Infof("Calling Getxattr (%d) - %s", operID, file.path)
-	defer logger.Infof("Called Getxattr (%d) - %s", operID, file.path)
+	logger.Infof("Calling Getxattr (%d) - %s, attr %s", operID, file.path, attr)
+	defer logger.Infof("Called Getxattr (%d) - %s, attr %s", operID, file.path, attr)
+
+	if IsUnhandledAttr(attr) {
+		return 0, syscall.ENODATA
+	}
 
 	file.mutex.RLock()
 	defer file.mutex.RUnlock()
@@ -424,6 +428,10 @@ func (file *File) Setxattr(ctx context.Context, attr string, data []byte, flags 
 	operID := file.fs.GetNextOperationID()
 	logger.Infof("Calling Setxattr (%d) - %s", operID, file.path)
 	defer logger.Infof("Called Setxattr (%d) - %s", operID, file.path)
+
+	if IsUnhandledAttr(attr) {
+		return syscall.EINVAL
+	}
 
 	file.mutex.RLock()
 	defer file.mutex.RUnlock()

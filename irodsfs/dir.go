@@ -373,6 +373,10 @@ func (dir *Dir) Getxattr(ctx context.Context, attr string, dest []byte) (uint32,
 	logger.Infof("Calling Getxattr (%d) - %s", operID, dir.path)
 	defer logger.Infof("Called Getxattr (%d) - %s", operID, dir.path)
 
+	if IsUnhandledAttr(attr) {
+		return 0, syscall.ENODATA
+	}
+
 	dir.mutex.RLock()
 	defer dir.mutex.RUnlock()
 
@@ -441,6 +445,10 @@ func (dir *Dir) Setxattr(ctx context.Context, attr string, data []byte, flags ui
 	operID := dir.fs.GetNextOperationID()
 	logger.Infof("Calling Setxattr (%d) - %s", operID, dir.path)
 	defer logger.Infof("Called Setxattr (%d) - %s", operID, dir.path)
+
+	if IsUnhandledAttr(attr) {
+		return syscall.EINVAL
+	}
 
 	dir.mutex.RLock()
 	defer dir.mutex.RUnlock()
