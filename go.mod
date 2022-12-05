@@ -3,12 +3,12 @@ module github.com/cyverse/irodsfs
 go 1.18
 
 require (
-	github.com/cyverse/go-irodsclient v0.10.0
-	github.com/cyverse/irodsfs-common v0.0.0-20221122233136-d6a1db2cba8b
+	github.com/cyverse/go-irodsclient v0.10.2
+	github.com/cyverse/irodsfs-common v0.0.0-20221205194134-22e3bba8bbaf
 	github.com/cyverse/irodsfs-monitor v0.0.0-20220809235922-daf13261a2dc
-	github.com/cyverse/irodsfs-pool v0.6.0
+	github.com/cyverse/irodsfs-pool v0.6.1
 	github.com/hanwen/go-fuse/v2 v2.1.0
-	github.com/pkg/profile v1.6.0
+	github.com/pkg/profile v1.7.0
 	github.com/rs/xid v1.3.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v1.6.1
@@ -19,7 +19,9 @@ require (
 
 require (
 	github.com/eikenb/pipeat v0.0.0-20210730190139-06b3e6902001 // indirect
+	github.com/felixge/fgprof v0.9.3 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/google/pprof v0.0.0-20211214055906-6f57359322fd // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/inconshreveable/mousetrap v1.0.1 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
