@@ -178,7 +178,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 					readConfig = true
 				} else {
 					// icommands environment
-					serverConfig, err := commons.LoadICommandsEnvironmentFile(configPath)
+					serverConfig, err := commons.LoadICommandsEnvironmentDir(configPath)
 					if err != nil {
 						logger.Error(err)
 						return nil, nil, false, err // stop here
