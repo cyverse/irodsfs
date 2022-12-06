@@ -120,9 +120,9 @@ path_mappings:
     resource_type: dir
 ```
 
-Then run `irodsfs` with `-config` option.
+Then run `irodsfs` with `--config` or `-c` option.
 ```shell script
-./bin/irodsfs -config config.yaml /mount/irods
+./bin/irodsfs -c config.yaml /mount/irods
 ```
 
 After mounting, `irodsfs` will be executed in the background.
@@ -170,9 +170,9 @@ path_mappings:
     resource_type: dir
 ```
 
-Then run `irodsfs` with `-config` option.
+Then run `irodsfs` with `--config` or `-c` option.
 ```shell script
-./bin/irodsfs -config config.yaml /mount/irods
+./bin/irodsfs -c config.yaml /mount/irods
 ```
 
 After mounting, `irodsfs` will be executed in the background.
@@ -210,9 +210,9 @@ path_mappings:
     resource_type: dir
 ```
 
-Then run `irodsfs` with `-config` option.
+Then run `irodsfs` with `--config` or `-c` option.
 ```shell script
-./bin/irodsfs -config config.yaml /mount/irods
+./bin/irodsfs -c config.yaml /mount/irods
 ```
 
 After mounting, `irodsfs` will be executed in the background.
@@ -226,9 +226,9 @@ ls /mount/irods
 
 An iRODS user `iychoi` has iCommands config in `~/.irods`. 
 
-Run `irodsfs` with `-config` option.
+Run `irodsfs` with `--config` or `-c` option.
 ```shell script
-./bin/irodsfs -config ~/.irods /mount/irods
+./bin/irodsfs -c ~/.irods /mount/irods
 ```
 
 After mounting, `irodsfs` will be executed in the background.
