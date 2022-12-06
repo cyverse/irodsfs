@@ -78,15 +78,25 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
+	authScheme, err := irodsclient_types.GetAuthScheme(config.AuthScheme)
+	if err != nil {
+		return nil, err
+	}
+
+	csNegotiation, err := irodsclient_types.GetCSNegotiationRequire(config.CSNegotiationPolicy)
+	if err != nil {
+		return nil, err
+	}
+
 	account, err := irodsclient_types.CreateIRODSProxyAccount(config.Host, config.Port,
 		config.ClientUser, config.Zone, config.ProxyUser, config.Zone,
-		irodsclient_types.AuthScheme(config.AuthScheme), config.Password, config.Resource)
+		authScheme, config.Password, config.Resource)
 	if err != nil {
 		logger.WithError(err).Error("failed to create IRODS Account")
 		return nil, fmt.Errorf("failed to create IRODS Account - %v", err)
 	}
 
-	if irodsclient_types.AuthScheme(config.AuthScheme) == irodsclient_types.AuthSchemePAM {
+	if authScheme == irodsclient_types.AuthSchemePAM {
 		sslConfig, err := irodsclient_types.CreateIRODSSSLConfig(config.CACertificateFile, config.EncryptionKeySize,
 			config.EncryptionAlgorithm, config.SaltSize, config.HashRounds)
 		if err != nil {
@@ -106,7 +116,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 			}
 
 			account.SetSSLConfiguration(sslConfig)
-			account.SetCSNegotiation(config.ClientServerNegotiation, irodsclient_types.CSNegotiationRequire(config.CSNegotiationPolicy))
+			account.SetCSNegotiation(config.ClientServerNegotiation, csNegotiation)
 		}
 	}
 
@@ -182,7 +192,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 			Zone:                     config.Zone,
 			ClientUser:               config.ClientUser,
 			ProxyUser:                config.ProxyUser,
-			AuthScheme:               config.AuthScheme,
+			AuthScheme:               string(authScheme),
 			ReadAheadMax:             config.ReadAheadMax,
 			OperationTimeout:         time.Duration(config.OperationTimeout).String(),
 			ConnectionIdleTimeout:    time.Duration(config.ConnectionIdleTimeout).String(),

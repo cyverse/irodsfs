@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
 	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 
@@ -27,10 +28,8 @@ const (
 	MetadataCacheTimeoutDefault     time.Duration = 5 * time.Minute
 	MetadataCacheCleanupTimeDefault time.Duration = 5 * time.Minute
 
-	AuthSchemePAM              string = "pam"
-	AuthSchemeNative           string = "native"
-	AuthSchemeDefault          string = AuthSchemeNative
-	CSNegotiationDefault       string = "CS_NEG_REFUSE" // Require TCP
+	AuthSchemeDefault          string = string(irodsclient_types.AuthSchemeNative)
+	CSNegotiationDefault       string = string(irodsclient_types.CSNegotiationRequireTCP)
 	EncryptionKeySizeDefault   int    = 32
 	EncryptionAlgorithmDefault string = "AES-256-CBC"
 	SaltSizeDefault            int    = 8
@@ -409,8 +408,9 @@ func (config *Config) Validate() error {
 		return fmt.Errorf("connection max must be equal or greater than 1")
 	}
 
-	if config.AuthScheme != AuthSchemePAM && config.AuthScheme != AuthSchemeNative {
-		return fmt.Errorf("unknown auth scheme - %v", config.AuthScheme)
+	authScheme, err := irodsclient_types.GetAuthScheme(config.AuthScheme)
+	if err != nil {
+		return err
 	}
 
 	if config.ClientServerNegotiation {
@@ -419,7 +419,7 @@ func (config *Config) Validate() error {
 		}
 	}
 
-	if config.AuthScheme == AuthSchemePAM {
+	if authScheme == irodsclient_types.AuthSchemePAM {
 		if _, err := os.Stat(config.CACertificateFile); os.IsNotExist(err) {
 			return fmt.Errorf("SSL CA Certificate file error - %v", err)
 		}
