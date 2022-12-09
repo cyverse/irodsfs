@@ -217,14 +217,26 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 
 	config.ChildProcess = childProcess
 
+	if config.Debug {
+		log.SetLevel(log.DebugLevel)
+	}
+
+	dataRootFlag := command.Flags().Lookup("data_root")
+	if dataRootFlag != nil {
+		dataRoot := dataRootFlag.Value.String()
+		if len(dataRoot) > 0 {
+			config.DataRootPath = dataRoot
+		}
+
+		if len(config.LogPath) == 0 {
+			config.LogPath = config.GetLogFilePath()
+		}
+	}
+
 	err := config.MakeLogDir()
 	if err != nil {
 		logger.Error(err)
 		return nil, nil, false, err // stop here
-	}
-
-	if config.Debug {
-		log.SetLevel(log.DebugLevel)
 	}
 
 	var logWriter io.WriteCloser
@@ -455,14 +467,6 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 		fuseOptionsString = strings.Trim(fuseOptionsString, "[]")
 		fuseOptionsStringArray := strings.Split(fuseOptionsString, ",")
 		config.FuseOptions = fuseOptionsStringArray
-	}
-
-	dataRootFlag := command.Flags().Lookup("data_root")
-	if dataRootFlag != nil {
-		dataRoot := dataRootFlag.Value.String()
-		if len(dataRoot) > 0 {
-			config.DataRootPath = dataRoot
-		}
 	}
 
 	profilePortFlag := command.Flags().Lookup("profile_port")
