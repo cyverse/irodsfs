@@ -99,7 +99,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	allowOther := false
 	allowOtherFlag := command.Flags().Lookup("allow_other")
 	if allowOtherFlag != nil {
-		allowOther, _ = strconv.ParseBool(debugFlag.Value.String())
+		allowOther, _ = strconv.ParseBool(allowOtherFlag.Value.String())
 	}
 
 	childProcess := false
