@@ -6,7 +6,7 @@ zone: iplant
 password:
 
 auth_scheme: "pam"
-ssl_ca_cert_file: "/etc/ssl/certs/ca-certificates.crt"
+ssl_ca_cert_file: "/home/iychoi/.irods/ca_cert.pem"
 ssl_encryption_key_size: 32
 ssl_encryption_algorithm: "AES-256-CBC"
 ssl_encryption_salt_size: 8
