@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
 	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 
@@ -182,6 +183,18 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 					if err != nil {
 						logger.Error(err)
 						return nil, nil, false, err // stop here
+					}
+
+					authScheme, err := irodsclient_types.GetAuthScheme(serverConfig.AuthScheme)
+					if err != nil {
+						logger.Error(err)
+						return nil, nil, false, err // stop here
+					}
+
+					if authScheme == irodsclient_types.AuthSchemePAM {
+						// in PAM auth mode, icommands environment password file (.irodsA) stores pam auth token, not password
+						// so you can use the token as password for native auth
+						serverConfig.AuthScheme = string(irodsclient_types.AuthSchemeNative)
 					}
 
 					// overwrite config
