@@ -92,7 +92,7 @@ type Config struct {
 
 	PoolEndpoint string `yaml:"pool_endpoint,omitempty"`
 
-	AuthScheme              string `yaml:"authscheme"`
+	AuthScheme              string `yaml:"auth_scheme"`
 	ClientServerNegotiation bool   `yaml:"cs_negotiation"`
 	CSNegotiationPolicy     string `yaml:"cs_negotiation_policy"`
 	CACertificateFile       string `yaml:"ssl_ca_cert_file"`

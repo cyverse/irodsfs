@@ -96,6 +96,8 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		return nil, fmt.Errorf("failed to create IRODS Account - %v", err)
 	}
 
+	logger.Infof("Connect to IRODS server using %s auth scheme", string(authScheme))
+
 	if authScheme == irodsclient_types.AuthSchemePAM {
 		sslConfig, err := irodsclient_types.CreateIRODSSSLConfig(config.CACertificateFile, config.EncryptionKeySize,
 			config.EncryptionAlgorithm, config.SaltSize, config.HashRounds)
@@ -103,6 +105,8 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 			logger.WithError(err).Error("failed to create IRODS SSL Config")
 			return nil, fmt.Errorf("failed to create IRODS SSL Config - %v", err)
 		}
+
+		logger.Info("PAM requires SSL, enabling CS negotiation")
 
 		account.SetSSLConfiguration(sslConfig)
 		account.SetCSNegotiation(true, irodsclient_types.CSNegotiationRequireSSL)
@@ -114,6 +118,8 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 				logger.WithError(err).Error("failed to create IRODS SSL Config")
 				return nil, fmt.Errorf("failed to create IRODS SSL Config - %v", err)
 			}
+
+			logger.Info("Enabling CS negotiation to turn on SSL")
 
 			account.SetSSLConfiguration(sslConfig)
 			account.SetCSNegotiation(config.ClientServerNegotiation, csNegotiation)
