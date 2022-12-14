@@ -130,6 +130,32 @@ func LoadICommandsEnvironmentFile(configPath string) (*Config, error) {
 		}
 	}
 
+	if len(iCommandsEnvMgr.Environment.CurrentWorkingDir) > 0 {
+		config.PathMappings = []irodsfs_common_vpath.VPathMapping{
+			{
+				IRODSPath:           iCommandsEnvMgr.Environment.CurrentWorkingDir,
+				MappingPath:         "/",
+				ResourceType:        irodsfs_common_vpath.VPathMappingDirectory,
+				ReadOnly:            false,
+				CreateDir:           false,
+				IgnoreNotExistError: false,
+			},
+		}
+	}
+
+	if len(iCommandsEnvMgr.Environment.Home) > 0 {
+		config.PathMappings = []irodsfs_common_vpath.VPathMapping{
+			{
+				IRODSPath:           iCommandsEnvMgr.Environment.Home,
+				MappingPath:         "/",
+				ResourceType:        irodsfs_common_vpath.VPathMappingDirectory,
+				ReadOnly:            false,
+				CreateDir:           false,
+				IgnoreNotExistError: false,
+			},
+		}
+	}
+
 	if len(config.PathMappings) == 0 {
 		iRODSHomePath := fmt.Sprintf("/%s/home/%s", config.Zone, config.ClientUser)
 		config.PathMappings = []irodsfs_common_vpath.VPathMapping{
