@@ -38,6 +38,7 @@ func SetCommonFlags(command *cobra.Command) {
 	command.Flags().Bool("allow_other", false, "Allow access from other users")
 
 	command.Flags().StringP("config", "c", "", "Set config file (yaml)")
+	command.Flags().String("instance_id", "", "Set instance ID")
 
 	command.Flags().String("host", "", "Set iRODS host")
 	command.Flags().Int("port", 1247, "Set iRODS port")
@@ -232,6 +233,14 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 
 	if config.Debug {
 		log.SetLevel(log.DebugLevel)
+	}
+
+	instanceIdFlag := command.Flags().Lookup("instance_id")
+	if instanceIdFlag != nil {
+		instanceId := instanceIdFlag.Value.String()
+		if len(instanceId) > 0 {
+			config.InstanceID = instanceId
+		}
 	}
 
 	dataRootFlag := command.Flags().Lookup("data_root")

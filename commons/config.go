@@ -38,21 +38,8 @@ const (
 	ProfileServicePortDefault int = 11021
 )
 
-var (
-	instanceID string
-)
-
-// getInstanceID returns instance ID
-func getInstanceID() string {
-	if len(instanceID) == 0 {
-		instanceID = xid.New().String()
-	}
-
-	return instanceID
-}
-
-func getLogFilename() string {
-	return fmt.Sprintf("%s.log", getInstanceID())
+func GetDefaultInstanceID() string {
+	return xid.New().String()
 }
 
 func GetDefaultDataRootDirPath() string {
@@ -180,7 +167,7 @@ func NewDefaultConfig() *Config {
 		AllowOther:   false,
 		ChildProcess: false,
 
-		InstanceID:  getInstanceID(),
+		InstanceID:  GetDefaultInstanceID(),
 		FuseOptions: []string{},
 	}
 }
@@ -237,16 +224,17 @@ func (config *Config) GetLogFilePath() string {
 	}
 
 	// default
-	return path.Join(config.DataRootPath, getLogFilename())
+	logFilename := fmt.Sprintf("%s.log", config.InstanceID)
+	return path.Join(config.DataRootPath, logFilename)
 }
 
 func (config *Config) GetTempRootDirPath() string {
-	dirname := fmt.Sprintf("%s/temp", getInstanceID())
+	dirname := fmt.Sprintf("%s/temp", config.InstanceID)
 	return path.Join(config.DataRootPath, dirname)
 }
 
 func (config *Config) GetInstanceDataRootDirPath() string {
-	return path.Join(config.DataRootPath, getInstanceID())
+	return path.Join(config.DataRootPath, config.InstanceID)
 }
 
 // MakeLogDir makes a log dir required
