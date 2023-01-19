@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
@@ -153,7 +152,7 @@ func ChildProcessReadConfigViaSTDIN() (*commons.Config, io.WriteCloser, error) {
 	}
 
 	logger.Info("Reading configuration from STDIN")
-	configBytes, err := ioutil.ReadAll(os.Stdin)
+	configBytes, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		logger.WithError(err).Error("failed to read configuration")
 		return nil, nil, err

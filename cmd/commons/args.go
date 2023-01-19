@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -142,7 +141,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 			if configPath == "-" {
 				// read from stdin
 				stdinReader := bufio.NewReader(os.Stdin)
-				yamlBytes, err := ioutil.ReadAll(stdinReader)
+				yamlBytes, err := io.ReadAll(stdinReader)
 				if err != nil {
 					logger.Error(err)
 					return nil, nil, false, err // stop here
@@ -162,7 +161,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 				// read from a file
 				if commons.IsYAMLFile(configPath) {
 					// YAML file
-					yamlBytes, err := ioutil.ReadFile(configPath)
+					yamlBytes, err := os.ReadFile(configPath)
 					if err != nil {
 						logger.Error(err)
 						return nil, nil, false, err // stop here
@@ -337,7 +336,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 		pathMappingFile := pathMappingFileFlag.Value.String()
 		if len(pathMappingFile) > 0 {
 			// YAML file
-			yamlBytes, err := ioutil.ReadFile(pathMappingFile)
+			yamlBytes, err := os.ReadFile(pathMappingFile)
 			if err != nil {
 				logger.Error(err)
 				return nil, logWriter, false, err // stop here
