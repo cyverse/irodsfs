@@ -37,6 +37,7 @@ func SetCommonFlags(command *cobra.Command) {
 
 	command.Flags().StringP("config", "c", "", "Set config file (yaml)")
 	command.Flags().String("instance_id", "", "Set instance ID")
+	command.Flags().String("log_path", "", "Set log file path")
 
 	command.Flags().String("host", "", "Set iRODS host")
 	command.Flags().Int("port", 1247, "Set iRODS port")
@@ -226,6 +227,14 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 		instanceId := instanceIdFlag.Value.String()
 		if len(instanceId) > 0 {
 			config.InstanceID = instanceId
+		}
+	}
+
+	logPathFlag := command.Flags().Lookup("log_path")
+	if logPathFlag != nil {
+		logPath := logPathFlag.Value.String()
+		if len(logPath) > 0 {
+			config.LogPath = logPath
 		}
 	}
 

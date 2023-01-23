@@ -240,6 +240,11 @@ func (config *Config) GetInstanceDataRootDirPath() string {
 // MakeLogDir makes a log dir required
 func (config *Config) MakeLogDir() error {
 	logFilePath := config.GetLogFilePath()
+	if logFilePath == "-" {
+		// skip
+		return nil
+	}
+
 	logDirPath := filepath.Dir(logFilePath)
 	err := config.makeDir(logDirPath)
 	if err != nil {
