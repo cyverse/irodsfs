@@ -238,6 +238,45 @@ Test access the mount.
 ls /mount/irods
 ```
 
+### Change Log Level
+
+An iRODS can change the log level in two ways: 1) using command-line argument `--log_level` or 2) using `log_level` parameter in a configuration file.
+
+There are 6 log levels configurable (case-insensitive):
+- "PANIC"
+- "FATAL"
+- "WARN"
+- "INFO"
+- "DEBUG"
+- "TRACE"
+
+For example, to display only fatal or more severe error logs, run `irodsfs` with `--log_level FATAL` option.
+```shell script
+./bin/irodsfs -c ~/.irods --log_level FATAL /mount/irods
+```
+
+Command-line argument `--log_level` overrides the log level set in a configuration file if any.
+
+To set the log level using a configuration file, add a `log_level` field.
+
+```yaml
+host: data.cyverse.org
+port: 1247
+proxy_user: iychoi
+client_user: iychoi
+zone: iplant
+password: "your_password" or leave empty to type in later
+log_level: FATAL
+
+path_mappings:
+  - irods_path: /iplant/home/iychoi/mount1
+    mapping_path: /mount1
+    resource_type: dir
+  - irods_path: /iplant/home/iychoi/mount2
+    mapping_path: /mount2
+    resource_type: dir
+```
+
 ### Unmount
 
 It is recommended to use `fusermount` command to unmount iRODS FUSE Lite as it does not require admin permission.
