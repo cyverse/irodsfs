@@ -31,6 +31,7 @@ func SetCommonFlags(command *cobra.Command) {
 	command.Flags().BoolP("version", "v", false, "Print version")
 	command.Flags().BoolP("help", "h", false, "Print help")
 	command.Flags().BoolP("debug", "d", false, "Enable debug mode")
+	command.Flags().String("log_level", "", "Set log level (default is INFO)")
 	command.Flags().Bool("profile", false, "Enable profiling")
 	command.Flags().BoolP("foreground", "f", false, "Run in foreground")
 	command.Flags().Bool("allow_other", false, "Allow access from other users")
@@ -79,6 +80,13 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 		"function": "ProcessCommonFlags",
 	})
 
+	logLevel := ""
+	logLevelFlag := command.Flags().Lookup("log_level")
+	if logLevelFlag != nil {
+		logLevelStr := logLevelFlag.Value.String()
+		logLevel = logLevelStr
+	}
+
 	debug := false
 	debugFlag := command.Flags().Lookup("debug")
 	if debugFlag != nil {
@@ -107,6 +115,15 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	childProcessFlag := command.Flags().Lookup(ChildProcessArgument)
 	if childProcessFlag != nil {
 		childProcess, _ = strconv.ParseBool(childProcessFlag.Value.String())
+	}
+
+	if len(logLevel) > 0 {
+		lvl, err := log.ParseLevel(logLevel)
+		if err != nil {
+			lvl = log.InfoLevel
+		}
+
+		log.SetLevel(lvl)
 	}
 
 	if debug {
@@ -198,7 +215,25 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 		config = commons.NewDefaultConfig()
 	}
 
+	if len(config.LogLevel) > 0 {
+		lvl, err := log.ParseLevel(config.LogLevel)
+		if err != nil {
+			lvl = log.InfoLevel
+		}
+
+		log.SetLevel(lvl)
+	}
+
 	// prioritize command-line flag over config files
+	if len(logLevel) > 0 {
+		lvl, err := log.ParseLevel(logLevel)
+		if err != nil {
+			lvl = log.InfoLevel
+		}
+
+		log.SetLevel(lvl)
+	}
+
 	if debug {
 		log.SetLevel(log.DebugLevel)
 		config.Debug = true

@@ -104,10 +104,11 @@ type Config struct {
 	Profile            bool `yaml:"profile,omitempty"`
 	ProfileServicePort int  `yaml:"profile_service_port,omitempty"`
 
-	Foreground   bool `yaml:"foreground,omitempty"`
-	Debug        bool `yaml:"debug,omitempty"`
-	AllowOther   bool `yaml:"allow_other,omitempty"`
-	ChildProcess bool `yaml:"childprocess,omitempty"`
+	Foreground   bool   `yaml:"foreground,omitempty"`
+	LogLevel     string `yaml:"log_level,omitempty"`
+	Debug        bool   `yaml:"debug,omitempty"`
+	AllowOther   bool   `yaml:"allow_other,omitempty"`
+	ChildProcess bool   `yaml:"childprocess,omitempty"`
 
 	InstanceID  string   `yaml:"instanceid,omitempty"`
 	FuseOptions []string `yaml:"fuse_options,omitempty"`
@@ -163,6 +164,7 @@ func NewDefaultConfig() *Config {
 		ProfileServicePort: ProfileServicePortDefault,
 
 		Foreground:   false,
+		LogLevel:     "",
 		Debug:        false,
 		AllowOther:   false,
 		ChildProcess: false,
