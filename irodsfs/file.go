@@ -654,16 +654,13 @@ func (file *File) Open(ctx context.Context, flags uint32) (fusefs.FileHandle, ui
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	openMode := string(irodsclient_types.FileOpenModeReadOnly)
+	openMode := string(irodsclient_types.FileOpenModeReadWrite)
 	fuseFlag := uint32(0)
 
 	// if we use Direct_IO, it will disable kernel cache, read-ahead, shared mmap
 	//fuseFlag |= fuse.FOPEN_DIRECT_IO
 
-	if flags&uint32(os.O_RDONLY) == uint32(os.O_RDONLY) {
-		openMode = string(irodsclient_types.FileOpenModeReadOnly)
-		//fuseFlag |= fuse.FOPEN_KEEP_CACHE
-	} else if flags&uint32(os.O_WRONLY) == uint32(os.O_WRONLY) {
+	if flags&uint32(os.O_WRONLY) == uint32(os.O_WRONLY) {
 		openMode = string(irodsclient_types.FileOpenModeWriteOnly)
 
 		if flags&uint32(os.O_APPEND) == uint32(os.O_APPEND) {
@@ -676,8 +673,8 @@ func (file *File) Open(ctx context.Context, flags uint32) (fusefs.FileHandle, ui
 	} else if flags&uint32(os.O_RDWR) == uint32(os.O_RDWR) {
 		openMode = string(irodsclient_types.FileOpenModeReadWrite)
 	} else {
-		logger.Errorf("unknown file open mode - 0o%o", flags)
-		return nil, 0, syscall.EPERM
+		openMode = string(irodsclient_types.FileOpenModeReadOnly)
+		//fuseFlag |= fuse.FOPEN_KEEP_CACHE
 	}
 
 	operID := file.fs.GetNextOperationID()
