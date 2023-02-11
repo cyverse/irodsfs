@@ -313,4 +313,4 @@ Redistribution and use in source and binary forms, with or without modification,
  * Neither the name of CyVerse, BIO5, The University of Arizona, Cold Spring Harbor Laboratory, The University of Texas at Austin, nor the names of other contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 
 
-Please check [LICENSE](https://github.com/cyverse/go-irodsclient/tree/master/LICENSE) file.
+Please check [LICENSE](https://github.com/cyverse/irodsfs/tree/master/LICENSE) file.
