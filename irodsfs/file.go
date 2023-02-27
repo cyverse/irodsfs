@@ -181,7 +181,7 @@ func (file *File) Getattr(ctx context.Context, fh fusefs.FileHandle, out *fuse.A
 	irodsEntry, err := file.fs.fsClient.Stat(irodsPath)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
+			logger.Debugf("failed to find a file - %s", irodsPath)
 			return syscall.ENOENT
 		}
 
@@ -304,7 +304,7 @@ func (file *File) Listxattr(ctx context.Context, dest []byte) (uint32, syscall.E
 	irodsMetadata, err := file.fs.fsClient.ListXattr(irodsPath)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
+			logger.Debugf("failed to find a file - %s", irodsPath)
 			return 0, syscall.ENOENT
 		}
 
@@ -387,7 +387,7 @@ func (file *File) Getxattr(ctx context.Context, attr string, dest []byte) (uint3
 	irodsMeta, err := file.fs.fsClient.GetXattr(irodsPath, attr)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
+			logger.Debugf("failed to find a file - %s", irodsPath)
 			return 0, syscall.ENOENT
 		}
 
@@ -461,7 +461,7 @@ func (file *File) Setxattr(ctx context.Context, attr string, data []byte, flags 
 	err = file.fs.fsClient.SetXattr(irodsPath, attr, string(data))
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
+			logger.Debugf("failed to find a file - %s", irodsPath)
 			return syscall.ENOENT
 		}
 
@@ -519,7 +519,7 @@ func (file *File) Removexattr(ctx context.Context, attr string) syscall.Errno {
 	irodsMeta, err := file.fs.fsClient.GetXattr(irodsPath, attr)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
+			logger.Debugf("failed to find a file - %s", irodsPath)
 			return syscall.ENOENT
 		}
 
@@ -534,7 +534,7 @@ func (file *File) Removexattr(ctx context.Context, attr string) syscall.Errno {
 	err = file.fs.fsClient.RemoveXattr(irodsPath, attr)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
+			logger.Debugf("failed to find a file - %s", irodsPath)
 			return syscall.ENOENT
 		}
 
@@ -592,7 +592,7 @@ func (file *File) Truncate(ctx context.Context, size uint64) syscall.Errno {
 	irodsEntry, err := file.fs.fsClient.Stat(irodsPath)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
+			logger.Debugf("failed to find a file - %s", irodsPath)
 			return syscall.ENOENT
 		}
 
@@ -627,7 +627,7 @@ func (file *File) Truncate(ctx context.Context, size uint64) syscall.Errno {
 			err = file.fs.fsClient.TruncateFile(irodsPath, int64(size))
 			if err != nil {
 				if irodsclient_types.IsFileNotFoundError(err) {
-					logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
+					logger.Debugf("failed to find a file - %s", irodsPath)
 					return syscall.ENOENT
 				}
 
@@ -716,7 +716,7 @@ func (file *File) Open(ctx context.Context, flags uint32) (fusefs.FileHandle, ui
 	handle, err := file.fs.fsClient.OpenFile(irodsPath, "", openMode)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.WithError(err).Errorf("failed to find a file - %s", irodsPath)
+			logger.Debugf("failed to find a file - %s", irodsPath)
 			return nil, 0, syscall.ENOENT
 		}
 
