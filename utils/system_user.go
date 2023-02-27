@@ -12,17 +12,17 @@ import (
 func GetCurrentSystemUser() (string, int, int, error) {
 	user, err := user.Current()
 	if err != nil {
-		return "root", 0, 0, xerrors.Errorf("failed to get current system user info - %v", err)
+		return "root", 0, 0, xerrors.Errorf("failed to get current system user info: %w", err)
 	}
 
 	uid, err := strconv.ParseInt(user.Uid, 10, 32)
 	if err != nil {
-		return "root", 0, 0, xerrors.Errorf("failed to parse uid - %s", user.Uid)
+		return "root", 0, 0, xerrors.Errorf("failed to parse uid '%s': %w", user.Uid, err)
 	}
 
 	gid, err := strconv.ParseInt(user.Gid, 10, 32)
 	if err != nil {
-		return "root", 0, 0, xerrors.Errorf("failed to parse gid - %s", user.Gid)
+		return "root", 0, 0, xerrors.Errorf("failed to parse gid '%s': %w", user.Gid, err)
 	}
 
 	return user.Username, int(uid), int(gid), nil
@@ -33,17 +33,17 @@ func CorrectSystemUser(username string, uid int, gid int) (string, int, int, err
 	if len(username) > 0 {
 		u, err := user.Lookup(username)
 		if err != nil {
-			return "root", 0, 0, xerrors.Errorf("failed to look up a user - %s", username)
+			return "root", 0, 0, xerrors.Errorf("failed to look up a user '%s': %w", username, err)
 		}
 
 		newuid, err := strconv.ParseInt(u.Uid, 10, 32)
 		if err != nil {
-			return "root", 0, 0, xerrors.Errorf("failed to parse uid - %s", u.Uid)
+			return "root", 0, 0, xerrors.Errorf("failed to parse uid '%s': %w", u.Uid, err)
 		}
 
 		newgid, err := strconv.ParseInt(u.Gid, 10, 32)
 		if err != nil {
-			return "root", 0, 0, xerrors.Errorf("failed to parse gid - %s", u.Gid)
+			return "root", 0, 0, xerrors.Errorf("failed to parse gid '%s': %w", u.Gid, err)
 		}
 
 		return username, int(newuid), int(newgid), nil
@@ -63,12 +63,12 @@ func CorrectSystemUser(username string, uid int, gid int) (string, int, int, err
 
 		newuid, err := strconv.ParseInt(u.Uid, 10, 32)
 		if err != nil {
-			return "root", 0, 0, xerrors.Errorf("failed to parse uid - %s", u.Uid)
+			return "root", 0, 0, xerrors.Errorf("failed to parse uid '%s': %w", u.Uid, err)
 		}
 
 		newgid, err := strconv.ParseInt(u.Gid, 10, 32)
 		if err != nil {
-			return "root", 0, 0, xerrors.Errorf("failed to parse gid - %s", u.Gid)
+			return "root", 0, 0, xerrors.Errorf("failed to parse gid '%s': %w", u.Gid, err)
 		}
 
 		return u.Username, int(newuid), int(newgid), nil
@@ -77,17 +77,17 @@ func CorrectSystemUser(username string, uid int, gid int) (string, int, int, err
 	// if nothing is given
 	u, err := user.Current()
 	if err != nil {
-		return "root", 0, 0, xerrors.Errorf("failed to get current system user info - %v", err)
+		return "root", 0, 0, xerrors.Errorf("failed to get current system user info: %w", err)
 	}
 
 	newuid, err := strconv.ParseInt(u.Uid, 10, 32)
 	if err != nil {
-		return "root", 0, 0, xerrors.Errorf("failed to parse uid - %s", u.Uid)
+		return "root", 0, 0, xerrors.Errorf("failed to parse uid '%s': %w", u.Uid, err)
 	}
 
 	newgid, err := strconv.ParseInt(u.Gid, 10, 32)
 	if err != nil {
-		return "root", 0, 0, xerrors.Errorf("failed to parse gid - %s", u.Gid)
+		return "root", 0, 0, xerrors.Errorf("failed to parse gid '%s': %w", u.Gid, err)
 	}
 
 	return u.Username, int(newuid), int(newgid), nil

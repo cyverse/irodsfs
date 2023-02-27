@@ -616,6 +616,7 @@ func (dir *Dir) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*f
 			return nil, syscall.ENOENT
 		}
 
+		logger.Errorf("%+v", err)
 		logger.WithError(err).Errorf("failed to stat - %s", irodsPath)
 		return nil, syscall.EREMOTEIO
 	}

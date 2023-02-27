@@ -30,14 +30,16 @@ func parseIrodsUrl(inputURL string) (*IRODSAccessURL, error) {
 	})
 
 	if !strings.HasPrefix(inputURL, "irods://") {
-		logger.Errorf("failed to parse source URL %s", inputURL)
-		return nil, xerrors.Errorf("input URL %s isn't iRODS Access URL", inputURL)
+		urlErr := xerrors.Errorf("failed to parse source URL %s", inputURL)
+		logger.Errorf("%+v", urlErr)
+		return nil, urlErr
 	}
 
 	u, err := url.Parse(inputURL)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to parse source URL %s", inputURL)
-		return nil, err
+		urlErr := xerrors.Errorf("failed to parse source URL %s: %w", inputURL, err)
+		logger.Errorf("%+v", urlErr)
+		return nil, urlErr
 	}
 
 	user := ""
@@ -61,8 +63,9 @@ func parseIrodsUrl(inputURL string) (*IRODSAccessURL, error) {
 	if len(u.Port()) > 0 {
 		port64, err := strconv.ParseInt(u.Port(), 10, 32)
 		if err != nil {
-			logger.WithError(err).Errorf("failed to parse source URL's port number %s", u.Port())
-			return nil, err
+			parseErr := xerrors.Errorf("failed to parse source URL's port number %s: %w", u.Port(), err)
+			logger.Errorf("%+v", parseErr)
+			return nil, parseErr
 		}
 		port = int(port64)
 	}
@@ -71,9 +74,9 @@ func parseIrodsUrl(inputURL string) (*IRODSAccessURL, error) {
 	zone := ""
 	irodsPath := "/"
 	if len(fullpath) == 0 || fullpath[0] != '/' {
-		err = xerrors.Errorf("path (%s) must contain an absolute path", u.Path)
-		logger.Error(err)
-		return nil, err
+		pathErr := xerrors.Errorf("path (%s) must contain an absolute path", u.Path)
+		logger.Errorf("%+v", pathErr)
+		return nil, pathErr
 	}
 
 	pos := strings.Index(fullpath[1:], "/")
@@ -87,9 +90,9 @@ func parseIrodsUrl(inputURL string) (*IRODSAccessURL, error) {
 	}
 
 	if len(zone) == 0 || len(irodsPath) == 0 {
-		err = xerrors.Errorf("path (%s) must contain an absolute path", inputURL)
-		logger.Error(err)
-		return nil, err
+		pathErr := xerrors.Errorf("path (%s) must contain an absolute path", inputURL)
+		logger.Errorf("%+v", pathErr)
+		return nil, pathErr
 	}
 
 	return &IRODSAccessURL{
@@ -112,7 +115,7 @@ func updateConfigFromIrodsUrl(inputURL string, config *commons.Config) error {
 	// the inputURL contains irods://HOST:PORT/ZONE/inputPath...
 	access, err := parseIrodsUrl(inputURL)
 	if err != nil {
-		logger.Error(err)
+		logger.Errorf("%+v", err)
 		return err
 	}
 

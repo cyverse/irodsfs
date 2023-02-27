@@ -169,9 +169,8 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 
 				serverConfig, err := commons.NewConfigFromYAML(yamlBytes)
 				if err != nil {
-					readErr := xerrors.Errorf("failed to read config from yaml: %w", err)
-					logger.Errorf("%+v", readErr)
-					return nil, nil, false, readErr // stop here
+					logger.Errorf("%+v", err)
+					return nil, nil, false, err // stop here
 				}
 
 				// overwrite config
@@ -191,9 +190,8 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 
 					serverConfig, err := commons.NewConfigFromYAML(yamlBytes)
 					if err != nil {
-						readErr := xerrors.Errorf("failed to read config from yaml: %w", err)
-						logger.Errorf("%+v", readErr)
-						return nil, nil, false, readErr // stop here
+						logger.Errorf("%+v", err)
+						return nil, nil, false, err // stop here
 					}
 
 					// overwrite config
@@ -203,9 +201,8 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 					// icommands environment
 					serverConfig, err := commons.LoadICommandsEnvironmentDir(configPath)
 					if err != nil {
-						readErr := xerrors.Errorf("failed to read icommands config %s: %w", configPath, err)
-						logger.Errorf("%+v", readErr)
-						return nil, nil, false, readErr // stop here
+						logger.Errorf("%+v", err)
+						return nil, nil, false, err // stop here
 					}
 
 					// overwrite config
@@ -581,18 +578,16 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 		// the first argument contains irods://HOST:PORT/ZONE/inputPath...
 		err := updateConfigFromIrodsUrl(args[0], config)
 		if err != nil {
-			urlErr := xerrors.Errorf("failed to update config from irods url: %w", err)
-			logger.Errorf("%+v", urlErr)
-			return nil, logWriter, false, urlErr // stop here
+			logger.Errorf("%+v", err)
+			return nil, logWriter, false, err // stop here
 		}
 	}
 
 	if !stdinClosed {
 		err = inputMissingParams(config)
 		if err != nil {
-			inputErr := xerrors.Errorf("failed to input missing parameters: %w", err)
-			logger.Errorf("%+v", inputErr)
-			return nil, logWriter, false, inputErr // stop here
+			logger.Errorf("%+v", err)
+			return nil, logWriter, false, err // stop here
 		}
 	}
 
@@ -608,16 +603,14 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 
 	err = config.CorrectSystemUser()
 	if err != nil {
-		userErr := xerrors.Errorf("failed to correct system user: %w", err)
-		logger.Errorf("%+v", userErr)
-		return nil, logWriter, false, userErr // stop here
+		logger.Errorf("%+v", err)
+		return nil, logWriter, false, err // stop here
 	}
 
 	err = config.Validate()
 	if err != nil {
-		validateErr := xerrors.Errorf("failed to validate configuration: %w", err)
-		logger.Errorf("%+v", validateErr)
-		return nil, logWriter, false, validateErr // stop here
+		logger.Errorf("%+v", err)
+		return nil, logWriter, false, err // stop here
 	}
 
 	return config, logWriter, true, nil // continue
@@ -626,7 +619,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 func PrintVersion(command *cobra.Command) error {
 	info, err := commons.GetVersionJSON()
 	if err != nil {
-		return xerrors.Errorf("failed to get version json: %w", err)
+		return err
 	}
 
 	fmt.Println(info)
@@ -675,7 +668,7 @@ func inputMissingParams(config *commons.Config) error {
 		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
 		fmt.Print("\n")
 		if err != nil {
-			return xerrors.Errorf("failed to read password")
+			return xerrors.Errorf("failed to read password: %w", err)
 		}
 
 		config.Password = string(bytePassword)

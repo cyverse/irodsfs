@@ -6,7 +6,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"sync"
 
 	cmd_commons "github.com/cyverse/irodsfs/cmd/commons"
 	"github.com/cyverse/irodsfs/commons"
@@ -255,24 +254,17 @@ func run(config *commons.Config, isChildProcess bool) error {
 		os.Exit(0)
 	}()
 
-	// wait
-	waitForCtrlC()
-
-	return nil
-}
-
-func waitForCtrlC() {
-	var endWaiter sync.WaitGroup
-
-	endWaiter.Add(1)
+	// handle ctrl + C
 	signalChannel := make(chan os.Signal, 1)
-
 	signal.Notify(signalChannel, os.Interrupt)
-
 	go func() {
 		<-signalChannel
-		endWaiter.Done()
+		logger.Info("received intrrupt")
+		fs.Stop() // this unmounts fuse
 	}()
 
-	endWaiter.Wait()
+	// wait
+	fs.Wait()
+
+	return nil
 }

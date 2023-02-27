@@ -172,9 +172,8 @@ func ChildProcessReadConfigViaSTDIN() (*commons.Config, io.WriteCloser, error) {
 
 	config, err := commons.NewConfigFromYAML(configBytes)
 	if err != nil {
-		configErr := xerrors.Errorf("failed to read configuration from yaml: %w", err)
-		logger.Errorf("%+v", configErr)
-		return nil, nil, configErr
+		logger.Errorf("%+v", err)
+		return nil, nil, err
 	}
 
 	if config.Debug {
@@ -183,16 +182,14 @@ func ChildProcessReadConfigViaSTDIN() (*commons.Config, io.WriteCloser, error) {
 
 	err = config.Validate()
 	if err != nil {
-		validationErr := xerrors.Errorf("failed to validate configuration: %w", err)
-		logger.Errorf("%+v", validationErr)
-		return nil, nil, validationErr
+		logger.Errorf("%+v", err)
+		return nil, nil, err
 	}
 
 	err = config.MakeLogDir()
 	if err != nil {
-		makeErr := xerrors.Errorf("failed to make log dir: %w", err)
-		logger.Errorf("%+v", makeErr)
-		return nil, nil, makeErr
+		logger.Errorf("%+v", err)
+		return nil, nil, err
 	}
 
 	// output to log file
