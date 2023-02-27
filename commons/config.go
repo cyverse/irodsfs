@@ -12,6 +12,7 @@ import (
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
 	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
+	"golang.org/x/xerrors"
 
 	"github.com/cyverse/irodsfs/utils"
 	"github.com/rs/xid"
@@ -180,7 +181,7 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 
 	err := yaml.Unmarshal(yamlBytes, config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal YAML - %v", err)
+		return nil, xerrors.Errorf("failed to unmarshal YAML - %v", err)
 	}
 
 	err = config.CorrectSystemUser()
@@ -287,7 +288,7 @@ func (config *Config) CleanWorkDirs() error {
 // makeDir makes a dir for use
 func (config *Config) makeDir(path string) error {
 	if len(path) == 0 {
-		return fmt.Errorf("failed to create a dir with empty path")
+		return xerrors.Errorf("failed to create a dir with empty path")
 	}
 
 	dirInfo, err := os.Stat(path)
@@ -296,22 +297,22 @@ func (config *Config) makeDir(path string) error {
 			// make
 			mkdirErr := os.MkdirAll(path, 0775)
 			if mkdirErr != nil {
-				return fmt.Errorf("making a dir (%s) error - %v", path, mkdirErr)
+				return xerrors.Errorf("making a dir (%s) error - %v", path, mkdirErr)
 			}
 
 			return nil
 		}
 
-		return fmt.Errorf("stating a dir (%s) error - %v", path, err)
+		return xerrors.Errorf("stating a dir (%s) error - %v", path, err)
 	}
 
 	if !dirInfo.IsDir() {
-		return fmt.Errorf("a file (%s) exist, not a directory", path)
+		return xerrors.Errorf("a file (%s) exist, not a directory", path)
 	}
 
 	dirPerm := dirInfo.Mode().Perm()
 	if dirPerm&0200 != 0200 {
-		return fmt.Errorf("a dir (%s) exist, but does not have the write permission", path)
+		return xerrors.Errorf("a dir (%s) exist, but does not have the write permission", path)
 	}
 
 	return nil
@@ -320,7 +321,7 @@ func (config *Config) makeDir(path string) error {
 // removeDir removes a dir
 func (config *Config) removeDir(path string) error {
 	if len(path) == 0 {
-		return fmt.Errorf("failed to remove a dir with empty path")
+		return xerrors.Errorf("failed to remove a dir with empty path")
 	}
 
 	return os.RemoveAll(path)
@@ -329,78 +330,78 @@ func (config *Config) removeDir(path string) error {
 // Validate validates configuration
 func (config *Config) Validate() error {
 	if len(config.Host) == 0 {
-		return fmt.Errorf("hostname must be given")
+		return xerrors.Errorf("hostname must be given")
 	}
 
 	if config.Port <= 0 {
-		return fmt.Errorf("port must be given")
+		return xerrors.Errorf("port must be given")
 	}
 
 	if config.Profile && config.ProfileServicePort <= 0 {
-		return fmt.Errorf("profile service port must be given")
+		return xerrors.Errorf("profile service port must be given")
 	}
 
 	if len(config.ProxyUser) == 0 {
-		return fmt.Errorf("proxyUser must be given")
+		return xerrors.Errorf("proxyUser must be given")
 	}
 
 	if len(config.ClientUser) == 0 {
-		return fmt.Errorf("clientUser must be given")
+		return xerrors.Errorf("clientUser must be given")
 	}
 
 	if len(config.Zone) == 0 {
-		return fmt.Errorf("zone must be given")
+		return xerrors.Errorf("zone must be given")
 	}
 
 	if len(config.Password) == 0 {
-		return fmt.Errorf("password must be given")
+		return xerrors.Errorf("password must be given")
 	}
 
 	if len(config.PathMappings) == 0 {
-		return fmt.Errorf("path mappings must be given")
+		return xerrors.Errorf("path mappings must be given")
 	}
 
 	err := irodsfs_common_vpath.ValidateVPathMappings(config.PathMappings)
 	if err != nil {
-		return fmt.Errorf("invalid path mappings - %v", err)
+		return xerrors.Errorf("invalid path mappings - %v", err)
 	}
 
 	if config.UID < 0 {
-		return fmt.Errorf("invalid UID - %v", err)
+		return xerrors.Errorf("invalid UID - %v", err)
 	}
 
 	if config.GID < 0 {
-		return fmt.Errorf("invalid GID - %v", err)
+		return xerrors.Errorf("invalid GID - %v", err)
 	}
 
 	if len(config.MountPath) == 0 {
-		return fmt.Errorf("mount path must be given")
+		return xerrors.Errorf("mount path must be given")
 	}
 
 	mountDirInfo, err := os.Stat(config.MountPath)
 	if err != nil {
-		return fmt.Errorf("mountpoint (%s) error - %v", config.MountPath, err)
+		return xerrors.Errorf("mountpoint (%s) error - %v", config.MountPath, err)
 	}
 
 	if !mountDirInfo.IsDir() {
-		return fmt.Errorf("mountpoint (%s) must be a directory", config.MountPath)
+		return xerrors.Errorf("mountpoint (%s) must be a directory", config.MountPath)
 	}
 
 	mountDirPerm := mountDirInfo.Mode().Perm()
 	if mountDirPerm&0200 != 0200 {
-		return fmt.Errorf("mountpoint (%s) must have write permission", config.MountPath)
+		return xerrors.Errorf("mountpoint (%s) must have write permission", config.MountPath)
 	}
 
 	if len(config.DataRootPath) == 0 {
-		return fmt.Errorf("data root dir must be given")
+		return xerrors.Errorf("data root dir must be given")
 	}
 
 	if config.ReadAheadMax < 0 {
-		return fmt.Errorf("readahead max must be equal or greater than 0")
+		return xerrors.Errorf("readahead max must be equal or greater than 0")
 	}
 
 	if config.ConnectionMax < 1 {
-		return fmt.Errorf("connection max must be equal or greater than 1")
+		return xerrors.Errorf("connection max must be equal or greater than 1")
 	}
 
 	authScheme, err := irodsclient_types.GetAuthScheme(config.AuthScheme)
@@ -410,29 +411,29 @@ func (config *Config) Validate() error {
 
 	if config.ClientServerNegotiation {
 		if len(config.CSNegotiationPolicy) == 0 {
-			return fmt.Errorf("CS negotiation policy must be given")
+			return xerrors.Errorf("CS negotiation policy must be given")
 		}
 	}
 
 	if authScheme == irodsclient_types.AuthSchemePAM {
 		if _, err := os.Stat(config.CACertificateFile); os.IsNotExist(err) {
-			return fmt.Errorf("SSL CA Certificate file error - %v", err)
+			return xerrors.Errorf("SSL CA Certificate file error - %v", err)
 		}
 
 		if config.EncryptionKeySize <= 0 {
-			return fmt.Errorf("SSL encryption key size must be given")
+			return xerrors.Errorf("SSL encryption key size must be given")
 		}
 
 		if len(config.EncryptionAlgorithm) == 0 {
-			return fmt.Errorf("SSL encryption algorithm must be given")
+			return xerrors.Errorf("SSL encryption algorithm must be given")
 		}
 
 		if config.SaltSize <= 0 {
-			return fmt.Errorf("SSL salt size must be given")
+			return xerrors.Errorf("SSL salt size must be given")
 		}
 
 		if config.HashRounds <= 0 {
-			return fmt.Errorf("SSL hash rounds must be given")
+			return xerrors.Errorf("SSL hash rounds must be given")
 		}
 	}
 
@@ -450,7 +451,7 @@ func (config *Config) Validate() error {
 func ParsePoolServiceEndpoint(endpoint string) (string, string, error) {
 	u, err := url.Parse(endpoint)
 	if err != nil {
-		return "", "", fmt.Errorf("could not parse endpoint: %v", err)
+		return "", "", xerrors.Errorf("could not parse endpoint: %v", err)
 	}
 
 	scheme := strings.ToLower(u.Scheme)
@@ -464,9 +465,9 @@ func ParsePoolServiceEndpoint(endpoint string) (string, string, error) {
 		if len(u.Host) > 0 {
 			return "tcp", u.Host, nil
 		}
-		return "", "", fmt.Errorf("unknown host: %s", u.Host)
+		return "", "", xerrors.Errorf("unknown host: %s", u.Host)
 	default:
-		return "", "", fmt.Errorf("unsupported protocol: %s", scheme)
+		return "", "", xerrors.Errorf("unsupported protocol: %s", scheme)
 	}
 }
 

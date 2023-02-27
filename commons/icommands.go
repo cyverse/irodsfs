@@ -8,6 +8,7 @@ import (
 	irodsclient_icommands "github.com/cyverse/go-irodsclient/utils/icommands"
 	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/xerrors"
 )
 
 func isICommandsEnvDir(dirPath string) bool {
@@ -63,7 +64,7 @@ func LoadICommandsEnvironmentDir(configDirPath string) (*Config, error) {
 		return LoadICommandsEnvironmentFile(envFilePath)
 	}
 
-	return nil, fmt.Errorf("failed to read iCommands environment dir %s", configDirPath)
+	return nil, xerrors.Errorf("failed to read iCommands environment dir %s", configDirPath)
 }
 
 func LoadICommandsEnvironmentFile(configPath string) (*Config, error) {

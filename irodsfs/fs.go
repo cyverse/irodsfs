@@ -1,7 +1,6 @@
 package irodsfs
 
 import (
-	"fmt"
 	"syscall"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 	monitor_types "github.com/cyverse/irodsfs-monitor/types"
 	irodspoolclient "github.com/cyverse/irodsfs-pool/client"
+	"golang.org/x/xerrors"
 
 	fusefs "github.com/hanwen/go-fuse/v2/fs"
 	fuse "github.com/hanwen/go-fuse/v2/fuse"
@@ -93,7 +93,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		authScheme, config.Password, config.Resource)
 	if err != nil {
 		logger.WithError(err).Error("failed to create IRODS Account")
-		return nil, fmt.Errorf("failed to create IRODS Account - %v", err)
+		return nil, xerrors.Errorf("failed to create IRODS Account - %v", err)
 	}
 
 	logger.Infof("Connect to IRODS server using %s auth scheme", string(authScheme))
@@ -103,7 +103,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 			config.EncryptionAlgorithm, config.SaltSize, config.HashRounds)
 		if err != nil {
 			logger.WithError(err).Error("failed to create IRODS SSL Config")
-			return nil, fmt.Errorf("failed to create IRODS SSL Config - %v", err)
+			return nil, xerrors.Errorf("failed to create IRODS SSL Config - %v", err)
 		}
 
 		logger.Info("PAM requires SSL, enabling CS negotiation")
@@ -116,7 +116,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 				config.EncryptionAlgorithm, config.SaltSize, config.HashRounds)
 			if err != nil {
 				logger.WithError(err).Error("failed to create IRODS SSL Config")
-				return nil, fmt.Errorf("failed to create IRODS SSL Config - %v", err)
+				return nil, xerrors.Errorf("failed to create IRODS SSL Config - %v", err)
 			}
 
 			logger.Info("Enabling CS negotiation to turn on SSL")
@@ -158,13 +158,13 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		err = poolClient.Connect()
 		if err != nil {
 			logger.WithError(err).Error("failed to connect to irodsfs-pool server %s", config.PoolEndpoint)
-			return nil, fmt.Errorf("failed to connect to irodsfs-pool server %s - %v", config.PoolEndpoint, err)
+			return nil, xerrors.Errorf("failed to connect to irodsfs-pool server %s - %v", config.PoolEndpoint, err)
 		}
 
 		fsClient, err = poolClient.NewSession(account, FSName)
 		if err != nil {
 			logger.WithError(err).Error("failed to create a new irodsfs-pool fs client")
-			return nil, fmt.Errorf("failed to create a new irodsfs-pool fs client - %v", err)
+			return nil, xerrors.Errorf("failed to create a new irodsfs-pool fs client - %v", err)
 		}
 	} else {
 		// use go-irodsclient driver
@@ -172,7 +172,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		fsClient, err = irodsfs_common_irods.NewIRODSFSClientDirect(account, fsConfig)
 		if err != nil {
 			logger.WithError(err).Error("failed to create a new go-irodsclient fs client")
-			return nil, fmt.Errorf("failed to create a new go-irodsclient fs client - %v", err)
+			return nil, xerrors.Errorf("failed to create a new go-irodsclient fs client - %v", err)
 		}
 	}
 
@@ -180,7 +180,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	vpathManager, err := irodsfs_common_vpath.NewVPathManager(fsClient, config.PathMappings)
 	if err != nil {
 		logger.WithError(err).Error("failed to create Virtual Path Manager")
-		return nil, fmt.Errorf("failed to create Virtual Path Manager - %v", err)
+		return nil, xerrors.Errorf("failed to create Virtual Path Manager - %v", err)
 	}
 
 	logger.Info("Initializing File Handle Map")
@@ -224,7 +224,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	userGroups, err := fsClient.ListUserGroups(account.ClientUser)
 	if err != nil {
 		logger.WithError(err).Errorf("failed to list groups for a user - %s", account.ClientUser)
-		return nil, fmt.Errorf("failed to list groups for a user - %s", account.ClientUser)
+		return nil, xerrors.Errorf("failed to list groups for a user - %s", account.ClientUser)
 	}
 
 	userGroupsMap := map[string]*irodsclient_types.IRODSUser{}

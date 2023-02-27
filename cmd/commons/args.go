@@ -16,6 +16,7 @@ import (
 
 	"github.com/cyverse/irodsfs/commons"
 	"golang.org/x/term"
+	"golang.org/x/xerrors"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gopkg.in/yaml.v2"
 
@@ -161,14 +162,16 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 				stdinReader := bufio.NewReader(os.Stdin)
 				yamlBytes, err := io.ReadAll(stdinReader)
 				if err != nil {
-					logger.Error(err)
-					return nil, nil, false, err // stop here
+					readErr := xerrors.Errorf("failed to read config from stdin: %w", err)
+					logger.Errorf("%+v", readErr)
+					return nil, nil, false, readErr // stop here
 				}
 
 				serverConfig, err := commons.NewConfigFromYAML(yamlBytes)
 				if err != nil {
-					logger.Error(err)
-					return nil, nil, false, err // stop here
+					readErr := xerrors.Errorf("failed to read config from yaml: %w", err)
+					logger.Errorf("%+v", readErr)
+					return nil, nil, false, readErr // stop here
 				}
 
 				// overwrite config
@@ -181,14 +184,16 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 					// YAML file
 					yamlBytes, err := os.ReadFile(configPath)
 					if err != nil {
-						logger.Error(err)
-						return nil, nil, false, err // stop here
+						readErr := xerrors.Errorf("failed to read config file %s: %w", configPath, err)
+						logger.Errorf("%+v", readErr)
+						return nil, nil, false, readErr // stop here
 					}
 
 					serverConfig, err := commons.NewConfigFromYAML(yamlBytes)
 					if err != nil {
-						logger.Error(err)
-						return nil, nil, false, err // stop here
+						readErr := xerrors.Errorf("failed to read config from yaml: %w", err)
+						logger.Errorf("%+v", readErr)
+						return nil, nil, false, readErr // stop here
 					}
 
 					// overwrite config
@@ -198,8 +203,9 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 					// icommands environment
 					serverConfig, err := commons.LoadICommandsEnvironmentDir(configPath)
 					if err != nil {
-						logger.Error(err)
-						return nil, nil, false, err // stop here
+						readErr := xerrors.Errorf("failed to read icommands config %s: %w", configPath, err)
+						logger.Errorf("%+v", readErr)
+						return nil, nil, false, readErr // stop here
 					}
 
 					// overwrite config
@@ -382,15 +388,17 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 			// YAML file
 			yamlBytes, err := os.ReadFile(pathMappingFile)
 			if err != nil {
-				logger.Error(err)
-				return nil, logWriter, false, err // stop here
+				readErr := xerrors.Errorf("failed to read path mapping from file %s: %w", pathMappingFile, err)
+				logger.Errorf("%+v", readErr)
+				return nil, logWriter, false, readErr // stop here
 			}
 
 			pathMappings := []irodsfs_common_vpath.VPathMapping{}
 			err = yaml.Unmarshal(yamlBytes, &pathMappings)
 			if err != nil {
-				logger.WithError(err).Errorf("failed to convert YAML object to []VPathMapping - %s", yamlBytes)
-				return nil, logWriter, false, err // stop here
+				yamlErr := xerrors.Errorf("failed to unmarshal yaml into path mapping: %w", err)
+				logger.Errorf("%+v", yamlErr)
+				return nil, logWriter, false, yamlErr // stop here
 			}
 
 			config.PathMappings = pathMappings
@@ -401,8 +409,9 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if readaheadFlag != nil {
 		readahead, err := strconv.ParseInt(readaheadFlag.Value.String(), 10, 32)
 		if err != nil {
-			logger.WithError(err).Errorf("failed to convert input to int")
-			return nil, logWriter, false, err // stop here
+			parseErr := xerrors.Errorf("failed to convert input '%s' to int64: %w", readaheadFlag.Value.String(), err)
+			logger.Errorf("%+v", parseErr)
+			return nil, logWriter, false, parseErr // stop here
 		}
 
 		if readahead > 0 {
@@ -414,8 +423,9 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if connectionMaxFlag != nil {
 		connectionMax, err := strconv.ParseInt(connectionMaxFlag.Value.String(), 10, 32)
 		if err != nil {
-			logger.WithError(err).Errorf("failed to convert input to int")
-			return nil, logWriter, false, err // stop here
+			parseErr := xerrors.Errorf("failed to convert input '%s' to int64: %w", connectionMaxFlag.Value.String(), err)
+			logger.Errorf("%+v", parseErr)
+			return nil, logWriter, false, parseErr // stop here
 		}
 
 		if connectionMax > 0 {
@@ -427,8 +437,9 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if operationTimeoutFlag != nil {
 		operationTimeout, err := time.ParseDuration(operationTimeoutFlag.Value.String())
 		if err != nil {
-			logger.WithError(err).Errorf("failed to convert input to duration")
-			return nil, logWriter, false, err // stop here
+			parseErr := xerrors.Errorf("failed to convert input '%s' to duration: %w", operationTimeoutFlag.Value.String(), err)
+			logger.Errorf("%+v", parseErr)
+			return nil, logWriter, false, parseErr // stop here
 		}
 
 		config.OperationTimeout = irodsfs_common_utils.Duration(operationTimeout)
@@ -438,8 +449,9 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if connectionIdleTimeoutFlag != nil {
 		connectionIdleTimeout, err := time.ParseDuration(connectionIdleTimeoutFlag.Value.String())
 		if err != nil {
-			logger.WithError(err).Errorf("failed to convert input to duration")
-			return nil, logWriter, false, err // stop here
+			parseErr := xerrors.Errorf("failed to convert input '%s' to duration: %w", connectionIdleTimeoutFlag.Value.String(), err)
+			logger.Errorf("%+v", parseErr)
+			return nil, logWriter, false, parseErr // stop here
 		}
 
 		config.ConnectionIdleTimeout = irodsfs_common_utils.Duration(connectionIdleTimeout)
@@ -449,8 +461,9 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if metadataCacheTimeoutFlag != nil {
 		metadataCacheTimeout, err := time.ParseDuration(metadataCacheTimeoutFlag.Value.String())
 		if err != nil {
-			logger.WithError(err).Errorf("failed to convert input to duration")
-			return nil, logWriter, false, err // stop here
+			parseErr := xerrors.Errorf("failed to convert input '%s' to duration: %w", metadataCacheTimeoutFlag.Value.String(), err)
+			logger.Errorf("%+v", parseErr)
+			return nil, logWriter, false, parseErr // stop here
 		}
 
 		config.MetadataCacheTimeout = irodsfs_common_utils.Duration(metadataCacheTimeout)
@@ -460,8 +473,9 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if metadataCacheCleanupTimeFlag != nil {
 		metadataCacheCleanupTime, err := time.ParseDuration(metadataCacheCleanupTimeFlag.Value.String())
 		if err != nil {
-			logger.WithError(err).Errorf("failed to convert input to duration")
-			return nil, logWriter, false, err // stop here
+			parseErr := xerrors.Errorf("failed to convert input '%s' to duration: %w", metadataCacheCleanupTimeFlag.Value.String(), err)
+			logger.Errorf("%+v", parseErr)
+			return nil, logWriter, false, parseErr // stop here
 		}
 
 		config.MetadataCacheCleanupTime = irodsfs_common_utils.Duration(metadataCacheCleanupTime)
@@ -483,8 +497,9 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if uidFlag != nil {
 		uid, err := strconv.ParseInt(uidFlag.Value.String(), 10, 32)
 		if err != nil {
-			logger.WithError(err).Errorf("failed to convert input to int")
-			return nil, logWriter, false, err // stop here
+			parseErr := xerrors.Errorf("failed to convert input '%s' to int: %w", uidFlag.Value.String(), err)
+			logger.Errorf("%+v", parseErr)
+			return nil, logWriter, false, parseErr // stop here
 		}
 
 		if uid > 0 {
@@ -496,8 +511,9 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if gidFlag != nil {
 		gid, err := strconv.ParseInt(gidFlag.Value.String(), 10, 32)
 		if err != nil {
-			logger.WithError(err).Errorf("failed to convert input to int")
-			return nil, logWriter, false, err // stop here
+			parseErr := xerrors.Errorf("failed to convert input '%s' to int: %w", gidFlag.Value.String(), err)
+			logger.Errorf("%+v", parseErr)
+			return nil, logWriter, false, parseErr // stop here
 		}
 
 		if gid > 0 {
@@ -525,8 +541,9 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if profilePortFlag != nil {
 		profilePort, err := strconv.ParseInt(profilePortFlag.Value.String(), 10, 32)
 		if err != nil {
-			logger.WithError(err).Errorf("failed to convert input to int")
-			return nil, logWriter, false, err // stop here
+			parseErr := xerrors.Errorf("failed to convert input '%s' to int: %w", profilePortFlag.Value.String(), err)
+			logger.Errorf("%+v", parseErr)
+			return nil, logWriter, false, parseErr // stop here
 		}
 
 		if profilePort > 0 {
@@ -554,7 +571,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	mountPath := ""
 	if len(args) == 0 {
 		PrintHelp(command)
-		return nil, logWriter, false, fmt.Errorf("mount point is not provided") // stop here
+		return nil, logWriter, false, xerrors.Errorf("mount point is not provided") // stop here
 	}
 
 	mountPath = args[len(args)-1]
@@ -564,38 +581,43 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 		// the first argument contains irods://HOST:PORT/ZONE/inputPath...
 		err := updateConfigFromIrodsUrl(args[0], config)
 		if err != nil {
-			logger.Error(err)
-			return nil, logWriter, false, err // stop here
+			urlErr := xerrors.Errorf("failed to update config from irods url: %w", err)
+			logger.Errorf("%+v", urlErr)
+			return nil, logWriter, false, urlErr // stop here
 		}
 	}
 
 	if !stdinClosed {
 		err = inputMissingParams(config)
 		if err != nil {
-			logger.WithError(err).Error("failed to input missing parameters")
-			return nil, logWriter, false, err // stop here
+			inputErr := xerrors.Errorf("failed to input missing parameters: %w", err)
+			logger.Errorf("%+v", inputErr)
+			return nil, logWriter, false, inputErr // stop here
 		}
 	}
 
 	// the second argument is local directory that irodsfs will be mounted
 	mountpoint, err := filepath.Abs(mountPath)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to access the mount point %s", mountPath)
-		return nil, logWriter, false, err // stop here
+		absErr := xerrors.Errorf("failed to get abs path for %s: %w", mountPath, err)
+		logger.Errorf("%+v", absErr)
+		return nil, logWriter, false, absErr // stop here
 	}
 
 	config.MountPath = mountpoint
 
 	err = config.CorrectSystemUser()
 	if err != nil {
-		logger.Error(err)
-		return nil, logWriter, false, err // stop here
+		userErr := xerrors.Errorf("failed to correct system user: %w", err)
+		logger.Errorf("%+v", userErr)
+		return nil, logWriter, false, userErr // stop here
 	}
 
 	err = config.Validate()
 	if err != nil {
-		logger.Error(err)
-		return nil, logWriter, false, err // stop here
+		validateErr := xerrors.Errorf("failed to validate configuration: %w", err)
+		logger.Errorf("%+v", validateErr)
+		return nil, logWriter, false, validateErr // stop here
 	}
 
 	return config, logWriter, true, nil // continue
@@ -604,7 +626,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 func PrintVersion(command *cobra.Command) error {
 	info, err := commons.GetVersionJSON()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get version json: %w", err)
 	}
 
 	fmt.Println(info)
@@ -639,11 +661,6 @@ func getLogWriterForChildProcess(logPath string) (io.WriteCloser, string) {
 
 // inputMissingParams gets user inputs for parameters missing, such as username and password
 func inputMissingParams(config *commons.Config) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "inputMissingParams",
-	})
-
 	if len(config.ProxyUser) == 0 {
 		fmt.Print("Username: ")
 		fmt.Scanln(&config.ProxyUser)
@@ -658,8 +675,7 @@ func inputMissingParams(config *commons.Config) error {
 		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
 		fmt.Print("\n")
 		if err != nil {
-			logger.WithError(err).Error("failed to read password")
-			return err
+			return xerrors.Errorf("failed to read password")
 		}
 
 		config.Password = string(bytePassword)

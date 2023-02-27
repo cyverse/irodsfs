@@ -1,7 +1,6 @@
 package commons
 
 import (
-	"fmt"
 	"net/url"
 	"path"
 	"strconv"
@@ -10,6 +9,7 @@ import (
 	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 	"github.com/cyverse/irodsfs/commons"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/xerrors"
 )
 
 // IRODSAccessURL is used to extract iRODS access information from iRODS Access URL (irods://host:port/zone/path)
@@ -31,7 +31,7 @@ func parseIrodsUrl(inputURL string) (*IRODSAccessURL, error) {
 
 	if !strings.HasPrefix(inputURL, "irods://") {
 		logger.Errorf("failed to parse source URL %s", inputURL)
-		return nil, fmt.Errorf("input URL %s isn't iRODS Access URL", inputURL)
+		return nil, xerrors.Errorf("input URL %s isn't iRODS Access URL", inputURL)
 	}
 
 	u, err := url.Parse(inputURL)
@@ -71,7 +71,7 @@ func parseIrodsUrl(inputURL string) (*IRODSAccessURL, error) {
 	zone := ""
 	irodsPath := "/"
 	if len(fullpath) == 0 || fullpath[0] != '/' {
-		err = fmt.Errorf("path (%s) must contain an absolute path", u.Path)
+		err = xerrors.Errorf("path (%s) must contain an absolute path", u.Path)
 		logger.Error(err)
 		return nil, err
 	}
@@ -87,7 +87,7 @@ func parseIrodsUrl(inputURL string) (*IRODSAccessURL, error) {
 	}
 
 	if len(zone) == 0 || len(irodsPath) == 0 {
-		err = fmt.Errorf("path (%s) must contain an absolute path", inputURL)
+		err = xerrors.Errorf("path (%s) must contain an absolute path", inputURL)
 		logger.Error(err)
 		return nil, err
 	}

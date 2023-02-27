@@ -2,7 +2,6 @@ package irodsfs
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"sync"
 	"syscall"
@@ -13,6 +12,7 @@ import (
 	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 	fusefs "github.com/hanwen/go-fuse/v2/fs"
 	fuse "github.com/hanwen/go-fuse/v2/fuse"
+	"golang.org/x/xerrors"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -692,7 +692,7 @@ func (file *File) Open(ctx context.Context, flags uint32) (fusefs.FileHandle, ui
 
 	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
 		// failed to open directory
-		err := fmt.Errorf("failed to open mapped directory entry - %s", vpathEntry.Path)
+		err := xerrors.Errorf("failed to open mapped directory entry - %s", vpathEntry.Path)
 		logger.Error(err)
 		return nil, 0, syscall.EPERM
 	}
@@ -728,7 +728,11 @@ func (file *File) Open(ctx context.Context, flags uint32) (fusefs.FileHandle, ui
 		file.fs.instanceReportClient.StartFileAccess(handle)
 	}
 
-	fileHandle := NewFileHandle(file, handle)
+	fileHandle, err := NewFileHandle(file, handle)
+	if err != nil {
+		logger.WithError(err).Errorf("failed to create a file handle - %s", irodsPath)
+		return nil, 0, syscall.EREMOTEIO
+	}
 
 	// add to file handle map
 	file.fs.fileHandleMap.Add(fileHandle)

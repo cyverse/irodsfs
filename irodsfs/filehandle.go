@@ -33,7 +33,7 @@ type FileHandle struct {
 	mutex sync.Mutex
 }
 
-func NewFileHandle(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle) *FileHandle {
+func NewFileHandle(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle) (*FileHandle, error) {
 	var writer irodsfscommon_io.Writer
 	var reader irodsfscommon_io.Reader
 
@@ -45,28 +45,22 @@ func NewFileHandle(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle)
 		writer = irodsfscommon_io.NewNilWriter(fsClient, fileHandle)
 
 		// reader
-		tempRootDirPath := file.fs.config.GetTempRootDirPath()
-		if len(tempRootDirPath) > 0 {
-			syncReader := irodsfscommon_io.NewSyncReader(fsClient, fileHandle, file.fs.instanceReportClient)
-			reader = irodsfscommon_io.NewAsyncBlockReader(syncReader, iRODSIOBlockSize, iRODSReadWriteSize, tempRootDirPath)
-		} else {
-			reader = irodsfscommon_io.NewSyncReader(fsClient, fileHandle, file.fs.instanceReportClient)
+		syncReader := irodsfscommon_io.NewSyncReader(fsClient, fileHandle, file.fs.instanceReportClient)
+
+		// use prefetching
+		// requires multiple readers
+		readers := []irodsfscommon_io.Reader{syncReader}
+
+		asyncReader, err := irodsfscommon_io.NewAsyncCacheThroughReader(readers, iRODSIOBlockSize, nil)
+		if err != nil {
+			return nil, err
 		}
+		reader = asyncReader
 	} else if openMode.IsWriteOnly() {
 		// writer
-		if len(file.fs.config.PoolEndpoint) > 0 {
-			writer = irodsfscommon_io.NewSyncWriter(fsClient, fileHandle, file.fs.instanceReportClient)
-		} else {
-			tempRootDirPath := file.fs.config.GetTempRootDirPath()
-			if len(tempRootDirPath) > 0 {
-				syncWriter := irodsfscommon_io.NewSyncWriter(fsClient, fileHandle, file.fs.instanceReportClient)
-				asyncWriter := irodsfscommon_io.NewAsyncWriter(syncWriter, iRODSIOBlockSize, tempRootDirPath)
-				writer = irodsfscommon_io.NewSyncBufferedWriter(asyncWriter, iRODSWriteBufferSize)
-			} else {
-				syncWriter := irodsfscommon_io.NewSyncWriter(fsClient, fileHandle, file.fs.instanceReportClient)
-				writer = irodsfscommon_io.NewSyncBufferedWriter(syncWriter, iRODSIOBlockSize)
-			}
-		}
+		syncWriter := irodsfscommon_io.NewSyncWriter(fsClient, fileHandle, file.fs.instanceReportClient)
+		syncBufferedWriter := irodsfscommon_io.NewSyncBufferedWriter(syncWriter, iRODSIOBlockSize)
+		writer = irodsfscommon_io.NewAsyncWriter(syncBufferedWriter)
 
 		// reader
 		reader = irodsfscommon_io.NewNilReader(fsClient, fileHandle)
@@ -84,7 +78,7 @@ func NewFileHandle(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle)
 		fileHandle: fileHandle,
 
 		mutex: sync.Mutex{},
-	}
+	}, nil
 }
 
 // Getattr returns stat of file entry
@@ -352,7 +346,7 @@ func (handle *FileHandle) Release(ctx context.Context) syscall.Errno {
 
 	if handle.reader != nil {
 		handle.reader.Release()
-		err := handle.reader.GetPendingError()
+		err := handle.reader.GetError()
 		if err != nil {
 			logger.WithError(err).Errorf("got a read failure - %s, %v", handle.file.path, err)
 			return syscall.EREMOTEIO
@@ -365,7 +359,7 @@ func (handle *FileHandle) Release(ctx context.Context) syscall.Errno {
 		// wait until all queued tasks complete
 		handle.writer.Release()
 
-		err := handle.writer.GetPendingError()
+		err := handle.writer.GetError()
 		if err != nil {
 			logger.WithError(err).Errorf("got a write failure - %s, %v", handle.file.path, err)
 			return syscall.EREMOTEIO

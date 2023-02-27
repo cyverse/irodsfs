@@ -2,7 +2,6 @@ package irodsfs
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"sync"
 	"syscall"
@@ -13,6 +12,7 @@ import (
 	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 	fusefs "github.com/hanwen/go-fuse/v2/fs"
 	fuse "github.com/hanwen/go-fuse/v2/fuse"
+	"golang.org/x/xerrors"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -858,14 +858,14 @@ func (dir *Dir) Rmdir(ctx context.Context, name string) syscall.Errno {
 
 	if vpathEntry.Path == targetPath {
 		// failed to remove. read only
-		err := fmt.Errorf("failed to remove mapped entry - %s", vpathEntry.Path)
+		err := xerrors.Errorf("failed to remove mapped entry - %s", vpathEntry.Path)
 		logger.Error(err)
 		return syscall.EPERM
 	}
 
 	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
 		// failed to remove. read only
-		err := fmt.Errorf("failed to remove an entry on a read-only directory - %s", vpathEntry.Path)
+		err := xerrors.Errorf("failed to remove an entry on a read-only directory - %s", vpathEntry.Path)
 		logger.Error(err)
 		return syscall.EPERM
 	}
@@ -877,7 +877,7 @@ func (dir *Dir) Rmdir(ctx context.Context, name string) syscall.Errno {
 
 	if vpathEntry.ReadOnly {
 		// failed to remove. read only
-		err := fmt.Errorf("failed to remove an entry on a read-only directory - %s", vpathEntry.Path)
+		err := xerrors.Errorf("failed to remove an entry on a read-only directory - %s", vpathEntry.Path)
 		logger.Error(err)
 		return syscall.EPERM
 	}
@@ -955,14 +955,14 @@ func (dir *Dir) Unlink(ctx context.Context, name string) syscall.Errno {
 
 	if vpathEntry.Path == targetPath {
 		// failed to remove. read only
-		err := fmt.Errorf("failed to remove mapped entry - %s", vpathEntry.Path)
+		err := xerrors.Errorf("failed to remove mapped entry - %s", vpathEntry.Path)
 		logger.Error(err)
 		return syscall.EPERM
 	}
 
 	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
 		// failed to remove. read only
-		err := fmt.Errorf("failed to remove an entry on a read-only directory - %s", vpathEntry.Path)
+		err := xerrors.Errorf("failed to remove an entry on a read-only directory - %s", vpathEntry.Path)
 		logger.Error(err)
 		return syscall.EPERM
 	}
@@ -974,7 +974,7 @@ func (dir *Dir) Unlink(ctx context.Context, name string) syscall.Errno {
 
 	if vpathEntry.ReadOnly {
 		// failed to remove. read only
-		err := fmt.Errorf("failed to remove an entry on a read-only directory - %s", vpathEntry.Path)
+		err := xerrors.Errorf("failed to remove an entry on a read-only directory - %s", vpathEntry.Path)
 		logger.Error(err)
 		return syscall.EPERM
 	}
@@ -1049,14 +1049,14 @@ func (dir *Dir) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.E
 
 	if vpathEntry.Path == targetPath {
 		// failed to create. read only
-		err := fmt.Errorf("failed to recreate mapped entry - %s", vpathEntry.Path)
+		err := xerrors.Errorf("failed to recreate mapped entry - %s", vpathEntry.Path)
 		logger.Error(err)
 		return nil, syscall.EPERM
 	}
 
 	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
 		// failed to create. read only
-		err := fmt.Errorf("failed to make a new entry on a read-only directory  - %s", vpathEntry.Path)
+		err := xerrors.Errorf("failed to make a new entry on a read-only directory  - %s", vpathEntry.Path)
 		logger.Error(err)
 		return nil, syscall.EPERM
 	}
@@ -1067,7 +1067,7 @@ func (dir *Dir) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.E
 	}
 
 	if vpathEntry.ReadOnly {
-		err := fmt.Errorf("failed to make a new entry on a read-only directory - %s", vpathEntry.Path)
+		err := xerrors.Errorf("failed to make a new entry on a read-only directory - %s", vpathEntry.Path)
 		logger.Error(err)
 		return nil, syscall.EPERM
 	}
@@ -1134,7 +1134,7 @@ func (dir *Dir) renameNode(srcPath string, destPath string, node *fusefs.Inode) 
 
 		fsnode.path = newPath
 	default:
-		return fmt.Errorf("unknown node type")
+		return xerrors.Errorf("unknown node type")
 	}
 
 	return nil
@@ -1190,28 +1190,28 @@ func (dir *Dir) Rename(ctx context.Context, name string, newParent fusefs.InodeE
 
 	if vpathSrcEntry.Path == targetSrcPath {
 		// failed to remove. read only
-		err := fmt.Errorf("failed to rename a read-only entry - %s", vpathSrcEntry.Path)
+		err := xerrors.Errorf("failed to rename a read-only entry - %s", vpathSrcEntry.Path)
 		logger.Error(err)
 		return syscall.EPERM
 	}
 
 	if vpathDestEntry.Path == targetDestPath {
 		// failed to remove. read only
-		err := fmt.Errorf("failed to remove a read-only entry - %s", vpathDestEntry.Path)
+		err := xerrors.Errorf("failed to remove a read-only entry - %s", vpathDestEntry.Path)
 		logger.Error(err)
 		return syscall.EPERM
 	}
 
 	if vpathSrcEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
 		// failed to remove. read only
-		err := fmt.Errorf("failed to rename a read-only entry - %s", vpathSrcEntry.Path)
+		err := xerrors.Errorf("failed to rename a read-only entry - %s", vpathSrcEntry.Path)
 		logger.Error(err)
 		return syscall.EPERM
 	}
 
 	if vpathDestEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
 		// failed to remove. read only
-		err := fmt.Errorf("failed to rename a read-only entry - %s", vpathDestEntry.Path)
+		err := xerrors.Errorf("failed to rename a read-only entry - %s", vpathDestEntry.Path)
 		logger.Error(err)
 		return syscall.EPERM
 	}
@@ -1223,14 +1223,14 @@ func (dir *Dir) Rename(ctx context.Context, name string, newParent fusefs.InodeE
 
 	if vpathSrcEntry.ReadOnly {
 		// failed to remove. read only
-		err := fmt.Errorf("failed to remove a read-only entry - %s", vpathSrcEntry.Path)
+		err := xerrors.Errorf("failed to remove a read-only entry - %s", vpathSrcEntry.Path)
 		logger.Error(err)
 		return syscall.EPERM
 	}
 
 	if vpathDestEntry.ReadOnly {
 		// failed to remove. read only
-		err := fmt.Errorf("failed to remove a read-only entry - %s", vpathDestEntry.Path)
+		err := xerrors.Errorf("failed to remove a read-only entry - %s", vpathDestEntry.Path)
 		logger.Error(err)
 		return syscall.EPERM
 	}
@@ -1394,14 +1394,14 @@ func (dir *Dir) Create(ctx context.Context, name string, flags uint32, mode uint
 
 	if vpathEntry.Path == targetPath {
 		// failed to create. read only
-		err := fmt.Errorf("failed to recreate mapped entry - %s", vpathEntry.Path)
+		err := xerrors.Errorf("failed to recreate mapped entry - %s", vpathEntry.Path)
 		logger.Error(err)
 		return nil, nil, 0, syscall.EPERM
 	}
 
 	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
 		// failed to create. read only
-		err := fmt.Errorf("failed to make a new entry on a read-only directory - %s", vpathEntry.Path)
+		err := xerrors.Errorf("failed to make a new entry on a read-only directory - %s", vpathEntry.Path)
 		logger.Error(err)
 		return nil, nil, 0, syscall.EPERM
 	}
@@ -1413,7 +1413,7 @@ func (dir *Dir) Create(ctx context.Context, name string, flags uint32, mode uint
 
 	if vpathEntry.ReadOnly {
 		// failed to create. read only
-		err := fmt.Errorf("failed to make a new entry on a read-only directory - %s", vpathEntry.Path)
+		err := xerrors.Errorf("failed to make a new entry on a read-only directory - %s", vpathEntry.Path)
 		logger.Error(err)
 		return nil, nil, 0, syscall.EPERM
 	}
@@ -1449,7 +1449,11 @@ func (dir *Dir) Create(ctx context.Context, name string, flags uint32, mode uint
 		dir.fs.instanceReportClient.StartFileAccess(handle)
 	}
 
-	fileHandle := NewFileHandle(subFile, handle)
+	fileHandle, err := NewFileHandle(subFile, handle)
+	if err != nil {
+		logger.WithError(err).Errorf("failed to create a file handle - %s", irodsPath)
+		return nil, nil, 0, syscall.EREMOTEIO
+	}
 
 	// add to file handle map
 	dir.fs.fileHandleMap.Add(fileHandle)

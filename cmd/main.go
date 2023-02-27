@@ -6,6 +6,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"sync"
 
 	cmd_commons "github.com/cyverse/irodsfs/cmd/commons"
 	"github.com/cyverse/irodsfs/commons"
@@ -91,7 +92,7 @@ func parentMain(command *cobra.Command, args []string) {
 	}
 
 	if err != nil {
-		logger.Error(err)
+		logger.Errorf("%+v", err)
 		os.Exit(1)
 	}
 
@@ -254,17 +255,24 @@ func run(config *commons.Config, isChildProcess bool) error {
 		os.Exit(0)
 	}()
 
-	// handle ctrl + C
-	signalChannel := make(chan os.Signal, 1)
-	signal.Notify(signalChannel, os.Interrupt)
-	go func() {
-		<-signalChannel
-		logger.Info("received intrrupt")
-		fs.Stop() // this unmounts fuse
-	}()
-
 	// wait
-	fs.Wait()
+	waitForCtrlC()
 
 	return nil
+}
+
+func waitForCtrlC() {
+	var endWaiter sync.WaitGroup
+
+	endWaiter.Add(1)
+	signalChannel := make(chan os.Signal, 1)
+
+	signal.Notify(signalChannel, os.Interrupt)
+
+	go func() {
+		<-signalChannel
+		endWaiter.Done()
+	}()
+
+	endWaiter.Wait()
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/cyverse/irodsfs/commons"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/xerrors"
 	"gopkg.in/yaml.v2"
 )
 
@@ -58,14 +59,16 @@ func RunChildProcess(serverExec string) (io.WriteCloser, io.ReadCloser, error) {
 	cmd := exec.Command(serverExec, childProcessArgument)
 	childStdin, err := cmd.StdinPipe()
 	if err != nil {
-		logger.WithError(err).Error("failed to get the child process's STDIN")
-		return nil, nil, err
+		pipeErr := xerrors.Errorf("failed to get the child process's STDIN: %w", err)
+		logger.Errorf("%+v", pipeErr)
+		return nil, nil, pipeErr
 	}
 
 	childStdout, err := cmd.StdoutPipe()
 	if err != nil {
-		logger.WithError(err).Error("failed to get the child process's STDOUT")
-		return nil, nil, err
+		pipeErr := xerrors.Errorf("failed to get the child process's STDOUT: %w", err)
+		logger.Errorf("%+v", pipeErr)
+		return nil, nil, pipeErr
 	}
 
 	cmd.Stderr = cmd.Stdout
@@ -73,13 +76,13 @@ func RunChildProcess(serverExec string) (io.WriteCloser, io.ReadCloser, error) {
 	// start
 	err = cmd.Start()
 	if err != nil {
-		logger.WithError(err).Errorf("failed to start the child process")
-		return nil, nil, err
+		cmdErr := xerrors.Errorf("failed to start the child process: %w", err)
+		logger.Errorf("%+v", cmdErr)
+		return nil, nil, cmdErr
 	}
 
 	logger.Infof("Child process id = %d", cmd.Process.Pid)
 	return childStdin, childStdout, nil
-
 }
 
 func ParentProcessSendConfigViaSTDIN(config *commons.Config, stdin io.WriteCloser, stdout io.ReadCloser) error {
@@ -91,15 +94,17 @@ func ParentProcessSendConfigViaSTDIN(config *commons.Config, stdin io.WriteClose
 	logger.Info("Sending configuration via STDIN")
 	configBytes, err := yaml.Marshal(config)
 	if err != nil {
-		logger.WithError(err).Error("failed to serialize configuration")
-		return err
+		yamlErr := xerrors.Errorf("failed to marshal configuration to yaml: %w", err)
+		logger.Errorf("%+v", yamlErr)
+		return yamlErr
 	}
 
 	// send it to child
 	_, err = io.WriteString(stdin, string(configBytes))
 	if err != nil {
-		logger.WithError(err).Error("failed to send via STDIN")
-		return err
+		writeErr := xerrors.Errorf("failed to send via STDIN: %w", err)
+		logger.Errorf("%+v", writeErr)
+		return writeErr
 	}
 
 	stdin.Close()
@@ -135,7 +140,7 @@ func ParentProcessSendConfigViaSTDIN(config *commons.Config, stdin io.WriteClose
 	stdout.Close()
 
 	if childProcessFailed {
-		return fmt.Errorf("failed to start child process")
+		return xerrors.Errorf("failed to start child process")
 	}
 
 	return nil
@@ -151,22 +156,25 @@ func ChildProcessReadConfigViaSTDIN() (*commons.Config, io.WriteCloser, error) {
 	logger.Info("Check STDIN to communicate to other process")
 	_, err := os.Stdin.Stat()
 	if err != nil {
-		logger.WithError(err).Error("failed to read from STDIN")
-		return nil, nil, err
+		statErr := xerrors.Errorf("failed to read from STDIN: %w", err)
+		logger.Errorf("%+v", statErr)
+		return nil, nil, statErr
 	}
 
 	logger.Info("Reading configuration from STDIN")
 	configBytes, err := io.ReadAll(os.Stdin)
 	if err != nil {
-		logger.WithError(err).Error("failed to read configuration")
-		return nil, nil, err
+		readErr := xerrors.Errorf("failed to read configuration: %w", err)
+		logger.Errorf("%+v", readErr)
+		return nil, nil, readErr
 	}
 	logger.Info("Successfully read configuration from STDIN")
 
 	config, err := commons.NewConfigFromYAML(configBytes)
 	if err != nil {
-		logger.WithError(err).Error("failed to read configuration")
-		return nil, nil, err
+		configErr := xerrors.Errorf("failed to read configuration from yaml: %w", err)
+		logger.Errorf("%+v", configErr)
+		return nil, nil, configErr
 	}
 
 	if config.Debug {
@@ -175,14 +183,16 @@ func ChildProcessReadConfigViaSTDIN() (*commons.Config, io.WriteCloser, error) {
 
 	err = config.Validate()
 	if err != nil {
-		logger.Error(err)
-		return nil, nil, err
+		validationErr := xerrors.Errorf("failed to validate configuration: %w", err)
+		logger.Errorf("%+v", validationErr)
+		return nil, nil, validationErr
 	}
 
 	err = config.MakeLogDir()
 	if err != nil {
-		logger.Error(err)
-		return nil, nil, err
+		makeErr := xerrors.Errorf("failed to make log dir: %w", err)
+		logger.Errorf("%+v", makeErr)
+		return nil, nil, makeErr
 	}
 
 	// output to log file

@@ -3,22 +3,22 @@ module github.com/cyverse/irodsfs
 go 1.18
 
 require (
-	github.com/cyverse/go-irodsclient v0.10.6
-	github.com/cyverse/irodsfs-common v0.0.0-20230119215412-1c1b617fe2df
+	github.com/cyverse/go-irodsclient v0.10.11
+	github.com/cyverse/irodsfs-common v0.0.0-20230227184021-2b0d4f0759ed
 	github.com/cyverse/irodsfs-monitor v0.0.0-20220809235922-daf13261a2dc
-	github.com/cyverse/irodsfs-pool v0.6.6-0.20230119215726-214fa64c7313
+	github.com/cyverse/irodsfs-pool v0.6.8
 	github.com/hanwen/go-fuse/v2 v2.1.0
 	github.com/pkg/profile v1.7.0
 	github.com/rs/xid v1.3.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v1.6.1
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211
+	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
-	github.com/eikenb/pipeat v0.0.0-20210730190139-06b3e6902001 // indirect
 	github.com/felixge/fgprof v0.9.3 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/pprof v0.0.0-20211214055906-6f57359322fd // indirect
