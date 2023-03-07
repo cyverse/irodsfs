@@ -245,6 +245,7 @@ func run(config *commons.Config, isChildProcess bool) error {
 	}
 
 	defer func() {
+		logger.Info("exiting")
 		fs.Stop()
 		fs.Release()
 
@@ -261,6 +262,7 @@ func run(config *commons.Config, isChildProcess bool) error {
 		<-signalChannel
 		logger.Info("received intrrupt")
 		fs.Stop() // this unmounts fuse
+		logger.Info("stopped the filesystem, unmounting FUSE")
 	}()
 
 	// wait

@@ -2,9 +2,10 @@ package utils
 
 import (
 	"bytes"
-	"errors"
+	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"runtime"
 
 	log "github.com/sirupsen/logrus"
@@ -59,17 +60,35 @@ func CheckDevFuse() CheckFUSEStatus {
 	return CheckFUSEStatusUnknown
 }
 
-// unmountFuse unmounts FUSE device
-func UnmountFuse(dir string) error {
-	cmd := exec.Command("fusermount", "-zu", dir)
-	output, err := cmd.CombinedOutput()
+// Unmount calls fusermount -uz on the mount.
+func UnmountFuse(mountPoint string) (err error) {
+	bin, err := fusermountBinary()
 	if err != nil {
-		if len(output) > 0 {
-			output = bytes.TrimRight(output, "\n")
-			msg := err.Error() + ": " + string(output)
-			err = errors.New(msg)
-		}
 		return err
 	}
-	return nil
+	errBuf := bytes.Buffer{}
+	cmd := exec.Command(bin, "-uz", mountPoint)
+	cmd.Stderr = &errBuf
+	err = cmd.Run()
+	if errBuf.Len() > 0 {
+		return fmt.Errorf("%s (code %v)\n",
+			errBuf.String(), err)
+	}
+	return err
+}
+
+func fusermountBinary() (string, error) {
+	return lookPathFallback("fusermount", "/bin")
+}
+
+// lookPathFallback - search binary in PATH and, if that fails,
+// in fallbackDir. This is useful if PATH is possible empty.
+func lookPathFallback(file string, fallbackDir string) (string, error) {
+	binPath, err := exec.LookPath(file)
+	if err == nil {
+		return binPath, nil
+	}
+
+	abs := path.Join(fallbackDir, file)
+	return exec.LookPath(abs)
 }

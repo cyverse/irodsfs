@@ -18,6 +18,7 @@ import (
 	fuse "github.com/hanwen/go-fuse/v2/fuse"
 
 	"github.com/cyverse/irodsfs/commons"
+	"github.com/cyverse/irodsfs/utils"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -332,7 +333,11 @@ func (fs *IRODSFS) Stop() {
 
 	fs.terminated = true
 
-	fs.fuseServer.Unmount()
+	//fs.fuseServer.Unmount()
+	err := utils.UnmountFuse(fs.config.MountPath)
+	if err != nil {
+		logger.Error(err)
+	}
 	fs.fuseServer = nil
 }
 
