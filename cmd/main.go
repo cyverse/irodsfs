@@ -190,14 +190,7 @@ func run(config *commons.Config, isChildProcess bool) error {
 	versionInfo := commons.GetVersion()
 	logger.Infof("iRODS FUSE Lite version - %s, commit - %s", versionInfo.ClientVersion, versionInfo.GitCommit)
 
-	// make work dirs required
-	err := config.MakeWorkDirs()
-	if err != nil {
-		logger.WithError(err).Error("invalid configuration")
-		return err
-	}
-
-	err = config.Validate()
+	err := config.Validate()
 	if err != nil {
 		logger.WithError(err).Error("invalid configuration")
 		return err
@@ -248,9 +241,6 @@ func run(config *commons.Config, isChildProcess bool) error {
 		logger.Info("exiting")
 		fs.Stop()
 		fs.Release()
-
-		// remove work dir
-		config.CleanWorkDirs()
 
 		os.Exit(0)
 	}()

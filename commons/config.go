@@ -231,11 +231,6 @@ func (config *Config) GetLogFilePath() string {
 	return path.Join(config.DataRootPath, logFilename)
 }
 
-func (config *Config) GetTempRootDirPath() string {
-	dirname := fmt.Sprintf("%s/temp", config.InstanceID)
-	return path.Join(config.DataRootPath, dirname)
-}
-
 func (config *Config) GetInstanceDataRootDirPath() string {
 	return path.Join(config.DataRootPath, config.InstanceID)
 }
@@ -250,34 +245,6 @@ func (config *Config) MakeLogDir() error {
 
 	logDirPath := filepath.Dir(logFilePath)
 	err := config.makeDir(logDirPath)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// MakeWorkDirs makes dirs required
-func (config *Config) MakeWorkDirs() error {
-	tempDirPath := config.GetTempRootDirPath()
-	err := config.makeDir(tempDirPath)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// CleanWorkDirs cleans dirs used
-func (config *Config) CleanWorkDirs() error {
-	tempDirPath := config.GetTempRootDirPath()
-	err := config.removeDir(tempDirPath)
-	if err != nil {
-		return err
-	}
-
-	instanceDataDirPath := config.GetInstanceDataRootDirPath()
-	err = config.removeDir(instanceDataDirPath)
 	if err != nil {
 		return err
 	}
