@@ -343,6 +343,10 @@ func (file *File) Getxattr(ctx context.Context, attr string, dest []byte) (uint3
 		return 0, syscall.ECONNABORTED
 	}
 
+	if IsUnhandledAttr(attr) {
+		return 0, syscall.ENODATA
+	}
+
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"struct":   "File",
@@ -354,10 +358,6 @@ func (file *File) Getxattr(ctx context.Context, attr string, dest []byte) (uint3
 	operID := file.fs.GetNextOperationID()
 	logger.Infof("Calling Getxattr (%d) - %s, attr %s", operID, file.path, attr)
 	defer logger.Infof("Called Getxattr (%d) - %s, attr %s", operID, file.path, attr)
-
-	if IsUnhandledAttr(attr) {
-		return 0, syscall.ENODATA
-	}
 
 	file.mutex.RLock()
 	defer file.mutex.RUnlock()

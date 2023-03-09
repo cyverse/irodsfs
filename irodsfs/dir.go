@@ -361,6 +361,10 @@ func (dir *Dir) Getxattr(ctx context.Context, attr string, dest []byte) (uint32,
 		return 0, syscall.ECONNABORTED
 	}
 
+	if IsUnhandledAttr(attr) {
+		return 0, syscall.ENODATA
+	}
+
 	logger := log.WithFields(log.Fields{
 		"package":  "irodsfs",
 		"struct":   "Dir",
@@ -370,12 +374,8 @@ func (dir *Dir) Getxattr(ctx context.Context, attr string, dest []byte) (uint32,
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := dir.fs.GetNextOperationID()
-	logger.Infof("Calling Getxattr (%d) - %s", operID, dir.path)
-	defer logger.Infof("Called Getxattr (%d) - %s", operID, dir.path)
-
-	if IsUnhandledAttr(attr) {
-		return 0, syscall.ENODATA
-	}
+	logger.Infof("Calling Getxattr (%d) - %s, name %s", operID, dir.path, attr)
+	defer logger.Infof("Called Getxattr (%d) - %s, name %s", operID, dir.path, attr)
 
 	dir.mutex.RLock()
 	defer dir.mutex.RUnlock()
@@ -807,17 +807,6 @@ func (dir *Dir) Readdir(ctx context.Context) (fusefs.DirStream, syscall.Errno) {
 			}
 
 			dirEntries[idx] = dirEntry
-		}
-
-		if !dir.fs.config.NoPermissionCheck && !vpathEntry.ReadOnly {
-			// list ACLs
-			// this caches all ACLs of entries in irodsPath, so make future ACL queries fast
-			logger.Debugf("Caching ACLs for entries in a dir - %s", irodsPath)
-			_, err = dir.fs.fsClient.ListACLsForEntries(irodsPath)
-			if err != nil {
-				logger.WithError(err).Errorf("failed to list ACLs - %s", irodsPath)
-				return nil, syscall.EREMOTEIO
-			}
 		}
 
 		return fusefs.NewListDirStream(dirEntries), fusefs.OK
