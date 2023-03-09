@@ -63,7 +63,7 @@ func (dir *Dir) setAttrOut(vpathEntry *irodsfs_common_vpath.VPathEntry, out *fus
 		out.Gid = dir.fs.gid
 		out.SetTimes(&vpathEntry.VirtualDirEntry.ModifyTime, &vpathEntry.VirtualDirEntry.ModifyTime, &vpathEntry.VirtualDirEntry.ModifyTime)
 		out.Size = uint64(vpathEntry.VirtualDirEntry.Size)
-		out.Mode = uint32(fuse.S_IFDIR | 0o400)
+		out.Mode = uint32(fuse.S_IFDIR | 0o500)
 	} else if vpathEntry.Type == irodsfs_common_vpath.VPathIRODS {
 		// irods
 		out.Ino = uint64(vpathEntry.IRODSEntry.ID)
