@@ -23,6 +23,7 @@ const (
 	PortDefault                     int           = 1247
 	ReadAheadMaxDefault             int           = 1024 * 128 // 128KB
 	ConnectionMaxDefault            int           = 10
+	TCPBufferSizeDefault            int           = 4 * 1024 * 1024 // 4MB
 	OperationTimeoutDefault         time.Duration = 5 * time.Minute
 	ConnectionLifespanDefault       time.Duration = 1 * time.Hour
 	ConnectionIdleTimeoutDefault    time.Duration = 5 * time.Minute
