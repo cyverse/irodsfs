@@ -12,6 +12,7 @@ import (
 	"github.com/cyverse/irodsfs/irodsfs"
 	"github.com/cyverse/irodsfs/utils"
 	"github.com/spf13/cobra"
+	"golang.org/x/xerrors"
 
 	"github.com/pkg/profile"
 	log "github.com/sirupsen/logrus"
@@ -73,7 +74,7 @@ func main() {
 
 	err := Execute()
 	if err != nil {
-		logger.Fatal(err)
+		logger.Fatalf("%+v", err)
 		os.Exit(1)
 	}
 }
@@ -120,20 +121,23 @@ func parentMain(command *cobra.Command, args []string) {
 		// background
 		childStdin, childStdout, err := cmd_commons.RunChildProcess(os.Args[0])
 		if err != nil {
-			logger.WithError(err).Error("failed to run iRODS FUSE Lite child process")
+			childErr := xerrors.Errorf("failed to run iRODS FUSE Lite child process: %w", err)
+			logger.Errorf("%+v", childErr)
 			os.Exit(1)
 		}
 
 		err = cmd_commons.ParentProcessSendConfigViaSTDIN(config, childStdin, childStdout)
 		if err != nil {
-			logger.WithError(err).Error("failed to send configuration to iRODS FUSE Lite child process")
+			sendErr := xerrors.Errorf("failed to send configuration to iRODS FUSE Lite child process: %w", err)
+			logger.Errorf("%+v", sendErr)
 			os.Exit(1)
 		}
 	} else {
 		// run foreground
 		err = run(config, false)
 		if err != nil {
-			logger.WithError(err).Error("failed to run iRODS FUSE Lite")
+			runErr := xerrors.Errorf("failed to run iRODS FUSE Lite: %w", err)
+			logger.Errorf("%+v", runErr)
 			os.Exit(1)
 		}
 	}
@@ -155,7 +159,8 @@ func childMain(command *cobra.Command, args []string) {
 	}
 
 	if err != nil {
-		logger.WithError(err).Error("failed to communicate to parent process")
+		commErr := xerrors.Errorf("failed to communicate to parent process: %w", err)
+		logger.Errorf("%+v", commErr)
 		cmd_commons.ReportChildProcessError()
 		os.Exit(1)
 	}
@@ -167,7 +172,8 @@ func childMain(command *cobra.Command, args []string) {
 	// background
 	err = run(config, true)
 	if err != nil {
-		logger.WithError(err).Error("failed to run iRODS FUSE Lite")
+		runErr := xerrors.Errorf("failed to run iRODS FUSE Lite: %w", err)
+		logger.Errorf("%+v", runErr)
 		os.Exit(1)
 	}
 
@@ -192,7 +198,8 @@ func run(config *commons.Config, isChildProcess bool) error {
 
 	err := config.Validate()
 	if err != nil {
-		logger.WithError(err).Error("invalid configuration")
+		configErr := xerrors.Errorf("invalid configuration: %w", err)
+		logger.Errorf("%+v", configErr)
 		return err
 	}
 
@@ -212,7 +219,8 @@ func run(config *commons.Config, isChildProcess bool) error {
 	// run the filesystem
 	fs, err := irodsfs.NewFileSystem(config)
 	if err != nil {
-		logger.WithError(err).Error("failed to create the filesystem")
+		fsErr := xerrors.Errorf("failed to create the filesystem: %w", err)
+		logger.Errorf("%+v", fsErr)
 		if isChildProcess {
 			cmd_commons.ReportChildProcessError()
 		}
@@ -221,7 +229,8 @@ func run(config *commons.Config, isChildProcess bool) error {
 
 	err = fs.Start()
 	if err != nil {
-		logger.WithError(err).Error("failed to start the filesystem")
+		fsErr := xerrors.Errorf("failed to start the filesystem: %w", err)
+		logger.Errorf("%+v", fsErr)
 		if isChildProcess {
 			cmd_commons.ReportChildProcessError()
 		}

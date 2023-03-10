@@ -201,7 +201,7 @@ func (dir *Dir) Getattr(ctx context.Context, fh fusefs.FileHandle, out *fuse.Att
 
 	irodsPath, err := vpathEntry.GetIRODSPath(dir.path)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get iRODS path")
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -212,7 +212,7 @@ func (dir *Dir) Getattr(ctx context.Context, fh fusefs.FileHandle, out *fuse.Att
 			return syscall.ENOENT
 		}
 
-		logger.WithError(err).Errorf("failed to stat - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -315,7 +315,7 @@ func (dir *Dir) Listxattr(ctx context.Context, dest []byte) (uint32, syscall.Err
 
 	irodsPath, err := vpathEntry.GetIRODSPath(dir.path)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get IRODS path")
+		logger.Errorf("%+v", err)
 		return 0, syscall.EREMOTEIO
 	}
 
@@ -326,7 +326,7 @@ func (dir *Dir) Listxattr(ctx context.Context, dest []byte) (uint32, syscall.Err
 			return 0, syscall.ENOENT
 		}
 
-		logger.WithError(err).Errorf("failed to list xattrs - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return 0, syscall.EREMOTEIO
 	}
 
@@ -397,7 +397,7 @@ func (dir *Dir) Getxattr(ctx context.Context, attr string, dest []byte) (uint32,
 
 	irodsPath, err := vpathEntry.GetIRODSPath(dir.path)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get IRODS path")
+		logger.Errorf("%+v", err)
 		return 0, syscall.EREMOTEIO
 	}
 
@@ -408,7 +408,7 @@ func (dir *Dir) Getxattr(ctx context.Context, attr string, dest []byte) (uint32,
 			return 0, syscall.ENOENT
 		}
 
-		logger.WithError(err).Errorf("failed to get xattrs - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return 0, syscall.EREMOTEIO
 	}
 
@@ -470,7 +470,7 @@ func (dir *Dir) Setxattr(ctx context.Context, attr string, data []byte, flags ui
 
 	irodsPath, err := vpathEntry.GetIRODSPath(dir.path)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get IRODS path")
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -481,7 +481,7 @@ func (dir *Dir) Setxattr(ctx context.Context, attr string, data []byte, flags ui
 			return syscall.ENOENT
 		}
 
-		logger.WithError(err).Errorf("failed to set xattrs - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -527,7 +527,7 @@ func (dir *Dir) Removexattr(ctx context.Context, attr string) syscall.Errno {
 
 	irodsPath, err := vpathEntry.GetIRODSPath(dir.path)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get IRODS path")
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -538,7 +538,7 @@ func (dir *Dir) Removexattr(ctx context.Context, attr string) syscall.Errno {
 			return syscall.ENOENT
 		}
 
-		logger.WithError(err).Errorf("failed to get xattrs - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -553,7 +553,7 @@ func (dir *Dir) Removexattr(ctx context.Context, attr string) syscall.Errno {
 			return syscall.ENOENT
 		}
 
-		logger.WithError(err).Errorf("failed to remove xattrs - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -605,7 +605,7 @@ func (dir *Dir) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*f
 
 	irodsPath, err := vpathEntry.GetIRODSPath(targetPath)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get IRODS path")
+		logger.Errorf("%+v", err)
 		return nil, syscall.EREMOTEIO
 	}
 
@@ -616,7 +616,7 @@ func (dir *Dir) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*f
 			return nil, syscall.ENOENT
 		}
 
-		logger.WithError(err).Errorf("failed to stat - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return nil, syscall.EREMOTEIO
 	}
 
@@ -680,7 +680,7 @@ func (dir *Dir) Opendir(ctx context.Context) syscall.Errno {
 
 	irodsPath, err := vpathEntry.GetIRODSPath(dir.path)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get IRODS path")
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -691,7 +691,7 @@ func (dir *Dir) Opendir(ctx context.Context) syscall.Errno {
 			return syscall.ENOENT
 		}
 
-		logger.WithError(err).Errorf("failed to stat - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -775,13 +775,13 @@ func (dir *Dir) Readdir(ctx context.Context) (fusefs.DirStream, syscall.Errno) {
 	} else if vpathEntry.Type == irodsfs_common_vpath.VPathIRODS {
 		irodsPath, err := vpathEntry.GetIRODSPath(dir.path)
 		if err != nil {
-			logger.WithError(err).Errorf("failed to get IRODS path")
+			logger.Errorf("%+v", err)
 			return nil, syscall.EREMOTEIO
 		}
 
 		irodsEntries, err := dir.fs.fsClient.List(irodsPath)
 		if err != nil {
-			logger.WithError(err).Errorf("failed to list - %s", irodsPath)
+			logger.Errorf("%+v", err)
 			return nil, syscall.EREMOTEIO
 		}
 
@@ -873,7 +873,7 @@ func (dir *Dir) Rmdir(ctx context.Context, name string) syscall.Errno {
 
 	irodsPath, err := vpathEntry.GetIRODSPath(targetPath)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get IRODS path")
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -884,13 +884,13 @@ func (dir *Dir) Rmdir(ctx context.Context, name string) syscall.Errno {
 			return syscall.ENOENT
 		}
 
-		logger.WithError(err).Errorf("failed to stat - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
 	switch irodsEntry.Type {
 	case irodsclient_fs.FileEntry:
-		logger.WithError(err).Errorf("failed to remove a file - %s", irodsPath)
+		logger.Errorf("failed to remove a file - %s", irodsPath)
 		return syscall.EREMOTEIO
 	case irodsclient_fs.DirectoryEntry:
 		err = dir.fs.fsClient.RemoveDir(irodsPath, false, true)
@@ -903,7 +903,7 @@ func (dir *Dir) Rmdir(ctx context.Context, name string) syscall.Errno {
 				return syscall.ENOTEMPTY
 			}
 
-			logger.WithError(err).Errorf("failed to remove a dir - %s", irodsPath)
+			logger.Errorf("%+v", err)
 			return syscall.EREMOTEIO
 		}
 		return fusefs.OK
@@ -970,7 +970,7 @@ func (dir *Dir) Unlink(ctx context.Context, name string) syscall.Errno {
 
 	irodsPath, err := vpathEntry.GetIRODSPath(targetPath)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get IRODS path")
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -981,7 +981,7 @@ func (dir *Dir) Unlink(ctx context.Context, name string) syscall.Errno {
 			return syscall.ENOENT
 		}
 
-		logger.WithError(err).Errorf("failed to stat - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -994,12 +994,12 @@ func (dir *Dir) Unlink(ctx context.Context, name string) syscall.Errno {
 				return syscall.ENOENT
 			}
 
-			logger.WithError(err).Errorf("failed to remove a file - %s", irodsPath)
+			logger.Errorf("%+v", err)
 			return syscall.EREMOTEIO
 		}
 		return fusefs.OK
 	case irodsclient_fs.DirectoryEntry:
-		logger.WithError(err).Errorf("failed to remove a dir - %s", irodsPath)
+		logger.Errorf("failed to remove a dir - %s", irodsPath)
 		return syscall.EREMOTEIO
 	default:
 		logger.Errorf("unknown entry type - %s", irodsEntry.Type)
@@ -1063,19 +1063,19 @@ func (dir *Dir) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.E
 
 	irodsPath, err := vpathEntry.GetIRODSPath(targetPath)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get IRODS path")
+		logger.Errorf("%+v", err)
 		return nil, syscall.EREMOTEIO
 	}
 
 	err = dir.fs.fsClient.MakeDir(irodsPath, false)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to make a dir - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return nil, syscall.EREMOTEIO
 	}
 
 	irodsEntry, err := dir.fs.fsClient.Stat(irodsPath)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to stat - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return nil, syscall.EREMOTEIO
 	}
 
@@ -1226,13 +1226,13 @@ func (dir *Dir) Rename(ctx context.Context, name string, newParent fusefs.InodeE
 
 	irodsSrcPath, err := vpathSrcEntry.GetIRODSPath(targetSrcPath)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get IRODS path")
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
 	irodsDestPath, err := vpathDestEntry.GetIRODSPath(targetDestPath)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get IRODS path")
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -1243,7 +1243,7 @@ func (dir *Dir) Rename(ctx context.Context, name string, newParent fusefs.InodeE
 			return syscall.ENOENT
 		}
 
-		logger.WithError(err).Errorf("failed to stat - %s", irodsSrcPath)
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -1261,7 +1261,7 @@ func (dir *Dir) Rename(ctx context.Context, name string, newParent fusefs.InodeE
 
 		err = dir.fs.fsClient.RenameDirToDir(irodsSrcPath, irodsDestPath)
 		if err != nil {
-			logger.WithError(err).Errorf("failed to rename dir - %s to %s", irodsSrcPath, irodsDestPath)
+			logger.Errorf("%+v", err)
 			return syscall.EREMOTEIO
 		}
 
@@ -1291,7 +1291,7 @@ func (dir *Dir) Rename(ctx context.Context, name string, newParent fusefs.InodeE
 				// delete first
 				err = dir.fs.fsClient.RemoveFile(irodsDestPath, true)
 				if err != nil {
-					logger.WithError(err).Errorf("failed to delete file - %s", irodsDestPath)
+					logger.Errorf("%+v", err)
 					return syscall.EREMOTEIO
 				}
 			}
@@ -1306,7 +1306,7 @@ func (dir *Dir) Rename(ctx context.Context, name string, newParent fusefs.InodeE
 
 		err = dir.fs.fsClient.RenameFileToFile(irodsSrcPath, irodsDestPath)
 		if err != nil {
-			logger.WithError(err).Errorf("failed to rename file - %s to %s", irodsSrcPath, irodsDestPath)
+			logger.Errorf("%+v", err)
 			return syscall.EREMOTEIO
 		}
 
@@ -1409,13 +1409,13 @@ func (dir *Dir) Create(ctx context.Context, name string, flags uint32, mode uint
 
 	irodsPath, err := vpathEntry.GetIRODSPath(targetPath)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get IRODS path")
+		logger.Errorf("%+v", err)
 		return nil, nil, 0, syscall.EREMOTEIO
 	}
 
 	handle, err := dir.fs.fsClient.CreateFile(irodsPath, "", openMode)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to create a file - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return nil, nil, 0, syscall.EREMOTEIO
 	}
 
@@ -1426,7 +1426,7 @@ func (dir *Dir) Create(ctx context.Context, name string, flags uint32, mode uint
 			return nil, nil, 0, syscall.EREMOTEIO
 		}
 
-		logger.WithError(err).Errorf("failed to stat - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return nil, nil, 0, syscall.EREMOTEIO
 	}
 
@@ -1440,7 +1440,7 @@ func (dir *Dir) Create(ctx context.Context, name string, flags uint32, mode uint
 
 	fileHandle, err := NewFileHandle(subFile, handle)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to create a file handle - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return nil, nil, 0, syscall.EREMOTEIO
 	}
 

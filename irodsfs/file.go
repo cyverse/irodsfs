@@ -174,7 +174,7 @@ func (file *File) Getattr(ctx context.Context, fh fusefs.FileHandle, out *fuse.A
 
 	irodsPath, err := vpathEntry.GetIRODSPath(file.path)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get IRODS path")
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -185,7 +185,7 @@ func (file *File) Getattr(ctx context.Context, fh fusefs.FileHandle, out *fuse.A
 			return syscall.ENOENT
 		}
 
-		logger.WithError(err).Errorf("failed to stat - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -297,7 +297,7 @@ func (file *File) Listxattr(ctx context.Context, dest []byte) (uint32, syscall.E
 
 	irodsPath, err := vpathEntry.GetIRODSPath(file.path)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get IRODS path")
+		logger.Errorf("%+v", err)
 		return 0, syscall.EREMOTEIO
 	}
 
@@ -308,7 +308,7 @@ func (file *File) Listxattr(ctx context.Context, dest []byte) (uint32, syscall.E
 			return 0, syscall.ENOENT
 		}
 
-		logger.WithError(err).Errorf("failed to list xattrs - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return 0, syscall.EREMOTEIO
 	}
 
@@ -380,7 +380,7 @@ func (file *File) Getxattr(ctx context.Context, attr string, dest []byte) (uint3
 
 	irodsPath, err := vpathEntry.GetIRODSPath(file.path)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get IRODS path")
+		logger.Errorf("%+v", err)
 		return 0, syscall.EREMOTEIO
 	}
 
@@ -391,7 +391,7 @@ func (file *File) Getxattr(ctx context.Context, attr string, dest []byte) (uint3
 			return 0, syscall.ENOENT
 		}
 
-		logger.WithError(err).Errorf("failed to get xattrs - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return 0, syscall.EREMOTEIO
 	}
 
@@ -454,7 +454,7 @@ func (file *File) Setxattr(ctx context.Context, attr string, data []byte, flags 
 
 	irodsPath, err := vpathEntry.GetIRODSPath(file.path)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get IRODS path")
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -465,7 +465,7 @@ func (file *File) Setxattr(ctx context.Context, attr string, data []byte, flags 
 			return syscall.ENOENT
 		}
 
-		logger.WithError(err).Errorf("failed to set xattrs - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -512,7 +512,7 @@ func (file *File) Removexattr(ctx context.Context, attr string) syscall.Errno {
 
 	irodsPath, err := vpathEntry.GetIRODSPath(file.path)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get IRODS path")
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -523,7 +523,7 @@ func (file *File) Removexattr(ctx context.Context, attr string) syscall.Errno {
 			return syscall.ENOENT
 		}
 
-		logger.WithError(err).Errorf("failed to get xattrs - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -538,7 +538,7 @@ func (file *File) Removexattr(ctx context.Context, attr string) syscall.Errno {
 			return syscall.ENOENT
 		}
 
-		logger.WithError(err).Errorf("failed to remove xattrs - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -584,7 +584,7 @@ func (file *File) Truncate(ctx context.Context, size uint64) syscall.Errno {
 
 	irodsPath, err := vpathEntry.GetIRODSPath(file.path)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get IRODS path")
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -596,7 +596,7 @@ func (file *File) Truncate(ctx context.Context, size uint64) syscall.Errno {
 			return syscall.ENOENT
 		}
 
-		logger.WithError(err).Errorf("failed to stat - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -631,7 +631,7 @@ func (file *File) Truncate(ctx context.Context, size uint64) syscall.Errno {
 					return syscall.ENOENT
 				}
 
-				logger.WithError(err).Errorf("failed to truncate a file - %s, %d", irodsPath, size)
+				logger.Errorf("%+v", err)
 				return syscall.EREMOTEIO
 			}
 		}
@@ -709,7 +709,7 @@ func (file *File) Open(ctx context.Context, flags uint32) (fusefs.FileHandle, ui
 
 	irodsPath, err := vpathEntry.GetIRODSPath(file.path)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get IRODS path")
+		logger.Errorf("%+v", err)
 		return nil, 0, syscall.EREMOTEIO
 	}
 
@@ -720,7 +720,7 @@ func (file *File) Open(ctx context.Context, flags uint32) (fusefs.FileHandle, ui
 			return nil, 0, syscall.ENOENT
 		}
 
-		logger.WithError(err).Errorf("failed to open a file - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return nil, 0, syscall.EREMOTEIO
 	}
 
@@ -730,7 +730,7 @@ func (file *File) Open(ctx context.Context, flags uint32) (fusefs.FileHandle, ui
 
 	fileHandle, err := NewFileHandle(file, handle)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to create a file handle - %s", irodsPath)
+		logger.Errorf("%+v", err)
 		return nil, 0, syscall.EREMOTEIO
 	}
 

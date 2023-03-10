@@ -182,7 +182,7 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 
 	err := yaml.Unmarshal(yamlBytes, config)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to unmarshal YAML - %v", err)
+		return nil, xerrors.Errorf("failed to unmarshal YAML: %w", err)
 	}
 
 	err = config.CorrectSystemUser()
@@ -265,13 +265,13 @@ func (config *Config) makeDir(path string) error {
 			// make
 			mkdirErr := os.MkdirAll(path, 0775)
 			if mkdirErr != nil {
-				return xerrors.Errorf("making a dir (%s) error - %v", path, mkdirErr)
+				return xerrors.Errorf("making a dir (%s) error: %w", path, mkdirErr)
 			}
 
 			return nil
 		}
 
-		return xerrors.Errorf("stating a dir (%s) error - %v", path, err)
+		return xerrors.Errorf("stating a dir (%s) error: %w", path, err)
 	}
 
 	if !dirInfo.IsDir() {
@@ -331,15 +331,15 @@ func (config *Config) Validate() error {
 
 	err := irodsfs_common_vpath.ValidateVPathMappings(config.PathMappings)
 	if err != nil {
-		return xerrors.Errorf("invalid path mappings - %v", err)
+		return xerrors.Errorf("invalid path mappings: %w", err)
 	}
 
 	if config.UID < 0 {
-		return xerrors.Errorf("invalid UID - %v", err)
+		return xerrors.Errorf("invalid UID: %w", err)
 	}
 
 	if config.GID < 0 {
-		return xerrors.Errorf("invalid GID - %v", err)
+		return xerrors.Errorf("invalid GID: %w", err)
 	}
 
 	if len(config.MountPath) == 0 {
@@ -348,7 +348,7 @@ func (config *Config) Validate() error {
 
 	mountDirInfo, err := os.Stat(config.MountPath)
 	if err != nil {
-		return xerrors.Errorf("mountpoint (%s) error - %v", config.MountPath, err)
+		return xerrors.Errorf("mountpoint (%s) error: %w", config.MountPath, err)
 	}
 
 	if !mountDirInfo.IsDir() {
@@ -385,7 +385,7 @@ func (config *Config) Validate() error {
 
 	if authScheme == irodsclient_types.AuthSchemePAM {
 		if _, err := os.Stat(config.CACertificateFile); os.IsNotExist(err) {
-			return xerrors.Errorf("SSL CA Certificate file error - %v", err)
+			return xerrors.Errorf("SSL CA Certificate file error: %w", err)
 		}
 
 		if config.EncryptionKeySize <= 0 {

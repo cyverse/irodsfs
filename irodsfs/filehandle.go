@@ -174,7 +174,7 @@ func (handle *FileHandle) Read(ctx context.Context, dest []byte, offset int64) (
 
 	readLen, err := handle.reader.ReadAt(dest, offset)
 	if err != nil && err != io.EOF {
-		logger.WithError(err).Errorf("failed to read data for file %s, offset %d, length %d", handle.file.path, offset, size)
+		logger.Errorf("%+v", err)
 		return nil, syscall.EREMOTEIO
 	}
 
@@ -225,7 +225,7 @@ func (handle *FileHandle) Write(ctx context.Context, data []byte, offset int64) 
 
 	writeLen, err := handle.writer.WriteAt(data, offset)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to write data for file %s, offset %d, length %d", handle.file.path, offset, size)
+		logger.Errorf("%+v", err)
 		return 0, syscall.EREMOTEIO
 	}
 
@@ -261,7 +261,7 @@ func (handle *FileHandle) Truncate(ctx context.Context, size uint64) syscall.Err
 
 	err := handle.fileHandle.Truncate(int64(size))
 	if err != nil {
-		logger.WithError(err).Errorf("failed to truncate data for file %s, size %d", handle.file.path, size)
+		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
@@ -294,7 +294,7 @@ func (handle *FileHandle) Flush(ctx context.Context) syscall.Errno {
 		// Flush
 		err := handle.writer.Flush()
 		if err != nil {
-			logger.WithError(err).Errorf("failed to flush - %s", handle.file.path)
+			logger.Errorf("%+v", err)
 			return syscall.EREMOTEIO
 		}
 	}
@@ -336,8 +336,8 @@ func (handle *FileHandle) Release(ctx context.Context) syscall.Errno {
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	logger.Debugf("Calling Release - %s", handle.file.path)
-	defer logger.Debugf("Called Release - %s", handle.file.path)
+	logger.Infof("Calling Release - %s", handle.file.path)
+	defer logger.Infof("Called Release - %s", handle.file.path)
 
 	if handle.fileHandle == nil {
 		logger.Errorf("failed to get a file handle - %s", handle.file.path)
@@ -348,7 +348,7 @@ func (handle *FileHandle) Release(ctx context.Context) syscall.Errno {
 		handle.reader.Release()
 		err := handle.reader.GetError()
 		if err != nil {
-			logger.WithError(err).Errorf("got a read failure - %s, %v", handle.file.path, err)
+			logger.Errorf("%+v", err)
 			return syscall.EREMOTEIO
 		}
 		handle.reader = nil
@@ -361,7 +361,7 @@ func (handle *FileHandle) Release(ctx context.Context) syscall.Errno {
 
 		err := handle.writer.GetError()
 		if err != nil {
-			logger.WithError(err).Errorf("got a write failure - %s, %v", handle.file.path, err)
+			logger.Errorf("%+v", err)
 			return syscall.EREMOTEIO
 		}
 		handle.writer = nil
@@ -373,24 +373,20 @@ func (handle *FileHandle) Release(ctx context.Context) syscall.Errno {
 		handle.mutex.Lock()
 		defer handle.mutex.Unlock()
 
-		err := handle.fileHandle.Close()
-		if err != nil {
-			logger.Errorf("failed to close - %s", handle.file.path)
-			//return syscall.EREMOTEIO
-			return
-		}
-
 		// remove the handle from file handle map
 		handle.fs.fileHandleMap.Remove(handle.fileHandle.GetID())
 
 		// Report
 		if handle.fs.instanceReportClient != nil {
-			err = handle.fs.instanceReportClient.DoneFileAccess(handle.fileHandle)
+			err := handle.fs.instanceReportClient.DoneFileAccess(handle.fileHandle)
 			if err != nil {
-				logger.WithError(err).Error("failed to report the file transfer to monitoring service")
-				return
-				//return err
+				logger.Errorf("%+v", err)
 			}
+		}
+
+		err := handle.fileHandle.Close()
+		if err != nil {
+			logger.Errorf("%+v", err)
 		}
 	}
 

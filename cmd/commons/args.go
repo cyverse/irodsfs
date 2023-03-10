@@ -321,7 +321,8 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if portFlag != nil {
 		port, err := strconv.ParseInt(portFlag.Value.String(), 10, 32)
 		if err != nil {
-			logger.WithError(err).Errorf("failed to convert input to int")
+			parseErr := xerrors.Errorf("failed to convert input to int: %w", err)
+			logger.Errorf("%+v", parseErr)
 			return nil, logWriter, false, err // stop here
 		}
 

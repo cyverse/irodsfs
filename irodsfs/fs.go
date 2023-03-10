@@ -93,8 +93,9 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		config.ClientUser, config.Zone, config.ProxyUser, config.Zone,
 		authScheme, config.Password, config.Resource)
 	if err != nil {
-		logger.WithError(err).Error("failed to create IRODS Account")
-		return nil, xerrors.Errorf("failed to create IRODS Account - %v", err)
+		accountErr := xerrors.Errorf("failed to create IRODS Account: %w", err)
+		logger.Errorf("%+v", accountErr)
+		return nil, accountErr
 	}
 
 	logger.Infof("Connect to IRODS server using %s auth scheme", string(authScheme))
@@ -103,8 +104,9 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		sslConfig, err := irodsclient_types.CreateIRODSSSLConfig(config.CACertificateFile, config.EncryptionKeySize,
 			config.EncryptionAlgorithm, config.SaltSize, config.HashRounds)
 		if err != nil {
-			logger.WithError(err).Error("failed to create IRODS SSL Config")
-			return nil, xerrors.Errorf("failed to create IRODS SSL Config - %v", err)
+			sslErr := xerrors.Errorf("failed to create IRODS SSL Config: %w", err)
+			logger.Errorf("%+v", sslErr)
+			return nil, sslErr
 		}
 
 		logger.Info("PAM requires SSL, enabling CS negotiation")
@@ -116,8 +118,9 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 			sslConfig, err := irodsclient_types.CreateIRODSSSLConfig(config.CACertificateFile, config.EncryptionKeySize,
 				config.EncryptionAlgorithm, config.SaltSize, config.HashRounds)
 			if err != nil {
-				logger.WithError(err).Error("failed to create IRODS SSL Config")
-				return nil, xerrors.Errorf("failed to create IRODS SSL Config - %v", err)
+				sslErr := xerrors.Errorf("failed to create IRODS SSL Config: %w", err)
+				logger.Errorf("%+v", sslErr)
+				return nil, sslErr
 			}
 
 			logger.Info("Enabling CS negotiation to turn on SSL")
@@ -158,30 +161,34 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		poolClient := irodspoolclient.NewPoolServiceClient(config.PoolEndpoint, time.Duration(config.OperationTimeout), config.InstanceID)
 		err = poolClient.Connect()
 		if err != nil {
-			logger.WithError(err).Error("failed to connect to irodsfs-pool server %s", config.PoolEndpoint)
-			return nil, xerrors.Errorf("failed to connect to irodsfs-pool server %s - %v", config.PoolEndpoint, err)
+			clientErr := xerrors.Errorf("failed to connect to irodsfs-pool server %s: %w", config.PoolEndpoint, err)
+			logger.Errorf("%+v", clientErr)
+			return nil, clientErr
 		}
 
 		fsClient, err = poolClient.NewSession(account, FSName)
 		if err != nil {
-			logger.WithError(err).Error("failed to create a new irodsfs-pool fs client")
-			return nil, xerrors.Errorf("failed to create a new irodsfs-pool fs client - %v", err)
+			sessionErr := xerrors.Errorf("failed to create a new irodsfs-pool fs client: %w", err)
+			logger.Errorf("%+v", sessionErr)
+			return nil, sessionErr
 		}
 	} else {
 		// use go-irodsclient driver
 		logger.Info("Initializing an iRODS native file system client")
 		fsClient, err = irodsfs_common_irods.NewIRODSFSClientDirect(account, fsConfig)
 		if err != nil {
-			logger.WithError(err).Error("failed to create a new go-irodsclient fs client")
-			return nil, xerrors.Errorf("failed to create a new go-irodsclient fs client - %v", err)
+			clientErr := xerrors.Errorf("failed to create a new go-irodsclient fs client: %w", err)
+			logger.Errorf("%+v", clientErr)
+			return nil, clientErr
 		}
 	}
 
 	logger.Info("Initializing virtual path mappings")
 	vpathManager, err := irodsfs_common_vpath.NewVPathManager(fsClient, config.PathMappings)
 	if err != nil {
-		logger.WithError(err).Error("failed to create Virtual Path Manager")
-		return nil, xerrors.Errorf("failed to create Virtual Path Manager - %v", err)
+		vpathErr := xerrors.Errorf("failed to create Virtual Path Manager: %v", err)
+		logger.Errorf("%+v", vpathErr)
+		return nil, vpathErr
 	}
 
 	logger.Info("Initializing File Handle Map")
@@ -217,15 +224,16 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 
 		instanceReportClient, err = reportClient.StartInstance(instanceInfo)
 		if err != nil {
-			logger.WithError(err).Errorf("failed to report the instance to monitoring service")
+			logger.Errorf("%+v", err)
 			// keep going.
 		}
 	}
 
 	userGroups, err := fsClient.ListUserGroups(account.ClientUser)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to list groups for a user - %s", account.ClientUser)
-		return nil, xerrors.Errorf("failed to list groups for a user - %s", account.ClientUser)
+		ugErr := xerrors.Errorf("failed to list groups for a user '%s': %w", account.ClientUser, err)
+		logger.Errorf("%+v", ugErr)
+		return nil, ugErr
 	}
 
 	userGroupsMap := map[string]*irodsclient_types.IRODSUser{}
@@ -299,13 +307,13 @@ func (fs *IRODSFS) Start() error {
 
 	rootDir, err := fs.Root()
 	if err != nil {
-		logger.WithError(err).Error("failed to create a root directory")
+		logger.Errorf("%+v", err)
 		return err
 	}
 
 	fuseServer, err := fusefs.Mount(fs.config.MountPath, rootDir, GetFuseOptions(fs.config))
 	if err != nil {
-		logger.WithError(err).Error("failed to connect to FUSE")
+		logger.Errorf("%+v", err)
 		return err
 	}
 

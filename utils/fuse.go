@@ -2,13 +2,13 @@ package utils
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"os/exec"
 	"path"
 	"runtime"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/xerrors"
 )
 
 // CheckFUSEStatus is used to describe FUSE installation state
@@ -48,7 +48,8 @@ func CheckDevFuse() CheckFUSEStatus {
 	// if /dev/fuse device exists, it's installed
 	fuseDevInfo, err := os.Stat("/dev/fuse")
 	if err != nil {
-		logger.WithError(err).Errorf("failed to find /dev/fuse, fuse is not installed or does not have enough privilege")
+		fuseErr := xerrors.Errorf("failed to find /dev/fuse, fuse is not installed or does not have enough privilege: %w", err)
+		logger.Errorf("%+v", fuseErr)
 		return CheckFUSEStatusNotFound
 	}
 
@@ -71,8 +72,7 @@ func UnmountFuse(mountPoint string) (err error) {
 	cmd.Stderr = &errBuf
 	err = cmd.Run()
 	if errBuf.Len() > 0 {
-		return fmt.Errorf("%s (code %v)\n",
-			errBuf.String(), err)
+		return xerrors.Errorf("%s (code %v)", errBuf.String(), err)
 	}
 	return err
 }
