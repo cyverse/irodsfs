@@ -893,7 +893,7 @@ func (dir *Dir) Rmdir(ctx context.Context, name string) syscall.Errno {
 		logger.Errorf("failed to remove a file - %s", irodsPath)
 		return syscall.EREMOTEIO
 	case irodsclient_fs.DirectoryEntry:
-		err = dir.fs.fsClient.RemoveDir(irodsPath, false, true)
+		err = dir.fs.fsClient.RemoveDir(irodsPath, false, false)
 		if err != nil {
 			if irodsclient_types.IsFileNotFoundError(err) {
 				logger.Debugf("failed to find a dir - %s", irodsPath)
@@ -987,7 +987,7 @@ func (dir *Dir) Unlink(ctx context.Context, name string) syscall.Errno {
 
 	switch irodsEntry.Type {
 	case irodsclient_fs.FileEntry:
-		err = dir.fs.fsClient.RemoveFile(irodsPath, true)
+		err = dir.fs.fsClient.RemoveFile(irodsPath, false)
 		if err != nil {
 			if irodsclient_types.IsFileNotFoundError(err) {
 				logger.Debugf("failed to find a file - %s", irodsPath)
@@ -1289,7 +1289,7 @@ func (dir *Dir) Rename(ctx context.Context, name string, newParent fusefs.InodeE
 			// no error - file exists
 			if destEntry.ID > 0 {
 				// delete first
-				err = dir.fs.fsClient.RemoveFile(irodsDestPath, true)
+				err = dir.fs.fsClient.RemoveFile(irodsDestPath, false)
 				if err != nil {
 					logger.Errorf("%+v", err)
 					return syscall.EREMOTEIO
