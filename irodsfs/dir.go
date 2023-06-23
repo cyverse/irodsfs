@@ -49,16 +49,23 @@ func (dir *Dir) newSubFileInode(ctx context.Context, entryID int64, path string)
 
 func (dir *Dir) getStableAttr() fusefs.StableAttr {
 	return fusefs.StableAttr{
-		Mode: fuse.S_IFDIR,
-		Ino:  uint64(dir.entryID),
+		Mode: uint32(fuse.S_IFDIR),
+		Ino:  getInodeIDFromEntryID(dir.entryID),
 		Gen:  0,
 	}
 }
 
 func (dir *Dir) setAttrOut(vpathEntry *irodsfs_common_vpath.VPathEntry, out *fuse.Attr) {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "Dir",
+		"function": "setAttrOut",
+	})
+
 	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
 		// vpath
-		out.Ino = uint64(vpathEntry.VirtualDirEntry.ID)
+		logger.Debugf("vpath virtual dir - path: %s ino: %d", vpathEntry.Path, getInodeIDFromEntryID(vpathEntry.VirtualDirEntry.ID))
+		out.Ino = getInodeIDFromEntryID(vpathEntry.VirtualDirEntry.ID)
 		out.Uid = dir.fs.uid
 		out.Gid = dir.fs.gid
 		out.SetTimes(&vpathEntry.VirtualDirEntry.ModifyTime, &vpathEntry.VirtualDirEntry.ModifyTime, &vpathEntry.VirtualDirEntry.ModifyTime)
@@ -66,7 +73,7 @@ func (dir *Dir) setAttrOut(vpathEntry *irodsfs_common_vpath.VPathEntry, out *fus
 		out.Mode = uint32(fuse.S_IFDIR | 0o500)
 	} else if vpathEntry.Type == irodsfs_common_vpath.VPathIRODS {
 		// irods
-		out.Ino = uint64(vpathEntry.IRODSEntry.ID)
+		out.Ino = getInodeIDFromEntryID(vpathEntry.IRODSEntry.ID)
 		out.Uid = dir.fs.uid
 		out.Gid = dir.fs.gid
 		out.SetTimes(&vpathEntry.IRODSEntry.ModifyTime, &vpathEntry.IRODSEntry.ModifyTime, &vpathEntry.IRODSEntry.ModifyTime)
@@ -732,37 +739,48 @@ func (dir *Dir) Readdir(ctx context.Context) (fusefs.DirStream, syscall.Errno) {
 
 	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
 		if vpathEntry.Path == dir.path {
-			dirEntries := make([]fuse.DirEntry, len(vpathEntry.VirtualDirEntry.DirEntries))
+			dirEntries := make([]fuse.DirEntry, len(vpathEntry.VirtualDirEntry.DirEntries)+2)
+
+			dirEntries[0] = fuse.DirEntry{
+				Ino:  0,
+				Mode: uint32(fuse.S_IFDIR),
+				Name: ".",
+			}
+			dirEntries[1] = fuse.DirEntry{
+				Ino:  0,
+				Mode: uint32(fuse.S_IFDIR),
+				Name: "..",
+			}
 
 			for idx, entry := range vpathEntry.VirtualDirEntry.DirEntries {
 				if entry.Type == irodsfs_common_vpath.VPathVirtualDir {
 					dirEntry := fuse.DirEntry{
-						Ino:  uint64(entry.VirtualDirEntry.ID),
-						Mode: fuse.S_IFDIR,
+						Ino:  getInodeIDFromEntryID(entry.VirtualDirEntry.ID),
+						Mode: uint32(fuse.S_IFDIR),
 						Name: entry.VirtualDirEntry.Name,
 					}
 
-					dirEntries[idx] = dirEntry
+					dirEntries[idx+2] = dirEntry
 				} else if entry.Type == irodsfs_common_vpath.VPathIRODS {
 					entryType := uint32(fuse.S_IFREG)
 
 					switch entry.IRODSEntry.Type {
 					case irodsclient_fs.FileEntry:
-						entryType = fuse.S_IFREG
+						entryType = uint32(fuse.S_IFREG)
 					case irodsclient_fs.DirectoryEntry:
-						entryType = fuse.S_IFDIR
+						entryType = uint32(fuse.S_IFDIR)
 					default:
 						logger.Errorf("unknown entry type - %s", entry.Type)
 						return nil, syscall.EREMOTEIO
 					}
 
 					dirEntry := fuse.DirEntry{
-						Ino:  uint64(entry.IRODSEntry.ID),
+						Ino:  getInodeIDFromEntryID(entry.IRODSEntry.ID),
 						Mode: entryType,
 						Name: irodsfs_common_utils.GetFileName(entry.Path),
 					}
 
-					dirEntries[idx] = dirEntry
+					dirEntries[idx+2] = dirEntry
 				} else {
 					logger.Errorf("unknown VPath Entry type : %s", entry.Type)
 					return nil, syscall.EREMOTEIO
@@ -785,28 +803,39 @@ func (dir *Dir) Readdir(ctx context.Context) (fusefs.DirStream, syscall.Errno) {
 			return nil, syscall.EREMOTEIO
 		}
 
-		dirEntries := make([]fuse.DirEntry, len(irodsEntries))
+		dirEntries := make([]fuse.DirEntry, len(irodsEntries)+2)
+
+		dirEntries[0] = fuse.DirEntry{
+			Ino:  0,
+			Mode: uint32(fuse.S_IFDIR),
+			Name: ".",
+		}
+		dirEntries[1] = fuse.DirEntry{
+			Ino:  0,
+			Mode: uint32(fuse.S_IFDIR),
+			Name: "..",
+		}
 
 		for idx, irodsEntry := range irodsEntries {
 			entryType := uint32(fuse.S_IFREG)
 
 			switch irodsEntry.Type {
 			case irodsclient_fs.FileEntry:
-				entryType = fuse.S_IFREG
+				entryType = uint32(fuse.S_IFREG)
 			case irodsclient_fs.DirectoryEntry:
-				entryType = fuse.S_IFDIR
+				entryType = uint32(fuse.S_IFDIR)
 			default:
 				logger.Errorf("unknown entry type - %s", irodsEntry.Type)
 				return nil, syscall.EREMOTEIO
 			}
 
 			dirEntry := fuse.DirEntry{
-				Ino:  uint64(irodsEntry.ID),
+				Ino:  getInodeIDFromEntryID(irodsEntry.ID),
 				Mode: entryType,
 				Name: irodsEntry.Name,
 			}
 
-			dirEntries[idx] = dirEntry
+			dirEntries[idx+2] = dirEntry
 		}
 
 		return fusefs.NewListDirStream(dirEntries), fusefs.OK

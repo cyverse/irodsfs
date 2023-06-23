@@ -40,7 +40,7 @@ func NewFile(fs *IRODSFS, entryID int64, path string) *File {
 func (file *File) getStableAttr() fusefs.StableAttr {
 	return fusefs.StableAttr{
 		Mode: fuse.S_IFREG,
-		Ino:  uint64(file.entryID),
+		Ino:  getInodeIDFromEntryID(file.entryID),
 		Gen:  0,
 	}
 }

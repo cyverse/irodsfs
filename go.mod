@@ -4,9 +4,9 @@ go 1.18
 
 require (
 	github.com/cyverse/go-irodsclient v0.11.2
-	github.com/cyverse/irodsfs-common v0.0.0-20230308234020-6ab739dff839
+	github.com/cyverse/irodsfs-common v0.0.0-20230623171151-5e4370b83339
 	github.com/cyverse/irodsfs-monitor v0.0.0-20220809235922-daf13261a2dc
-	github.com/cyverse/irodsfs-pool v0.6.12
+	github.com/cyverse/irodsfs-pool v0.6.13
 	github.com/hanwen/go-fuse/v2 v2.1.0
 	github.com/pkg/profile v1.7.0
 	github.com/rs/xid v1.3.0
