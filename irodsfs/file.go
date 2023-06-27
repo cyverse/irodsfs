@@ -399,15 +399,14 @@ func (file *File) Getxattr(ctx context.Context, attr string, dest []byte) (uint3
 		return 0, syscall.ENODATA
 	}
 
-	requiredBytesLen := len([]byte(irodsMeta.Value)) + 1 // with null termination
+	requiredBytesLen := len([]byte(irodsMeta.Value))
 
 	if len(dest) < requiredBytesLen {
 		return uint32(requiredBytesLen), syscall.ERANGE
 	}
 
 	copy(dest, []byte(irodsMeta.Value))
-	dest[len([]byte(irodsMeta.Value))] = 0 // null termination
-	return uint32(len([]byte(irodsMeta.Value)) + 1), fusefs.OK
+	return uint32(requiredBytesLen), fusefs.OK
 }
 
 // Setxattr sets xattr
@@ -457,6 +456,8 @@ func (file *File) Setxattr(ctx context.Context, attr string, data []byte, flags 
 		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
+
+	logger.Debugf("xattr %s - '%v'", irodsPath, data)
 
 	err = file.fs.fsClient.SetXattr(irodsPath, attr, string(data))
 	if err != nil {
