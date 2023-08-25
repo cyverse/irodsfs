@@ -741,6 +741,102 @@ func (file *File) Open(ctx context.Context, flags uint32) (fusefs.FileHandle, ui
 	return fileHandle, fuseFlag, fusefs.OK
 }
 
+// Getlk returns locks
+func (file *File) Getlk(ctx context.Context, fh fusefs.FileHandle, owner uint64, lk *fuse.FileLock, flags uint32, out *fuse.FileLock) syscall.Errno {
+	if file.fs.terminated {
+		return syscall.ECONNABORTED
+	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "File",
+		"function": "Getlk",
+	})
+
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+
+	operID := file.fs.GetNextOperationID()
+	logger.Infof("Calling Getattr (%d) - %s", operID, file.path)
+	defer logger.Infof("Called Getattr (%d) - %s", operID, file.path)
+
+	fileHandle, ok := fh.(*FileHandle)
+	if !ok {
+		logger.Errorf("failed to convert fh to a file handle - %s", fileHandle.file.path)
+		return syscall.EREMOTEIO
+	}
+
+	if fileHandle.fileHandle == nil {
+		logger.Errorf("failed to get a file handle - %s", fileHandle.file.path)
+		return syscall.EREMOTEIO
+	}
+
+	return fileHandle.GetLocalLock(ctx, owner, lk, flags, out)
+}
+
+// Setlk obtains a lock on a file, or fail if the lock could not obtained
+func (file *File) Setlk(ctx context.Context, fh fusefs.FileHandle, owner uint64, lk *fuse.FileLock, flags uint32) syscall.Errno {
+	if file.fs.terminated {
+		return syscall.ECONNABORTED
+	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "File",
+		"function": "Setlk",
+	})
+
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+
+	operID := file.fs.GetNextOperationID()
+	logger.Infof("Calling Setlk (%d) - %s", operID, file.path)
+	defer logger.Infof("Called Setlk (%d) - %s", operID, file.path)
+
+	fileHandle, ok := fh.(*FileHandle)
+	if !ok {
+		logger.Errorf("failed to convert fh to a file handle - %s", fileHandle.file.path)
+		return syscall.EREMOTEIO
+	}
+
+	if fileHandle.fileHandle == nil {
+		logger.Errorf("failed to get a file handle - %s", fileHandle.file.path)
+		return syscall.EREMOTEIO
+	}
+
+	return fileHandle.SetLocalLock(ctx, owner, lk, flags)
+}
+
+// Setlkw obtains a lock on a file, waiting if necessary
+func (file *File) Setlkw(ctx context.Context, fh fusefs.FileHandle, owner uint64, lk *fuse.FileLock, flags uint32) syscall.Errno {
+	if file.fs.terminated {
+		return syscall.ECONNABORTED
+	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "File",
+		"function": "Setlkw",
+	})
+
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+
+	operID := file.fs.GetNextOperationID()
+	logger.Infof("Calling Setlkw (%d) - %s", operID, file.path)
+	defer logger.Infof("Called Setlkw (%d) - %s", operID, file.path)
+
+	fileHandle, ok := fh.(*FileHandle)
+	if !ok {
+		logger.Errorf("failed to convert fh to a file handle - %s", fileHandle.file.path)
+		return syscall.EREMOTEIO
+	}
+
+	if fileHandle.fileHandle == nil {
+		logger.Errorf("failed to get a file handle - %s", fileHandle.file.path)
+		return syscall.EREMOTEIO
+	}
+
+	return fileHandle.SetLocalLockW(ctx, owner, lk, flags)
+}
+
 /*
 func (dir *Dir) Link(ctx context.Context, target InodeEmbedder, name string, out *fuse.EntryOut) (node *Inode, errno syscall.Errno) {
 }

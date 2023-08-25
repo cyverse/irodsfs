@@ -11,6 +11,7 @@ import (
 	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
 	fusefs "github.com/hanwen/go-fuse/v2/fs"
 	fuse "github.com/hanwen/go-fuse/v2/fuse"
+	"github.com/rs/xid"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -26,9 +27,10 @@ type FileHandle struct {
 	fs   *IRODSFS
 	file *File
 
-	reader     irodsfscommon_io.Reader
-	writer     irodsfscommon_io.Writer
-	fileHandle irodsfscommon_irods.IRODSFSFileHandle
+	reader               irodsfscommon_io.Reader
+	writer               irodsfscommon_io.Writer
+	fileHandle           irodsfscommon_irods.IRODSFSFileHandle
+	localFileLockManager *FileHandleLocalLockManager
 
 	mutex sync.Mutex
 }
@@ -73,9 +75,10 @@ func NewFileHandle(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle)
 		fs:   file.fs,
 		file: file,
 
-		reader:     reader,
-		writer:     writer,
-		fileHandle: fileHandle,
+		reader:               reader,
+		writer:               writer,
+		fileHandle:           fileHandle,
+		localFileLockManager: NewFileHandleLocalLockManager(),
 
 		mutex: sync.Mutex{},
 	}, nil
@@ -177,6 +180,8 @@ func (handle *FileHandle) Read(ctx context.Context, dest []byte, offset int64) (
 		logger.Errorf("%+v", err)
 		return nil, syscall.EREMOTEIO
 	}
+
+	logger.Debugf("read %d bytes, eof? %t", readLen, err == io.EOF)
 
 	return fuse.ReadResultData(dest[:readLen]), fusefs.OK
 }
@@ -319,6 +324,20 @@ func (handle *FileHandle) Fsync(ctx context.Context, flags uint32) syscall.Errno
 	logger.Debugf("Calling Fsync - %s", handle.file.path)
 	defer logger.Debugf("Called Fsync - %s", handle.file.path)
 
+	if handle.fileHandle == nil {
+		logger.Errorf("failed to get a file handle - %s", handle.file.path)
+		return syscall.EREMOTEIO
+	}
+
+	if handle.writer != nil {
+		// Flush
+		err := handle.writer.Flush()
+		if err != nil {
+			logger.Errorf("%+v", err)
+			return syscall.EREMOTEIO
+		}
+	}
+
 	return fusefs.OK
 }
 
@@ -401,16 +420,180 @@ func (handle *FileHandle) Release(ctx context.Context) syscall.Errno {
 	return fusefs.OK
 }
 
-/*
+// Getlk returns lock
 func (handle *FileHandle) Getlk(ctx context.Context, owner uint64, lk *fuse.FileLock, flags uint32, out *fuse.FileLock) syscall.Errno {
+	if handle.fs.terminated {
+		return syscall.ECONNABORTED
+	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "FileHandle",
+		"function": "Getlk",
+	})
+
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+
+	operID := handle.fs.GetNextOperationID()
+	logger.Infof("Calling Getlk (%d) - %s", operID, handle.file.path)
+	defer logger.Infof("Called Getlk (%d) - %s", operID, handle.file.path)
+
+	return handle.file.Getlk(ctx, handle, owner, lk, flags, out)
 }
 
+// Setlk locks the file handle
 func (handle *FileHandle) Setlk(ctx context.Context, owner uint64, lk *fuse.FileLock, flags uint32) syscall.Errno {
+	if handle.fs.terminated {
+		return syscall.ECONNABORTED
+	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "FileHandle",
+		"function": "Setlk",
+	})
+
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+
+	operID := handle.fs.GetNextOperationID()
+	logger.Infof("Calling Setlk (%d) - %s", operID, handle.file.path)
+	defer logger.Infof("Called Setlk (%d) - %s", operID, handle.file.path)
+
+	return handle.file.Setlk(ctx, handle, owner, lk, flags)
 }
 
+// Setlkw locks the file handle and wait until it acquires the lock
 func (handle *FileHandle) Setlkw(ctx context.Context, owner uint64, lk *fuse.FileLock, flags uint32) syscall.Errno {
+	if handle.fs.terminated {
+		return syscall.ECONNABORTED
+	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "FileHandle",
+		"function": "Setlkw",
+	})
+
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+
+	logger.Debugf("Calling Setlkw - %s", handle.file.path)
+	defer logger.Debugf("Called Setlkw - %s", handle.file.path)
+
+	return handle.file.Setlkw(ctx, handle, owner, lk, flags)
 }
 
+// GetLocalLock returns local lock
+func (handle *FileHandle) GetLocalLock(ctx context.Context, owner uint64, lk *fuse.FileLock, flags uint32, out *fuse.FileLock) syscall.Errno {
+	if handle.fs.terminated {
+		return syscall.ECONNABORTED
+	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "FileHandle",
+		"function": "GetLocalLock",
+	})
+
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+
+	operID := handle.fs.GetNextOperationID()
+	logger.Infof("Calling GetLocalLock (%d) - %s", operID, handle.file.path)
+	defer logger.Infof("Called GetLocalLock (%d) - %s", operID, handle.file.path)
+
+	logger.Debugf("owner %d, type %d, start %d, end %d, pid %d, flags %d", owner, lk.Typ, lk.Start, lk.End, lk.Pid, flags)
+
+	lock := FileHandleLocalLock{
+		LockType: lk.Typ,
+		Pid:      lk.Pid,
+		Start:    lk.Start,
+		End:      lk.End,
+	}
+
+	lockFound := handle.localFileLockManager.Get(lock.Start, lock.End)
+	if lockFound != nil {
+		out.Start = lockFound.Start
+		out.End = lockFound.End
+		out.Pid = lockFound.Pid
+		out.Typ = lockFound.LockType
+		return fusefs.OK
+	}
+
+	out.Start = lk.Start
+	out.End = lk.End
+	out.Pid = lk.Pid
+	out.Typ = syscall.F_UNLCK
+	return fusefs.OK
+}
+
+// SetLocalLock sets local lock
+func (handle *FileHandle) SetLocalLock(ctx context.Context, owner uint64, lk *fuse.FileLock, flags uint32) syscall.Errno {
+	if handle.fs.terminated {
+		return syscall.ECONNABORTED
+	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "FileHandle",
+		"function": "SetLocalLock",
+	})
+
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+
+	operID := handle.fs.GetNextOperationID()
+	logger.Infof("Calling SetLocalLock (%d) - %s", operID, handle.file.path)
+	defer logger.Infof("Called SetLocalLock (%d) - %s", operID, handle.file.path)
+
+	logger.Debugf("owner %d, type %d, start %d, end %d, pid %d, flags %d", owner, lk.Typ, lk.Start, lk.End, lk.Pid, flags)
+
+	lock := FileHandleLocalLock{
+		ID:       xid.New().String(),
+		LockType: lk.Typ,
+		Pid:      lk.Pid,
+		Start:    lk.Start,
+		End:      lk.End,
+	}
+
+	if lk.Typ == syscall.F_UNLCK {
+		// unlock
+		err := handle.localFileLockManager.Unlock(&lock)
+		if err != nil {
+			logger.Errorf("%+v", err)
+			return syscall.ENOENT
+		}
+	} else {
+		err := handle.localFileLockManager.Lock(&lock)
+		if err != nil {
+			logger.Errorf("%+v", err)
+			return syscall.EAGAIN
+		}
+	}
+
+	return fusefs.OK
+}
+
+// SetLocalLockW sets local lock and wait until it acquires the lock
+func (handle *FileHandle) SetLocalLockW(ctx context.Context, owner uint64, lk *fuse.FileLock, flags uint32) syscall.Errno {
+	if handle.fs.terminated {
+		return syscall.ECONNABORTED
+	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "FileHandle",
+		"function": "SetLocalLockW",
+	})
+
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+
+	logger.Debugf("Calling SetLocalLockW - %s", handle.file.path)
+	defer logger.Debugf("Called SetLocalLockW - %s", handle.file.path)
+
+	logger.Debugf("owner %d, type %d, start %d, end %d, pid %d, flags %d", owner, lk.Typ, lk.Start, lk.End, lk.Pid, flags)
+
+	return syscall.ENOTSUP
+}
+
+/*
 func (handle *FileHandle) Lseek(ctx context.Context, off uint64, whence uint32) (uint64, syscall.Errno) {
 }
 
