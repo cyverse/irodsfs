@@ -46,6 +46,9 @@ func GetFuseOptions(config *commons.Config) *fusefs.Options {
 	options.FsName = FSName
 	options.Name = Subtype
 	options.SingleThreaded = false
+	options.IgnoreSecurityLabels = true
+	options.EnableLocks = true
+	options.DisableReadDirPlus = true
 	return options
 }
 
