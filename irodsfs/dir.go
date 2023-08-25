@@ -1371,17 +1371,11 @@ func (dir *Dir) Create(ctx context.Context, name string, flags uint32, mode uint
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	targetPath := irodsfs_common_utils.JoinPath(dir.path, name)
-
-	operID := dir.fs.GetNextOperationID()
-	logger.Infof("Calling Create (%d) - %s", operID, targetPath)
-	defer logger.Infof("Called Create (%d) - %s", operID, targetPath)
-
-	dir.mutex.Lock()
-	defer dir.mutex.Unlock()
-
 	var openMode string
 	fuseFlag := uint32(0)
+
+	// if we use Direct_IO, it will disable kernel cache, read-ahead, shared mmap
+	//fuseFlag |= fuse.FOPEN_DIRECT_IO
 
 	if flags&uint32(os.O_WRONLY) == uint32(os.O_WRONLY) {
 		openMode = string(irodsclient_types.FileOpenModeWriteOnly)
@@ -1393,15 +1387,21 @@ func (dir *Dir) Create(ctx context.Context, name string, flags uint32, mode uint
 			// truncate
 			openMode = string(irodsclient_types.FileOpenModeWriteTruncate)
 		}
-
-		// if we use Direct_IO, it will disable kernel cache, read-ahead, shared mmap
-		//fuseFlag |= fuse.FOPEN_DIRECT_IO
 	} else if flags&uint32(os.O_RDWR) == uint32(os.O_RDWR) {
 		openMode = string(irodsclient_types.FileOpenModeReadWrite)
 	} else {
 		logger.Errorf("unknown file open mode - 0o%o", flags)
 		return nil, nil, 0, syscall.EPERM
 	}
+
+	targetPath := irodsfs_common_utils.JoinPath(dir.path, name)
+
+	operID := dir.fs.GetNextOperationID()
+	logger.Infof("Calling Create (%d) - %s, mode(%s)", operID, targetPath, openMode)
+	defer logger.Infof("Called Create (%d) - %s, mode(%s)", operID, targetPath, openMode)
+
+	dir.mutex.Lock()
+	defer dir.mutex.Unlock()
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(targetPath)
 	if vpathEntry == nil {
@@ -1476,6 +1476,28 @@ func (dir *Dir) Create(ctx context.Context, name string, flags uint32, mode uint
 	dir.fs.fileHandleMap.Add(fileHandle)
 
 	return subFileInode, fileHandle, fuseFlag, fusefs.OK
+}
+
+// Fsync flushes content changes
+func (dir *Dir) Fsync(ctx context.Context, fh fusefs.FileHandle, flags uint32) syscall.Errno {
+	if dir.fs.terminated {
+		return syscall.ECONNABORTED
+	}
+
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "Dir",
+		"function": "Fsync",
+	})
+
+	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+
+	operID := dir.fs.GetNextOperationID()
+	logger.Infof("Calling Fsync (%d) - %s", operID, dir.path)
+	defer logger.Infof("Called Fsync (%d) - %s", operID, dir.path)
+
+	// do nothing
+	return fusefs.OK
 }
 
 /*
