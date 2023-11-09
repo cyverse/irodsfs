@@ -59,6 +59,7 @@ type IRODSFS struct {
 	fuseServer    *fuse.Server
 	vpathManager  *irodsfs_common_vpath.VPathManager
 	fsClient      irodsfs_common_irods.IRODSFSClient
+	fsDummyClient irodsfs_common_irods.IRODSFSClient
 	fileHandleMap *FileHandleMap
 	userGroupsMap map[string]*irodsclient_types.IRODSUser
 
@@ -147,6 +148,8 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 
 	fsConfig := irodsclient_fs.NewFileSystemConfig(
 		FSName,
+		commons.ConnectionErrorTimeout,
+		0,
 		time.Duration(config.ConnectionLifespan),
 		time.Duration(config.OperationTimeout), time.Duration(config.ConnectionIdleTimeout),
 		config.ConnectionMax, commons.TCPBufferSizeDefault,
@@ -376,18 +379,24 @@ func (fs *IRODSFS) Root() (*Dir, error) {
 		return nil, syscall.EREMOTEIO
 	}
 
-	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
+	if vpathEntry.IsVirtualDirEntry() {
 		return NewDir(fs, vpathEntry.VirtualDirEntry.ID, "/"), nil
-	} else if vpathEntry.Type == irodsfs_common_vpath.VPathIRODS {
+	} else {
+		if vpathEntry.RequireIRODSEntryUpdate() {
+			// update
+			err := vpathEntry.UpdateIRODSEntry(fs.fsClient)
+			if err != nil {
+				logger.Errorf("%+v", err)
+				return nil, syscall.EREMOTEIO
+			}
+		}
+
 		if vpathEntry.IRODSEntry.Type != irodsclient_fs.DirectoryEntry {
 			logger.Errorf("failed to mount a data object as a root")
 			return nil, syscall.EREMOTEIO
 		}
 
 		return NewDir(fs, vpathEntry.IRODSEntry.ID, "/"), nil
-	} else {
-		logger.Errorf("unknown VPath Entry type : %s", vpathEntry.Type)
-		return nil, syscall.EREMOTEIO
 	}
 }
 

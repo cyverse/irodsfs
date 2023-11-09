@@ -46,7 +46,7 @@ func (file *File) getStableAttr() fusefs.StableAttr {
 }
 
 func (file *File) setAttrOut(vpathEntry *irodsfs_common_vpath.VPathEntry, out *fuse.Attr) {
-	if vpathEntry.Type == irodsfs_common_vpath.VPathIRODS {
+	if vpathEntry.IsIRODSEntry() {
 		// irods
 		out.Ino = uint64(vpathEntry.IRODSEntry.ID)
 		out.Uid = file.fs.uid
@@ -162,26 +162,26 @@ func (file *File) Getattr(ctx context.Context, fh fusefs.FileHandle, out *fuse.A
 		return syscall.EREMOTEIO
 	}
 
-	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
+	// Virtual Dir
+	if vpathEntry.IsVirtualDirEntry() {
 		logger.Errorf("failed to get file attribute from a virtual dir mapping")
 		return syscall.EREMOTEIO
 	}
 
-	if vpathEntry.Type != irodsfs_common_vpath.VPathIRODS {
-		logger.Errorf("unknown VPath Entry type : %s", vpathEntry.Type)
-		return syscall.EREMOTEIO
+	// IRODS Dir
+	if vpathEntry.RequireIRODSEntryUpdate() {
+		// update
+		err := vpathEntry.UpdateIRODSEntry(file.fs.fsClient)
+		if err != nil {
+			logger.Errorf("%+v", err)
+			return syscall.EREMOTEIO
+		}
 	}
 
-	irodsPath, err := vpathEntry.GetIRODSPath(file.path)
-	if err != nil {
-		logger.Errorf("%+v", err)
-		return syscall.EREMOTEIO
-	}
-
-	irodsEntry, err := file.fs.fsClient.Stat(irodsPath)
+	_, irodsEntry, err := vpathEntry.StatIRODSEntry(file.fs.fsClient, file.path)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find a file - %s", irodsPath)
+			logger.Debugf("failed to find a file - %s", file.path)
 			return syscall.ENOENT
 		}
 
@@ -189,7 +189,7 @@ func (file *File) Getattr(ctx context.Context, fh fusefs.FileHandle, out *fuse.A
 		return syscall.EREMOTEIO
 	}
 
-	newVPathEntry := irodsfs_common_vpath.NewVPathEntryFromIRODSFSEntry(file.path, irodsEntry, vpathEntry.ReadOnly)
+	newVPathEntry := irodsfs_common_vpath.NewVPathEntryFromIRODSFSEntry(file.path, irodsEntry.Path, irodsEntry, vpathEntry.ReadOnly)
 	file.setAttrOut(newVPathEntry, &out.Attr)
 	return fusefs.OK
 }
@@ -285,14 +285,20 @@ func (file *File) Listxattr(ctx context.Context, dest []byte) (uint32, syscall.E
 		return 0, syscall.EREMOTEIO
 	}
 
-	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
+	// Virtual Dir
+	if vpathEntry.IsVirtualDirEntry() {
 		logger.Errorf("failed to get file extended attribute from a virtual dir mapping")
 		return 0, syscall.EREMOTEIO
 	}
 
-	if vpathEntry.Type != irodsfs_common_vpath.VPathIRODS {
-		logger.Errorf("unknown VPath Entry type : %s", vpathEntry.Type)
-		return 0, syscall.EREMOTEIO
+	// IRODS Dir
+	if vpathEntry.RequireIRODSEntryUpdate() {
+		// update
+		err := vpathEntry.UpdateIRODSEntry(file.fs.fsClient)
+		if err != nil {
+			logger.Errorf("%+v", err)
+			return 0, syscall.EREMOTEIO
+		}
 	}
 
 	irodsPath, err := vpathEntry.GetIRODSPath(file.path)
@@ -368,14 +374,20 @@ func (file *File) Getxattr(ctx context.Context, attr string, dest []byte) (uint3
 		return 0, syscall.EREMOTEIO
 	}
 
-	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
+	// Virtual Dir
+	if vpathEntry.IsVirtualDirEntry() {
 		logger.Errorf("failed to get file extended attribute from a virtual dir mapping")
 		return 0, syscall.EREMOTEIO
 	}
 
-	if vpathEntry.Type != irodsfs_common_vpath.VPathIRODS {
-		logger.Errorf("unknown VPath Entry type : %s", vpathEntry.Type)
-		return 0, syscall.EREMOTEIO
+	// IRODS Dir
+	if vpathEntry.RequireIRODSEntryUpdate() {
+		// update
+		err := vpathEntry.UpdateIRODSEntry(file.fs.fsClient)
+		if err != nil {
+			logger.Errorf("%+v", err)
+			return 0, syscall.EREMOTEIO
+		}
 	}
 
 	irodsPath, err := vpathEntry.GetIRODSPath(file.path)
@@ -441,14 +453,20 @@ func (file *File) Setxattr(ctx context.Context, attr string, data []byte, flags 
 		return syscall.EREMOTEIO
 	}
 
-	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
+	// Virtual Dir
+	if vpathEntry.IsVirtualDirEntry() {
 		logger.Errorf("failed to set file extended attribute from a virtual dir mapping")
 		return syscall.EREMOTEIO
 	}
 
-	if vpathEntry.Type != irodsfs_common_vpath.VPathIRODS {
-		logger.Errorf("unknown VPath Entry type : %s", vpathEntry.Type)
-		return syscall.EREMOTEIO
+	// IRODS Dir
+	if vpathEntry.RequireIRODSEntryUpdate() {
+		// update
+		err := vpathEntry.UpdateIRODSEntry(file.fs.fsClient)
+		if err != nil {
+			logger.Errorf("%+v", err)
+			return syscall.EREMOTEIO
+		}
 	}
 
 	irodsPath, err := vpathEntry.GetIRODSPath(file.path)
@@ -501,14 +519,20 @@ func (file *File) Removexattr(ctx context.Context, attr string) syscall.Errno {
 		return syscall.EREMOTEIO
 	}
 
-	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
+	// Virtual Dir
+	if vpathEntry.IsVirtualDirEntry() {
 		logger.Errorf("failed to remove file extended attribute from a virtual dir mapping")
 		return syscall.EREMOTEIO
 	}
 
-	if vpathEntry.Type != irodsfs_common_vpath.VPathIRODS {
-		logger.Errorf("unknown VPath Entry type : %s", vpathEntry.Type)
-		return syscall.EREMOTEIO
+	// IRODS Dir
+	if vpathEntry.RequireIRODSEntryUpdate() {
+		// update
+		err := vpathEntry.UpdateIRODSEntry(file.fs.fsClient)
+		if err != nil {
+			logger.Errorf("%+v", err)
+			return syscall.EREMOTEIO
+		}
 	}
 
 	irodsPath, err := vpathEntry.GetIRODSPath(file.path)
@@ -573,27 +597,26 @@ func (file *File) Truncate(ctx context.Context, size uint64) syscall.Errno {
 		return syscall.EREMOTEIO
 	}
 
-	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
+	// Virtual Dir
+	if vpathEntry.IsVirtualDirEntry() {
 		logger.Errorf("failed to truncate a virtual dir")
 		return syscall.EREMOTEIO
 	}
 
-	if vpathEntry.Type != irodsfs_common_vpath.VPathIRODS {
-		logger.Errorf("unknown VPath Entry type : %s", vpathEntry.Type)
-		return syscall.EREMOTEIO
+	// IRODS Dir
+	if vpathEntry.RequireIRODSEntryUpdate() {
+		// update
+		err := vpathEntry.UpdateIRODSEntry(file.fs.fsClient)
+		if err != nil {
+			logger.Errorf("%+v", err)
+			return syscall.EREMOTEIO
+		}
 	}
 
-	irodsPath, err := vpathEntry.GetIRODSPath(file.path)
-	if err != nil {
-		logger.Errorf("%+v", err)
-		return syscall.EREMOTEIO
-	}
-
-	// redo to get fresh info
-	irodsEntry, err := file.fs.fsClient.Stat(irodsPath)
+	_, irodsEntry, err := vpathEntry.StatIRODSEntry(file.fs.fsClient, file.path)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find a file - %s", irodsPath)
+			logger.Debugf("failed to find a file - %s", file.path)
 			return syscall.ENOENT
 		}
 
@@ -604,7 +627,7 @@ func (file *File) Truncate(ctx context.Context, size uint64) syscall.Errno {
 	// check if there're opened file handles
 	// handle ftruncate operation
 	callFtruncate := false
-	handlesOpened := file.fs.fileHandleMap.ListByPath(irodsPath)
+	handlesOpened := file.fs.fileHandleMap.ListByPath(irodsEntry.Path)
 	for _, handle := range handlesOpened {
 		if handle.fileHandle.IsWriteMode() {
 			// is writing
@@ -612,7 +635,7 @@ func (file *File) Truncate(ctx context.Context, size uint64) syscall.Errno {
 
 			errno := handle.Truncate(ctx, size)
 			if errno != 0 {
-				logger.Errorf("failed to truncate a file - %s, %d", irodsPath, size)
+				logger.Errorf("failed to truncate a file - %s, %d", irodsEntry.Path, size)
 				return errno
 			}
 
@@ -625,10 +648,10 @@ func (file *File) Truncate(ctx context.Context, size uint64) syscall.Errno {
 
 	if !callFtruncate {
 		if irodsEntry.Size != int64(size) {
-			err = file.fs.fsClient.TruncateFile(irodsPath, int64(size))
+			err = file.fs.fsClient.TruncateFile(irodsEntry.Path, int64(size))
 			if err != nil {
 				if irodsclient_types.IsFileNotFoundError(err) {
-					logger.Debugf("failed to find a file - %s", irodsPath)
+					logger.Debugf("failed to find a file - %s", irodsEntry.Path)
 					return syscall.ENOENT
 				}
 
@@ -691,21 +714,27 @@ func (file *File) Open(ctx context.Context, flags uint32) (fusefs.FileHandle, ui
 		return nil, 0, syscall.EREMOTEIO
 	}
 
-	if vpathEntry.Type == irodsfs_common_vpath.VPathVirtualDir {
+	// Virtual Dir
+	if vpathEntry.IsVirtualDirEntry() {
 		// failed to open directory
 		err := xerrors.Errorf("failed to open mapped directory entry - %s", vpathEntry.Path)
 		logger.Error(err)
 		return nil, 0, syscall.EPERM
 	}
 
-	if vpathEntry.Type != irodsfs_common_vpath.VPathIRODS {
-		logger.Errorf("unknown VPath Entry type : %s", vpathEntry.Type)
-		return nil, 0, syscall.EREMOTEIO
-	}
-
 	if vpathEntry.ReadOnly && openMode != string(irodsclient_types.FileOpenModeReadOnly) {
 		logger.Errorf("failed to open a read-only file with non-read-only mode")
 		return nil, 0, syscall.EREMOTEIO
+	}
+
+	// IRODS Dir
+	if vpathEntry.RequireIRODSEntryUpdate() {
+		// update
+		err := vpathEntry.UpdateIRODSEntry(file.fs.fsClient)
+		if err != nil {
+			logger.Errorf("%+v", err)
+			return nil, 0, syscall.EREMOTEIO
+		}
 	}
 
 	irodsPath, err := vpathEntry.GetIRODSPath(file.path)
