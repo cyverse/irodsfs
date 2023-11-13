@@ -24,6 +24,7 @@ const (
 	ReadAheadMaxDefault             int           = 1024 * 128 // 128KB
 	ConnectionMaxDefault            int           = 10
 	TCPBufferSizeDefault            int           = 4 * 1024 * 1024 // 4MB
+	ConnectionErrorTimeout          time.Duration = 1 * time.Minute
 	OperationTimeoutDefault         time.Duration = 5 * time.Minute
 	ConnectionLifespanDefault       time.Duration = 1 * time.Hour
 	ConnectionIdleTimeoutDefault    time.Duration = 5 * time.Minute
@@ -74,6 +75,7 @@ type Config struct {
 	GID               int                                 `yaml:"gid"`
 	SystemUser        string                              `yaml:"system_user"`
 	MountPath         string                              `yaml:"mount_path,omitempty"`
+	DummyAtFail       bool                                `yaml:"dummy_at_fail,omitempty"`
 
 	DataRootPath string `yaml:"data_root_path,omitempty"`
 
@@ -133,6 +135,7 @@ func NewDefaultConfig() *Config {
 		UID:               uid,
 		GID:               gid,
 		SystemUser:        systemUser,
+		DummyAtFail:       false,
 
 		DataRootPath: GetDefaultDataRootDirPath(),
 
@@ -284,15 +287,6 @@ func (config *Config) makeDir(path string) error {
 	}
 
 	return nil
-}
-
-// removeDir removes a dir
-func (config *Config) removeDir(path string) error {
-	if len(path) == 0 {
-		return xerrors.Errorf("failed to remove a dir with empty path")
-	}
-
-	return os.RemoveAll(path)
 }
 
 // Validate validates configuration

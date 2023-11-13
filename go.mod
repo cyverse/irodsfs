@@ -3,10 +3,10 @@ module github.com/cyverse/irodsfs
 go 1.18
 
 require (
-	github.com/cyverse/go-irodsclient v0.12.18
-	github.com/cyverse/irodsfs-common v0.0.0-20231109181905-cbde74dd04b5
+	github.com/cyverse/go-irodsclient v0.12.19-0.20231113190749-e76ad0ea0374
+	github.com/cyverse/irodsfs-common v0.0.0-20231113190844-3ef47b1e4fb9
 	github.com/cyverse/irodsfs-monitor v0.0.0-20220809235922-daf13261a2dc
-	github.com/cyverse/irodsfs-pool v0.6.20-0.20231109181956-6d4d6d755ab8
+	github.com/cyverse/irodsfs-pool v0.6.20-0.20231113191113-75bb60be0c73
 	github.com/hanwen/go-fuse/v2 v2.3.0
 	github.com/pkg/profile v1.7.0
 	github.com/rs/xid v1.3.0

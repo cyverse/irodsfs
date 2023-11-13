@@ -59,7 +59,6 @@ type IRODSFS struct {
 	fuseServer    *fuse.Server
 	vpathManager  *irodsfs_common_vpath.VPathManager
 	fsClient      irodsfs_common_irods.IRODSFSClient
-	fsDummyClient irodsfs_common_irods.IRODSFSClient
 	fileHandleMap *FileHandleMap
 	userGroupsMap map[string]*irodsclient_types.IRODSUser
 
@@ -381,23 +380,9 @@ func (fs *IRODSFS) Root() (*Dir, error) {
 
 	if vpathEntry.IsVirtualDirEntry() {
 		return NewDir(fs, vpathEntry.VirtualDirEntry.ID, "/"), nil
-	} else {
-		if vpathEntry.RequireIRODSEntryUpdate() {
-			// update
-			err := vpathEntry.UpdateIRODSEntry(fs.fsClient)
-			if err != nil {
-				logger.Errorf("%+v", err)
-				return nil, syscall.EREMOTEIO
-			}
-		}
-
-		if vpathEntry.IRODSEntry.Type != irodsclient_fs.DirectoryEntry {
-			logger.Errorf("failed to mount a data object as a root")
-			return nil, syscall.EREMOTEIO
-		}
-
-		return NewDir(fs, vpathEntry.IRODSEntry.ID, "/"), nil
 	}
+
+	return NewIRODSRoot(fs, vpathEntry)
 }
 
 // GetNextOperationID returns next operation ID

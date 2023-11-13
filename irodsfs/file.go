@@ -9,7 +9,6 @@ import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
-	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 	fusefs "github.com/hanwen/go-fuse/v2/fs"
 	fuse "github.com/hanwen/go-fuse/v2/fuse"
 	"golang.org/x/xerrors"
@@ -45,94 +44,9 @@ func (file *File) getStableAttr() fusefs.StableAttr {
 	}
 }
 
-func (file *File) setAttrOut(vpathEntry *irodsfs_common_vpath.VPathEntry, out *fuse.Attr) {
-	if vpathEntry.IsIRODSEntry() {
-		// irods
-		out.Ino = uint64(vpathEntry.IRODSEntry.ID)
-		out.Uid = file.fs.uid
-		out.Gid = file.fs.gid
-		out.SetTimes(&vpathEntry.IRODSEntry.ModifyTime, &vpathEntry.IRODSEntry.ModifyTime, &vpathEntry.IRODSEntry.ModifyTime)
-		out.Size = uint64(vpathEntry.IRODSEntry.Size)
-		out.Mode = uint32(fuse.S_IFREG | file.getACL(vpathEntry.IRODSEntry, vpathEntry.ReadOnly))
-	}
-}
-
-func (file *File) getPermission(level irodsclient_types.IRODSAccessLevelType) os.FileMode {
-	switch level {
-	case irodsclient_types.IRODSAccessLevelOwner, irodsclient_types.IRODSAccessLevelWrite:
-		return 0o700
-	case irodsclient_types.IRODSAccessLevelRead:
-		return 0o500
-	case irodsclient_types.IRODSAccessLevelNone:
-		return 0o0
-	default:
-		return 0o0
-	}
-}
-
-func (file *File) getACL(irodsEntry *irodsclient_fs.Entry, readonly bool) os.FileMode {
-	logger := log.WithFields(log.Fields{
-		"package":  "irodsfs",
-		"struct":   "File",
-		"function": "getACL",
-	})
-
-	defer irodsfs_common_utils.StackTraceFromPanic(logger)
-
-	// we don't actually check permissions for reading file when vpathEntry is read only
-	// because files with no-access for the user will not be visible
-	if readonly {
-		return 0o500
-	}
-
-	if file.fs.config.NoPermissionCheck {
-		// skip perform permission check
-		// give the highest permission, but this doesn't mean that the user can write data
-		// since iRODS will check permission
-		return 0o700
-	}
-
-	if irodsEntry.Owner == file.fs.config.ClientUser {
-		// mine
-		return 0o700
-	}
-
-	logger.Infof("Checking ACL information of the Entry for %s and user %s", irodsEntry.Path, file.fs.config.ClientUser)
-	defer logger.Infof("Checked ACL information of the Entry for %s and user %s", irodsEntry.Path, file.fs.config.ClientUser)
-
-	accesses, err := file.fs.fsClient.ListFileACLs(irodsEntry.Path)
-	if err != nil {
-		logger.Errorf("failed to get ACL information of the Entry for %s", irodsEntry.Path)
-	}
-
-	var highestPermission os.FileMode = 0o500
-	for _, access := range accesses {
-		if access.UserType == irodsclient_types.IRODSUserRodsUser && access.UserName == file.fs.config.ClientUser {
-			perm := file.getPermission(access.AccessLevel)
-			if perm == 0o700 {
-				return perm
-			}
-
-			if perm > highestPermission {
-				highestPermission = perm
-			}
-		} else if access.UserType == irodsclient_types.IRODSUserRodsGroup {
-			if _, ok := file.fs.userGroupsMap[access.UserName]; ok {
-				// my group
-				perm := file.getPermission(access.AccessLevel)
-				if perm == 0o700 {
-					return perm
-				}
-
-				if perm > highestPermission {
-					highestPermission = perm
-				}
-			}
-		}
-	}
-
-	logger.Debugf("failed to find ACL information of the Entry for %s and user %s", irodsEntry.Path, file.fs.config.ClientUser)
-	return highestPermission
+func (file *File) setAttrOutForIRODSEntry(entry *irodsclient_fs.Entry, readonly bool, out *fuse.Attr) {
+	mode := GetACL(file.fs, entry, readonly)
+	setAttrOutForIRODSEntry(entry, file.fs.uid, file.fs.gid, mode, out)
 }
 
 // Getattr returns stat of file entry
@@ -169,13 +83,10 @@ func (file *File) Getattr(ctx context.Context, fh fusefs.FileHandle, out *fuse.A
 	}
 
 	// IRODS Dir
-	if vpathEntry.RequireIRODSEntryUpdate() {
-		// update
-		err := vpathEntry.UpdateIRODSEntry(file.fs.fsClient)
-		if err != nil {
-			logger.Errorf("%+v", err)
-			return syscall.EREMOTEIO
-		}
+	err := ensureVPathEntryIsIRODSEntry(file.fs.fsClient, vpathEntry)
+	if err != nil {
+		logger.Errorf("%+v", err)
+		return syscall.EREMOTEIO
 	}
 
 	_, irodsEntry, err := vpathEntry.StatIRODSEntry(file.fs.fsClient, file.path)
@@ -189,8 +100,7 @@ func (file *File) Getattr(ctx context.Context, fh fusefs.FileHandle, out *fuse.A
 		return syscall.EREMOTEIO
 	}
 
-	newVPathEntry := irodsfs_common_vpath.NewVPathEntryFromIRODSFSEntry(file.path, irodsEntry.Path, irodsEntry, vpathEntry.ReadOnly)
-	file.setAttrOut(newVPathEntry, &out.Attr)
+	file.setAttrOutForIRODSEntry(irodsEntry, vpathEntry.ReadOnly, &out.Attr)
 	return fusefs.OK
 }
 
@@ -292,13 +202,10 @@ func (file *File) Listxattr(ctx context.Context, dest []byte) (uint32, syscall.E
 	}
 
 	// IRODS Dir
-	if vpathEntry.RequireIRODSEntryUpdate() {
-		// update
-		err := vpathEntry.UpdateIRODSEntry(file.fs.fsClient)
-		if err != nil {
-			logger.Errorf("%+v", err)
-			return 0, syscall.EREMOTEIO
-		}
+	err := ensureVPathEntryIsIRODSEntry(file.fs.fsClient, vpathEntry)
+	if err != nil {
+		logger.Errorf("%+v", err)
+		return 0, syscall.EREMOTEIO
 	}
 
 	irodsPath, err := vpathEntry.GetIRODSPath(file.path)
@@ -381,13 +288,10 @@ func (file *File) Getxattr(ctx context.Context, attr string, dest []byte) (uint3
 	}
 
 	// IRODS Dir
-	if vpathEntry.RequireIRODSEntryUpdate() {
-		// update
-		err := vpathEntry.UpdateIRODSEntry(file.fs.fsClient)
-		if err != nil {
-			logger.Errorf("%+v", err)
-			return 0, syscall.EREMOTEIO
-		}
+	err := ensureVPathEntryIsIRODSEntry(file.fs.fsClient, vpathEntry)
+	if err != nil {
+		logger.Errorf("%+v", err)
+		return 0, syscall.EREMOTEIO
 	}
 
 	irodsPath, err := vpathEntry.GetIRODSPath(file.path)
@@ -460,13 +364,10 @@ func (file *File) Setxattr(ctx context.Context, attr string, data []byte, flags 
 	}
 
 	// IRODS Dir
-	if vpathEntry.RequireIRODSEntryUpdate() {
-		// update
-		err := vpathEntry.UpdateIRODSEntry(file.fs.fsClient)
-		if err != nil {
-			logger.Errorf("%+v", err)
-			return syscall.EREMOTEIO
-		}
+	err := ensureVPathEntryIsIRODSEntry(file.fs.fsClient, vpathEntry)
+	if err != nil {
+		logger.Errorf("%+v", err)
+		return syscall.EREMOTEIO
 	}
 
 	irodsPath, err := vpathEntry.GetIRODSPath(file.path)
@@ -526,13 +427,10 @@ func (file *File) Removexattr(ctx context.Context, attr string) syscall.Errno {
 	}
 
 	// IRODS Dir
-	if vpathEntry.RequireIRODSEntryUpdate() {
-		// update
-		err := vpathEntry.UpdateIRODSEntry(file.fs.fsClient)
-		if err != nil {
-			logger.Errorf("%+v", err)
-			return syscall.EREMOTEIO
-		}
+	err := ensureVPathEntryIsIRODSEntry(file.fs.fsClient, vpathEntry)
+	if err != nil {
+		logger.Errorf("%+v", err)
+		return syscall.EREMOTEIO
 	}
 
 	irodsPath, err := vpathEntry.GetIRODSPath(file.path)
@@ -604,13 +502,10 @@ func (file *File) Truncate(ctx context.Context, size uint64) syscall.Errno {
 	}
 
 	// IRODS Dir
-	if vpathEntry.RequireIRODSEntryUpdate() {
-		// update
-		err := vpathEntry.UpdateIRODSEntry(file.fs.fsClient)
-		if err != nil {
-			logger.Errorf("%+v", err)
-			return syscall.EREMOTEIO
-		}
+	err := ensureVPathEntryIsIRODSEntry(file.fs.fsClient, vpathEntry)
+	if err != nil {
+		logger.Errorf("%+v", err)
+		return syscall.EREMOTEIO
 	}
 
 	_, irodsEntry, err := vpathEntry.StatIRODSEntry(file.fs.fsClient, file.path)
@@ -728,13 +623,10 @@ func (file *File) Open(ctx context.Context, flags uint32) (fusefs.FileHandle, ui
 	}
 
 	// IRODS Dir
-	if vpathEntry.RequireIRODSEntryUpdate() {
-		// update
-		err := vpathEntry.UpdateIRODSEntry(file.fs.fsClient)
-		if err != nil {
-			logger.Errorf("%+v", err)
-			return nil, 0, syscall.EREMOTEIO
-		}
+	err := ensureVPathEntryIsIRODSEntry(file.fs.fsClient, vpathEntry)
+	if err != nil {
+		logger.Errorf("%+v", err)
+		return nil, 0, syscall.EREMOTEIO
 	}
 
 	irodsPath, err := vpathEntry.GetIRODSPath(file.path)
