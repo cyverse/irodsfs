@@ -35,7 +35,56 @@ type FileHandle struct {
 	mutex sync.Mutex
 }
 
-func NewFileHandle(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle) (*FileHandle, error) {
+func NewFileHandle(fs *IRODSFS, fileHandle irodsfscommon_irods.IRODSFSFileHandle) (*FileHandle, error) {
+	var writer irodsfscommon_io.Writer
+	var reader irodsfscommon_io.Reader
+
+	fsClient := fs.fsClient
+
+	openMode := fileHandle.GetOpenMode()
+	if openMode.IsReadOnly() {
+		// writer
+		writer = irodsfscommon_io.NewNilWriter(fsClient, fileHandle)
+
+		// reader
+		syncReader := irodsfscommon_io.NewSyncReader(fsClient, fileHandle, fs.instanceReportClient)
+
+		// use prefetching
+		// requires multiple readers
+		readers := []irodsfscommon_io.Reader{syncReader}
+
+		asyncReader, err := irodsfscommon_io.NewAsyncCacheThroughReader(readers, iRODSIOBlockSize, nil)
+		if err != nil {
+			return nil, err
+		}
+		reader = asyncReader
+	} else if openMode.IsWriteOnly() {
+		// writer
+		syncWriter := irodsfscommon_io.NewSyncWriter(fsClient, fileHandle, fs.instanceReportClient)
+		syncBufferedWriter := irodsfscommon_io.NewSyncBufferedWriter(syncWriter, iRODSIOBlockSize)
+		writer = irodsfscommon_io.NewAsyncWriter(syncBufferedWriter)
+
+		// reader
+		reader = irodsfscommon_io.NewNilReader(fsClient, fileHandle)
+	} else {
+		writer = irodsfscommon_io.NewSyncWriter(fsClient, fileHandle, fs.instanceReportClient)
+		reader = irodsfscommon_io.NewSyncReader(fsClient, fileHandle, fs.instanceReportClient)
+	}
+
+	return &FileHandle{
+		fs:   fs,
+		file: nil,
+
+		reader:               reader,
+		writer:               writer,
+		fileHandle:           fileHandle,
+		localFileLockManager: NewFileHandleLocalLockManager(),
+
+		mutex: sync.Mutex{},
+	}, nil
+}
+
+func NewFileHandleWithFile(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle) (*FileHandle, error) {
 	var writer irodsfscommon_io.Writer
 	var reader irodsfscommon_io.Reader
 
@@ -82,6 +131,11 @@ func NewFileHandle(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle)
 
 		mutex: sync.Mutex{},
 	}, nil
+}
+
+// SetFile sets File
+func (handle *FileHandle) SetFile(file *File) {
+	handle.file = file
 }
 
 // Getattr returns stat of file entry

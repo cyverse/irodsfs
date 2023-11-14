@@ -1,5 +1,6 @@
 package irodsfs
 
+// IsUnhandledAttr checks if given attr is ignored
 func IsUnhandledAttr(attr string) bool {
 	switch attr {
 	// we suppress attr "system.posix_acl_access" as it may cause wrong permission check

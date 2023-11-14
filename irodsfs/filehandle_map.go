@@ -227,19 +227,64 @@ func (fileHandleMap *FileHandleMap) RenameDir(srcParentPath string, destParentPa
 		newPath := fmt.Sprintf("%s%s", newPrefix, subPath)
 
 		// rename
-		ids := fileHandleMap.filePathID[path]
-		delete(fileHandleMap.filePathID, path)
-		fileHandleMap.filePathID[newPath] = ids
+		if ids, ok := fileHandleMap.filePathID[path]; ok {
+			delete(fileHandleMap.filePathID, path)
+			fileHandleMap.filePathID[newPath] = ids
+		}
 	}
 }
 
-// Rename renames files
-func (fileHandleMap *FileHandleMap) Rename(srcPath string, destPath string) {
+// RenameFile renames files
+func (fileHandleMap *FileHandleMap) RenameFile(srcPath string, destPath string) {
 	fileHandleMap.mutex.Lock()
 	defer fileHandleMap.mutex.Unlock()
 
 	// rename
-	ids := fileHandleMap.filePathID[srcPath]
-	delete(fileHandleMap.filePathID, srcPath)
-	fileHandleMap.filePathID[destPath] = ids
+	if ids, ok := fileHandleMap.filePathID[srcPath]; ok {
+		delete(fileHandleMap.filePathID, srcPath)
+		fileHandleMap.filePathID[destPath] = ids
+	}
+}
+
+// Rename renames files or dirs
+func (fileHandleMap *FileHandleMap) Rename(srcPath string, destPath string) {
+	fileHandleMap.mutex.Lock()
+	defer fileHandleMap.mutex.Unlock()
+
+	if ids, ok := fileHandleMap.filePathID[srcPath]; ok {
+		// rename files
+		delete(fileHandleMap.filePathID, srcPath)
+		fileHandleMap.filePathID[destPath] = ids
+	} else {
+		// rename dirs
+		prefix := srcPath
+		if len(prefix) > 1 && !strings.HasSuffix(prefix, "/") {
+			prefix = fmt.Sprintf("%s/", prefix)
+		}
+
+		newPrefix := destPath
+		if len(newPrefix) > 1 && !strings.HasSuffix(newPrefix, "/") {
+			newPrefix = fmt.Sprintf("%s/", newPrefix)
+		}
+
+		paths := []string{}
+		// loop over all file handles opened
+		for path := range fileHandleMap.filePathID {
+			// check if it's sub dirs or files in the dir
+			if strings.HasPrefix(path, prefix) {
+				paths = append(paths, path)
+			}
+		}
+
+		for _, path := range paths {
+			subPath := path[len(prefix):]
+			newPath := fmt.Sprintf("%s%s", newPrefix, subPath)
+
+			// rename
+			if ids, ok := fileHandleMap.filePathID[path]; ok {
+				delete(fileHandleMap.filePathID, path)
+				fileHandleMap.filePathID[newPath] = ids
+			}
+		}
+	}
 }

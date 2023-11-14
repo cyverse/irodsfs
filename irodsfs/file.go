@@ -2,13 +2,13 @@ package irodsfs
 
 import (
 	"context"
-	"os"
 	"sync"
 	"syscall"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
+	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 	fusefs "github.com/hanwen/go-fuse/v2/fs"
 	fuse "github.com/hanwen/go-fuse/v2/fuse"
 	"golang.org/x/xerrors"
@@ -44,9 +44,13 @@ func (file *File) getStableAttr() fusefs.StableAttr {
 	}
 }
 
-func (file *File) setAttrOutForIRODSEntry(entry *irodsclient_fs.Entry, readonly bool, out *fuse.Attr) {
-	mode := GetACL(file.fs, entry, readonly)
+func (file *File) setAttrOutForIRODSEntry(ctx context.Context, entry *irodsclient_fs.Entry, readonly bool, out *fuse.Attr) {
+	mode := IRODSGetACL(ctx, file.fs, entry, readonly)
 	setAttrOutForIRODSEntry(entry, file.fs.uid, file.fs.gid, mode, out)
+}
+
+func (file *File) ensureIRODSPath(vpathEntry *irodsfs_common_vpath.VPathEntry) error {
+	return ensureVPathEntryIsIRODSEntry(file.fs.fsClient, vpathEntry)
 }
 
 // Getattr returns stat of file entry
@@ -82,26 +86,20 @@ func (file *File) Getattr(ctx context.Context, fh fusefs.FileHandle, out *fuse.A
 		return syscall.EREMOTEIO
 	}
 
-	// IRODS Dir
-	err := ensureVPathEntryIsIRODSEntry(file.fs.fsClient, vpathEntry)
+	// IRODS File
+	err := file.ensureIRODSPath(vpathEntry)
 	if err != nil {
 		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
-	_, irodsEntry, err := vpathEntry.StatIRODSEntry(file.fs.fsClient, file.path)
+	irodsPath, err := vpathEntry.GetIRODSPath(file.path)
 	if err != nil {
-		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find a file - %s", file.path)
-			return syscall.ENOENT
-		}
-
 		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
 	}
 
-	file.setAttrOutForIRODSEntry(irodsEntry, vpathEntry.ReadOnly, &out.Attr)
-	return fusefs.OK
+	return IRODSGetattr(ctx, file.fs, irodsPath, vpathEntry.ReadOnly, out)
 }
 
 // Setattr sets file attributes
@@ -201,8 +199,8 @@ func (file *File) Listxattr(ctx context.Context, dest []byte) (uint32, syscall.E
 		return 0, syscall.EREMOTEIO
 	}
 
-	// IRODS Dir
-	err := ensureVPathEntryIsIRODSEntry(file.fs.fsClient, vpathEntry)
+	// IRODS File
+	err := file.ensureIRODSPath(vpathEntry)
 	if err != nil {
 		logger.Errorf("%+v", err)
 		return 0, syscall.EREMOTEIO
@@ -214,37 +212,7 @@ func (file *File) Listxattr(ctx context.Context, dest []byte) (uint32, syscall.E
 		return 0, syscall.EREMOTEIO
 	}
 
-	irodsMetadata, err := file.fs.fsClient.ListXattr(irodsPath)
-	if err != nil {
-		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find a file - %s", irodsPath)
-			return 0, syscall.ENOENT
-		}
-
-		logger.Errorf("%+v", err)
-		return 0, syscall.EREMOTEIO
-	}
-
-	// convert to a byte array
-	xattrNames := []byte{}
-	for _, irodsMeta := range irodsMetadata {
-		xattrNames = append(xattrNames, []byte(irodsMeta.Name)...)
-		xattrNames = append(xattrNames, byte(0))
-	}
-
-	requiredBytesLen := len(xattrNames)
-	if len(dest) < requiredBytesLen {
-		return uint32(requiredBytesLen), syscall.ERANGE
-	}
-
-	// has any?
-	if len(xattrNames) > 0 {
-		copy(dest, xattrNames)
-		return uint32(requiredBytesLen), fusefs.OK
-	}
-
-	// return empty
-	return 0, fusefs.OK
+	return IRODSListxattr(ctx, file.fs, irodsPath, dest)
 }
 
 // Getxattr returns xattr
@@ -287,8 +255,8 @@ func (file *File) Getxattr(ctx context.Context, attr string, dest []byte) (uint3
 		return 0, syscall.EREMOTEIO
 	}
 
-	// IRODS Dir
-	err := ensureVPathEntryIsIRODSEntry(file.fs.fsClient, vpathEntry)
+	// IRODS File
+	err := file.ensureIRODSPath(vpathEntry)
 	if err != nil {
 		logger.Errorf("%+v", err)
 		return 0, syscall.EREMOTEIO
@@ -300,29 +268,7 @@ func (file *File) Getxattr(ctx context.Context, attr string, dest []byte) (uint3
 		return 0, syscall.EREMOTEIO
 	}
 
-	irodsMeta, err := file.fs.fsClient.GetXattr(irodsPath, attr)
-	if err != nil {
-		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find a file - %s", irodsPath)
-			return 0, syscall.ENOENT
-		}
-
-		logger.Errorf("%+v", err)
-		return 0, syscall.EREMOTEIO
-	}
-
-	if irodsMeta == nil {
-		return 0, syscall.ENODATA
-	}
-
-	requiredBytesLen := len([]byte(irodsMeta.Value))
-
-	if len(dest) < requiredBytesLen {
-		return uint32(requiredBytesLen), syscall.ERANGE
-	}
-
-	copy(dest, []byte(irodsMeta.Value))
-	return uint32(requiredBytesLen), fusefs.OK
+	return IRODSGetxattr(ctx, file.fs, irodsPath, attr, dest)
 }
 
 // Setxattr sets xattr
@@ -363,8 +309,8 @@ func (file *File) Setxattr(ctx context.Context, attr string, data []byte, flags 
 		return syscall.EREMOTEIO
 	}
 
-	// IRODS Dir
-	err := ensureVPathEntryIsIRODSEntry(file.fs.fsClient, vpathEntry)
+	// IRODS File
+	err := file.ensureIRODSPath(vpathEntry)
 	if err != nil {
 		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
@@ -376,20 +322,7 @@ func (file *File) Setxattr(ctx context.Context, attr string, data []byte, flags 
 		return syscall.EREMOTEIO
 	}
 
-	logger.Debugf("xattr %s - '%v'", irodsPath, data)
-
-	err = file.fs.fsClient.SetXattr(irodsPath, attr, string(data))
-	if err != nil {
-		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find a file - %s", irodsPath)
-			return syscall.ENOENT
-		}
-
-		logger.Errorf("%+v", err)
-		return syscall.EREMOTEIO
-	}
-
-	return fusefs.OK
+	return IRODSSetxattr(ctx, file.fs, irodsPath, attr, data)
 }
 
 // Removexattr removes xattr
@@ -426,8 +359,8 @@ func (file *File) Removexattr(ctx context.Context, attr string) syscall.Errno {
 		return syscall.EREMOTEIO
 	}
 
-	// IRODS Dir
-	err := ensureVPathEntryIsIRODSEntry(file.fs.fsClient, vpathEntry)
+	// IRODS File
+	err := file.ensureIRODSPath(vpathEntry)
 	if err != nil {
 		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
@@ -439,33 +372,7 @@ func (file *File) Removexattr(ctx context.Context, attr string) syscall.Errno {
 		return syscall.EREMOTEIO
 	}
 
-	irodsMeta, err := file.fs.fsClient.GetXattr(irodsPath, attr)
-	if err != nil {
-		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find a file - %s", irodsPath)
-			return syscall.ENOENT
-		}
-
-		logger.Errorf("%+v", err)
-		return syscall.EREMOTEIO
-	}
-
-	if irodsMeta == nil {
-		return syscall.ENODATA
-	}
-
-	err = file.fs.fsClient.RemoveXattr(irodsPath, attr)
-	if err != nil {
-		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find a file - %s", irodsPath)
-			return syscall.ENOENT
-		}
-
-		logger.Errorf("%+v", err)
-		return syscall.EREMOTEIO
-	}
-
-	return fusefs.OK
+	return IRODSRemovexattr(ctx, file.fs, irodsPath, attr)
 }
 
 // Truncate truncates file entry
@@ -501,7 +408,7 @@ func (file *File) Truncate(ctx context.Context, size uint64) syscall.Errno {
 		return syscall.EREMOTEIO
 	}
 
-	// IRODS Dir
+	// IRODS File
 	err := ensureVPathEntryIsIRODSEntry(file.fs.fsClient, vpathEntry)
 	if err != nil {
 		logger.Errorf("%+v", err)
@@ -573,32 +480,13 @@ func (file *File) Open(ctx context.Context, flags uint32) (fusefs.FileHandle, ui
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	openMode := string(irodsclient_types.FileOpenModeReadWrite)
 	fuseFlag := uint32(0)
-
 	// if we use Direct_IO, it will disable kernel cache, read-ahead, shared mmap
 	//fuseFlag |= fuse.FOPEN_DIRECT_IO
 
-	if flags&uint32(os.O_WRONLY) == uint32(os.O_WRONLY) {
-		openMode = string(irodsclient_types.FileOpenModeWriteOnly)
-
-		if flags&uint32(os.O_APPEND) == uint32(os.O_APPEND) {
-			// append
-			openMode = string(irodsclient_types.FileOpenModeAppend)
-		} else if flags&uint32(os.O_TRUNC) == uint32(os.O_TRUNC) {
-			// truncate
-			openMode = string(irodsclient_types.FileOpenModeWriteTruncate)
-		}
-	} else if flags&uint32(os.O_RDWR) == uint32(os.O_RDWR) {
-		openMode = string(irodsclient_types.FileOpenModeReadWrite)
-	} else {
-		openMode = string(irodsclient_types.FileOpenModeReadOnly)
-		//fuseFlag |= fuse.FOPEN_KEEP_CACHE
-	}
-
 	operID := file.fs.GetNextOperationID()
-	logger.Infof("Calling Open (%d) - %s, mode(%s)", operID, file.path, openMode)
-	defer logger.Infof("Called Open (%d) - %s, mode(%s)", operID, file.path, openMode)
+	logger.Infof("Calling Open (%d) - %s, mode(%d)", operID, file.path, flags)
+	defer logger.Infof("Called Open (%d) - %s, mode(%d)", operID, file.path, flags)
 
 	file.mutex.RLock()
 	defer file.mutex.RUnlock()
@@ -617,13 +505,17 @@ func (file *File) Open(ctx context.Context, flags uint32) (fusefs.FileHandle, ui
 		return nil, 0, syscall.EPERM
 	}
 
-	if vpathEntry.ReadOnly && openMode != string(irodsclient_types.FileOpenModeReadOnly) {
-		logger.Errorf("failed to open a read-only file with non-read-only mode")
-		return nil, 0, syscall.EREMOTEIO
+	if vpathEntry.ReadOnly {
+		openMode := IRODSGetOpenFlags(flags)
+
+		if openMode != irodsclient_types.FileOpenModeReadOnly {
+			logger.Errorf("failed to open a read-only file with non-read-only mode")
+			return nil, 0, syscall.EPERM
+		}
 	}
 
-	// IRODS Dir
-	err := ensureVPathEntryIsIRODSEntry(file.fs.fsClient, vpathEntry)
+	// IRODS File
+	err := file.ensureIRODSPath(vpathEntry)
 	if err != nil {
 		logger.Errorf("%+v", err)
 		return nil, 0, syscall.EREMOTEIO
@@ -635,26 +527,12 @@ func (file *File) Open(ctx context.Context, flags uint32) (fusefs.FileHandle, ui
 		return nil, 0, syscall.EREMOTEIO
 	}
 
-	handle, err := file.fs.fsClient.OpenFile(irodsPath, "", openMode)
-	if err != nil {
-		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find a file - %s", irodsPath)
-			return nil, 0, syscall.ENOENT
-		}
-
-		logger.Errorf("%+v", err)
-		return nil, 0, syscall.EREMOTEIO
+	fileHandle, errno := IRODSOpen(ctx, file.fs, file, irodsPath, flags)
+	if errno != fusefs.OK {
+		return nil, 0, errno
 	}
 
-	if file.fs.instanceReportClient != nil {
-		file.fs.instanceReportClient.StartFileAccess(handle)
-	}
-
-	fileHandle, err := NewFileHandle(file, handle)
-	if err != nil {
-		logger.Errorf("%+v", err)
-		return nil, 0, syscall.EREMOTEIO
-	}
+	fileHandle.SetFile(file)
 
 	// add to file handle map
 	file.fs.fileHandleMap.Add(fileHandle)

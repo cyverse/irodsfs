@@ -35,3 +35,15 @@ func ensureVPathEntryIsIRODSEntry(fsClient irodsfs_common_irods.IRODSFSClient, v
 
 	return nil
 }
+
+func isVPathEntryUnmodifiable(vpathEntry *irodsfs_common_vpath.VPathEntry, targetPath string) bool {
+	if vpathEntry.Path == targetPath {
+		return true
+	}
+
+	if vpathEntry.ReadOnly || vpathEntry.IsVirtualDirEntry() {
+		return true
+	}
+
+	return false
+}
