@@ -36,8 +36,8 @@ func setAttrOutForIRODSEntry(entry *irodsclient_fs.Entry, uid uint32, gid uint32
 	}
 }
 
-func setAttrOutForDummy(uid uint32, gid uint32, dir bool, out *fuse.Attr) {
-	out.Ino = getDummyInodeID()
+func setAttrOutForDummy(path string, uid uint32, gid uint32, dir bool, out *fuse.Attr) {
+	out.Ino = getDummyInodeID(path)
 	out.Uid = uid
 	out.Gid = gid
 

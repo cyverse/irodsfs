@@ -141,7 +141,7 @@ func IRODSGetattr(ctx context.Context, fs *IRODSFS, path string, vpathReadonly b
 		if isTransitiveConnectionError(err) {
 			// return dummy
 			logger.Errorf("returning dummy attr for path %s", path)
-			setAttrOutForDummy(fs.uid, fs.gid, true, &out.Attr)
+			setAttrOutForDummy(path, fs.uid, fs.gid, true, &out.Attr)
 			return fusefs.OK
 		}
 

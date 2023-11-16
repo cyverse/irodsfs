@@ -114,7 +114,7 @@ func (dir *Dir) Getattr(ctx context.Context, fh fusefs.FileHandle, out *fuse.Att
 		if isTransitiveConnectionError(err) {
 			// return dummy
 			logger.Errorf("returning dummy attr for path %s", dir.path)
-			setAttrOutForDummy(dir.fs.uid, dir.fs.gid, true, &out.Attr)
+			setAttrOutForDummy(dir.path, dir.fs.uid, dir.fs.gid, true, &out.Attr)
 			return fusefs.OK
 		}
 
