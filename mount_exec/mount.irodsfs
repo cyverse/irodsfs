@@ -53,7 +53,7 @@ def reorderArgs(argv):
                     if fokv[0] == "mounttimeout":
                         mountTimeout = int(fokv[1])
                         if mountTimeout <= 0:
-                            mountTimeout = 300
+                            mountTimeout = 10
                     else:
                         options.append("--%s" % fokv[0])
                         options.append(fokv[1])
@@ -127,7 +127,8 @@ def run_command(command_argv):
         vars_dict["PATH"] = pathenv
         os.environ.update(vars_dict)
 
-    os.spawnvpe(os.P_WAIT, command_argv[0], command_argv, os.environ)
+    # returns exit code
+    return os.spawnvpe(os.P_WAIT, command_argv[0], command_argv, os.environ)
 
 def main(argv):
     irodsBin = which("irodsfs")
@@ -146,7 +147,13 @@ def main(argv):
 
     command = "%s %s" % (irodsBin, " ".join(reorderedArgv[1:]))
     print("executing > %s" % command)
-    run_command(command.split())
+    exitcode = run_command(command.split())
+    if exitcode > 0:
+        print("failed to mount (irodsfs exited with exitcode %d)" % exitcode, file=sys.stderr)
+        sys.exit(exitcode)
+    elif exitcode < 0:
+        print("failed to mount (irodsfs exited with SIG %d)" % exitcode, file=sys.stderr)
+        sys.exit(1)
 
     mountPoint = reorderedArgv[-1]
     if not check_mount(mountPoint, mountTimeout):
