@@ -221,12 +221,15 @@ func run(config *commons.Config, isChildProcess bool) error {
 	if err != nil {
 		fsErr := xerrors.Errorf("failed to create the filesystem: %w", err)
 		logger.Errorf("%+v", fsErr)
+
 		if isChildProcess {
 			cmd_commons.ReportChildProcessError()
 		}
-		return err
+		return fsErr
 	}
 
+	// iRODS connection must be established correctly by here
+	// any network errors from here will be recoverable
 	err = fs.Start()
 	if err != nil {
 		fsErr := xerrors.Errorf("failed to start the filesystem: %w", err)
@@ -236,7 +239,7 @@ func run(config *commons.Config, isChildProcess bool) error {
 		}
 
 		fs.Release()
-		return err
+		return fsErr
 	}
 
 	if isChildProcess {

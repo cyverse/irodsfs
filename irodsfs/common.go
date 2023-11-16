@@ -3,8 +3,10 @@ package irodsfs
 import (
 	"context"
 	"io/fs"
+	"time"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 	fusefs "github.com/hanwen/go-fuse/v2/fs"
 	fuse "github.com/hanwen/go-fuse/v2/fuse"
@@ -31,6 +33,23 @@ func setAttrOutForIRODSEntry(entry *irodsclient_fs.Entry, uid uint32, gid uint32
 		out.Mode = uint32(fuse.S_IFDIR | mode)
 	} else {
 		out.Mode = uint32(fuse.S_IFREG | mode)
+	}
+}
+
+func setAttrOutForDummy(uid uint32, gid uint32, dir bool, out *fuse.Attr) {
+	out.Ino = getDummyInodeID()
+	out.Uid = uid
+	out.Gid = gid
+
+	now := time.Now()
+
+	out.SetTimes(&now, &now, &now)
+	out.Size = uint64(0)
+
+	if dir {
+		out.Mode = uint32(fuse.S_IFDIR | 0o500)
+	} else {
+		out.Mode = uint32(fuse.S_IFREG | 0o500)
 	}
 }
 
@@ -64,4 +83,8 @@ func NewSubFileInode(ctx context.Context, dir *Dir, entryID int64, path string) 
 	subFileInode := dir.NewInode(ctx, subFile, subFile.getStableAttr())
 
 	return subFile, subFileInode
+}
+
+func isTransitiveConnectionError(err error) bool {
+	return irodsclient_types.IsConnectionError(err) || irodsclient_types.IsConnectionPoolFullError(err)
 }

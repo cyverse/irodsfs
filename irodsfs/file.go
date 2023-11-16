@@ -415,7 +415,13 @@ func (file *File) Truncate(ctx context.Context, size uint64) syscall.Errno {
 		return syscall.EREMOTEIO
 	}
 
-	_, irodsEntry, err := vpathEntry.StatIRODSEntry(file.fs.fsClient, file.path)
+	irodsPath, err := vpathEntry.GetIRODSPath(file.path)
+	if err != nil {
+		logger.Errorf("%+v", err)
+		return syscall.EREMOTEIO
+	}
+
+	irodsEntry, err := IRODSStat(ctx, file.fs, irodsPath)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
 			logger.Debugf("failed to find a file - %s", file.path)

@@ -118,6 +118,11 @@ func IRODSGetACL(ctx context.Context, fs *IRODSFS, entry *irodsclient_fs.Entry, 
 	return highestPermission
 }
 
+// IRODSStat returns a stat for the given irods path
+func IRODSStat(ctx context.Context, fs *IRODSFS, path string) (*irodsclient_fs.Entry, error) {
+	return fs.fsClient.Stat(path)
+}
+
 // IRODSGetattr returns an attr for the given irods path
 func IRODSGetattr(ctx context.Context, fs *IRODSFS, path string, vpathReadonly bool, out *fuse.AttrOut) syscall.Errno {
 	logger := log.WithFields(log.Fields{
@@ -133,6 +138,13 @@ func IRODSGetattr(ctx context.Context, fs *IRODSFS, path string, vpathReadonly b
 		}
 
 		logger.Errorf("%+v", err)
+		if isTransitiveConnectionError(err) {
+			// return dummy
+			logger.Errorf("returning dummy attr for path %s", path)
+			setAttrOutForDummy(fs.uid, fs.gid, true, &out.Attr)
+			return fusefs.OK
+		}
+
 		return syscall.EREMOTEIO
 	}
 
@@ -309,6 +321,12 @@ func IRODSOpendir(ctx context.Context, fs *IRODSFS, path string) syscall.Errno {
 		}
 
 		logger.Errorf("%+v", err)
+		if isTransitiveConnectionError(err) {
+			// return dummy
+			logger.Errorf("opening dummy dir for path %s", path)
+			return fusefs.OK
+		}
+
 		return syscall.EREMOTEIO
 	}
 
@@ -327,6 +345,8 @@ func IRODSReaddir(ctx context.Context, fs *IRODSFS, path string) ([]fuse.DirEntr
 		"function": "IRODSReaddir",
 	})
 
+	dirEntries := []fuse.DirEntry{}
+
 	entries, err := fs.fsClient.List(path)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
@@ -335,10 +355,14 @@ func IRODSReaddir(ctx context.Context, fs *IRODSFS, path string) ([]fuse.DirEntr
 		}
 
 		logger.Errorf("%+v", err)
+		if isTransitiveConnectionError(err) {
+			// return dummy
+			logger.Errorf("returning dummy dir entries for path %s", path)
+			return dirEntries, fusefs.OK
+		}
+
 		return nil, syscall.EREMOTEIO
 	}
-
-	dirEntries := []fuse.DirEntry{}
 
 	for _, entry := range entries {
 		entryType := uint32(fuse.S_IFREG)

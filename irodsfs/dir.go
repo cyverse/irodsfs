@@ -24,6 +24,11 @@ func NewIRODSRoot(fs *IRODSFS, vpathEntry *irodsfs_common_vpath.VPathEntry) (*Di
 	err := ensureVPathEntryIsIRODSDir(fs.fsClient, vpathEntry)
 	if err != nil {
 		logger.Errorf("%+v", err)
+		if isTransitiveConnectionError(err) {
+			// continue
+			return NewDir(fs, 0, "/"), nil
+		}
+
 		return nil, syscall.EREMOTEIO
 	}
 
@@ -106,6 +111,13 @@ func (dir *Dir) Getattr(ctx context.Context, fh fusefs.FileHandle, out *fuse.Att
 	err := dir.ensureDirIRODSPath(vpathEntry)
 	if err != nil {
 		logger.Errorf("%+v", err)
+		if isTransitiveConnectionError(err) {
+			// return dummy
+			logger.Errorf("returning dummy attr for path %s", dir.path)
+			setAttrOutForDummy(dir.fs.uid, dir.fs.gid, true, &out.Attr)
+			return fusefs.OK
+		}
+
 		return syscall.EREMOTEIO
 	}
 
@@ -486,6 +498,12 @@ func (dir *Dir) Opendir(ctx context.Context) syscall.Errno {
 	err := dir.ensureDirIRODSPath(vpathEntry)
 	if err != nil {
 		logger.Errorf("%+v", err)
+		if isTransitiveConnectionError(err) {
+			// return dummy
+			logger.Errorf("opening dummy dir for path %s", dir.path)
+			return fusefs.OK
+		}
+
 		return syscall.EREMOTEIO
 	}
 
@@ -567,6 +585,12 @@ func (dir *Dir) Readdir(ctx context.Context) (fusefs.DirStream, syscall.Errno) {
 	err := dir.ensureDirIRODSPath(vpathEntry)
 	if err != nil {
 		logger.Errorf("%+v", err)
+		if isTransitiveConnectionError(err) {
+			// return dummy
+			logger.Errorf("returning dummy dir entries for path %s", dir.path)
+			return fusefs.NewListDirStream(dirEntries), fusefs.OK
+		}
+
 		return nil, syscall.EREMOTEIO
 	}
 
