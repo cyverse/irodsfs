@@ -26,13 +26,15 @@ func NewIRODSRoot(fs *IRODSFS, vpathEntry *irodsfs_common_vpath.VPathEntry) (*Di
 		logger.Errorf("%+v", err)
 		if isTransitiveConnectionError(err) {
 			// continue
-			return NewDir(fs, 0, "/"), nil
+			inodeID := fs.inodeManager.GetInodeIDForVPathEntry("/")
+			return NewDir(fs, inodeID, "/"), nil
 		}
 
 		return nil, syscall.EREMOTEIO
 	}
 
-	return NewDir(fs, vpathEntry.IRODSEntry.ID, "/"), nil
+	inodeID := fs.inodeManager.GetInodeIDForIRODSEntryID(vpathEntry.IRODSEntry.ID)
+	return NewDir(fs, inodeID, "/"), nil
 }
 
 // Dir is a directory node
@@ -40,16 +42,16 @@ type Dir struct {
 	fusefs.Inode
 
 	fs      *IRODSFS
-	entryID int64
+	inodeID uint64
 	path    string
 	mutex   sync.RWMutex
 }
 
 // NewDir creates a new Dir
-func NewDir(fs *IRODSFS, entryID int64, path string) *Dir {
+func NewDir(fs *IRODSFS, inodeID uint64, path string) *Dir {
 	return &Dir{
 		fs:      fs,
-		entryID: entryID,
+		inodeID: inodeID,
 		path:    path,
 		mutex:   sync.RWMutex{},
 	}
@@ -58,7 +60,7 @@ func NewDir(fs *IRODSFS, entryID int64, path string) *Dir {
 func (dir *Dir) getStableAttr() fusefs.StableAttr {
 	return fusefs.StableAttr{
 		Mode: uint32(fuse.S_IFDIR),
-		Ino:  getInodeIDFromEntryID(dir.entryID),
+		Ino:  dir.inodeID,
 		Gen:  0,
 	}
 }
@@ -101,7 +103,7 @@ func (dir *Dir) Getattr(ctx context.Context, fh fusefs.FileHandle, out *fuse.Att
 	// Virtual Dir
 	if vpathEntry.IsVirtualDirEntry() {
 		if vpathEntry.Path == dir.path {
-			setAttrOutForVirtualDirEntry(vpathEntry.VirtualDirEntry, dir.fs.uid, dir.fs.gid, &out.Attr)
+			setAttrOutForVirtualDirEntry(dir.fs.inodeManager, vpathEntry.VirtualDirEntry, dir.fs.uid, dir.fs.gid, &out.Attr)
 			return fusefs.OK
 		}
 		return syscall.ENOENT
@@ -114,7 +116,7 @@ func (dir *Dir) Getattr(ctx context.Context, fh fusefs.FileHandle, out *fuse.Att
 		if isTransitiveConnectionError(err) {
 			// return dummy
 			logger.Errorf("returning dummy attr for path %s", dir.path)
-			setAttrOutForDummy(dir.path, dir.fs.uid, dir.fs.gid, true, &out.Attr)
+			setAttrOutForDummy(dir.fs.inodeManager, dir.path, dir.fs.uid, dir.fs.gid, true, &out.Attr)
 			return fusefs.OK
 		}
 
@@ -424,7 +426,7 @@ func (dir *Dir) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*f
 	if vpathEntry.IsVirtualDirEntry() {
 		if vpathEntry.Path == targetPath {
 			_, subDirInode := NewSubDirInode(ctx, dir, vpathEntry.VirtualDirEntry.ID, targetPath)
-			setAttrOutForVirtualDirEntry(vpathEntry.VirtualDirEntry, dir.fs.uid, dir.fs.gid, &out.Attr)
+			setAttrOutForVirtualDirEntry(dir.fs.inodeManager, vpathEntry.VirtualDirEntry, dir.fs.uid, dir.fs.gid, &out.Attr)
 			return subDirInode, fusefs.OK
 		}
 		return nil, syscall.ENOENT
@@ -448,12 +450,13 @@ func (dir *Dir) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*f
 		return nil, errno
 	}
 
+	inodeID := dir.fs.inodeManager.GetInodeIDForIRODSEntryID(entryID)
 	if entryDir {
-		_, subDirInode := NewSubDirInode(ctx, dir, entryID, targetPath)
+		_, subDirInode := NewSubDirInode(ctx, dir, inodeID, targetPath)
 		return subDirInode, fusefs.OK
 	}
 
-	_, subFileInode := NewSubFileInode(ctx, dir, entryID, targetPath)
+	_, subFileInode := NewSubFileInode(ctx, dir, inodeID, targetPath)
 	return subFileInode, fusefs.OK
 }
 
@@ -552,7 +555,7 @@ func (dir *Dir) Readdir(ctx context.Context) (fusefs.DirStream, syscall.Errno) {
 				if entry.IsVirtualDirEntry() {
 					// Virtual Dir entry
 					dirEntry := fuse.DirEntry{
-						Ino:  getInodeIDFromEntryID(entry.VirtualDirEntry.ID),
+						Ino:  entry.VirtualDirEntry.ID,
 						Mode: uint32(fuse.S_IFDIR),
 						Name: entry.VirtualDirEntry.Name,
 					}
@@ -566,8 +569,9 @@ func (dir *Dir) Readdir(ctx context.Context) (fusefs.DirStream, syscall.Errno) {
 						entryType = uint32(fuse.S_IFDIR)
 					}
 
+					inodeID := dir.fs.inodeManager.GetInodeIDForIRODSEntryID(entry.IRODSEntry.ID)
 					dirEntry := fuse.DirEntry{
-						Ino:  getInodeIDFromEntryID(entry.IRODSEntry.ID),
+						Ino:  inodeID,
 						Mode: entryType,
 						Name: irodsfs_common_utils.GetFileName(entry.Path),
 					}
@@ -764,7 +768,8 @@ func (dir *Dir) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.E
 		return nil, errno
 	}
 
-	_, subDirInode := NewSubDirInode(ctx, dir, entryID, targetPath)
+	inodeID := dir.fs.inodeManager.GetInodeIDForIRODSEntryID(entryID)
+	_, subDirInode := NewSubDirInode(ctx, dir, inodeID, targetPath)
 	return subDirInode, fusefs.OK
 }
 
@@ -994,7 +999,8 @@ func (dir *Dir) Create(ctx context.Context, name string, flags uint32, mode uint
 		return nil, nil, 0, errno
 	}
 
-	subFile, subFileInode := NewSubFileInode(ctx, dir, entryID, targetPath)
+	inodeID := dir.fs.inodeManager.GetInodeIDForIRODSEntryID(entryID)
+	subFile, subFileInode := NewSubFileInode(ctx, dir, inodeID, targetPath)
 	fileHandle.SetFile(subFile)
 
 	// add to file handle map

@@ -21,16 +21,16 @@ type File struct {
 	fusefs.Inode
 
 	fs      *IRODSFS
-	entryID int64
+	inodeID uint64
 	path    string
 	mutex   sync.RWMutex
 }
 
 // NewFile creates a new File
-func NewFile(fs *IRODSFS, entryID int64, path string) *File {
+func NewFile(fs *IRODSFS, inodeID uint64, path string) *File {
 	return &File{
 		fs:      fs,
-		entryID: entryID,
+		inodeID: inodeID,
 		path:    path,
 		mutex:   sync.RWMutex{},
 	}
@@ -39,14 +39,14 @@ func NewFile(fs *IRODSFS, entryID int64, path string) *File {
 func (file *File) getStableAttr() fusefs.StableAttr {
 	return fusefs.StableAttr{
 		Mode: fuse.S_IFREG,
-		Ino:  getInodeIDFromEntryID(file.entryID),
+		Ino:  file.inodeID,
 		Gen:  0,
 	}
 }
 
 func (file *File) setAttrOutForIRODSEntry(ctx context.Context, entry *irodsclient_fs.Entry, readonly bool, out *fuse.Attr) {
 	mode := IRODSGetACL(ctx, file.fs, entry, readonly)
-	setAttrOutForIRODSEntry(entry, file.fs.uid, file.fs.gid, mode, out)
+	setAttrOutForIRODSEntry(file.fs.inodeManager, entry, file.fs.uid, file.fs.gid, mode, out)
 }
 
 func (file *File) ensureIRODSPath(vpathEntry *irodsfs_common_vpath.VPathEntry) error {

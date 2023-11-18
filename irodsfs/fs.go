@@ -6,6 +6,7 @@ import (
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
+	irodsfs_common_inode "github.com/cyverse/irodsfs-common/inode"
 	irodsfs_common_irods "github.com/cyverse/irodsfs-common/irods"
 	irodsfs_common_report "github.com/cyverse/irodsfs-common/report"
 	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
@@ -57,6 +58,7 @@ type IRODSFS struct {
 	config *commons.Config
 
 	fuseServer    *fuse.Server
+	inodeManager  *irodsfs_common_inode.InodeManager
 	vpathManager  *irodsfs_common_vpath.VPathManager
 	fsClient      irodsfs_common_irods.IRODSFSClient
 	fileHandleMap *FileHandleMap
@@ -188,8 +190,10 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		}
 	}
 
+	inodeManager := irodsfs_common_inode.NewInodeManager()
+
 	logger.Info("Initializing virtual path mappings")
-	vpathManager, err := irodsfs_common_vpath.NewVPathManager(fsClient, config.PathMappings)
+	vpathManager, err := irodsfs_common_vpath.NewVPathManager(fsClient, inodeManager, config.PathMappings)
 	if err != nil {
 		vpathErr := xerrors.Errorf("failed to create Virtual Path Manager: %v", err)
 		logger.Errorf("%+v", vpathErr)
@@ -249,6 +253,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	return &IRODSFS{
 		config:        config,
 		fuseServer:    nil,
+		inodeManager:  inodeManager,
 		vpathManager:  vpathManager,
 		fsClient:      fsClient,
 		fileHandleMap: fileHandleMap,

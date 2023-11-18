@@ -141,7 +141,7 @@ func IRODSGetattr(ctx context.Context, fs *IRODSFS, path string, vpathReadonly b
 		if isTransitiveConnectionError(err) {
 			// return dummy
 			logger.Errorf("returning dummy attr for path %s", path)
-			setAttrOutForDummy(path, fs.uid, fs.gid, true, &out.Attr)
+			setAttrOutForDummy(fs.inodeManager, path, fs.uid, fs.gid, true, &out.Attr)
 			return fusefs.OK
 		}
 
@@ -149,7 +149,7 @@ func IRODSGetattr(ctx context.Context, fs *IRODSFS, path string, vpathReadonly b
 	}
 
 	mode := IRODSGetACL(ctx, fs, entry, vpathReadonly)
-	setAttrOutForIRODSEntry(entry, fs.uid, fs.gid, mode, &out.Attr)
+	setAttrOutForIRODSEntry(fs.inodeManager, entry, fs.uid, fs.gid, mode, &out.Attr)
 	return fusefs.OK
 }
 
@@ -173,7 +173,7 @@ func IRODSLookup(ctx context.Context, fs *IRODSFS, dir *Dir, path string, vpathR
 
 	mode := IRODSGetACL(ctx, fs, entry, vpathReadonly)
 
-	setAttrOutForIRODSEntry(entry, fs.uid, fs.gid, mode, &out.Attr)
+	setAttrOutForIRODSEntry(fs.inodeManager, entry, fs.uid, fs.gid, mode, &out.Attr)
 	return entry.ID, entry.IsDir(), fusefs.OK
 }
 
@@ -372,7 +372,7 @@ func IRODSReaddir(ctx context.Context, fs *IRODSFS, path string) ([]fuse.DirEntr
 		}
 
 		dirEntry := fuse.DirEntry{
-			Ino:  getInodeIDFromEntryID(entry.ID),
+			Ino:  fs.inodeManager.GetInodeIDForIRODSEntryID(entry.ID),
 			Mode: entryType,
 			Name: entry.Name,
 		}
@@ -488,7 +488,7 @@ func IRODSMkdir(ctx context.Context, fs *IRODSFS, dir *Dir, path string, out *fu
 		return 0, syscall.EREMOTEIO
 	}
 
-	setAttrOutForIRODSEntry(entry, fs.uid, fs.gid, mode, &out.Attr)
+	setAttrOutForIRODSEntry(fs.inodeManager, entry, fs.uid, fs.gid, mode, &out.Attr)
 	return entry.ID, fusefs.OK
 }
 
@@ -587,7 +587,7 @@ func IRODSCreate(ctx context.Context, fs *IRODSFS, dir *Dir, path string, flags 
 	}
 
 	mode := IRODSGetACL(ctx, fs, entry, false)
-	setAttrOutForIRODSEntry(entry, fs.uid, fs.gid, mode, &out.Attr)
+	setAttrOutForIRODSEntry(fs.inodeManager, entry, fs.uid, fs.gid, mode, &out.Attr)
 
 	return entry.ID, fileHandle, fusefs.OK
 }

@@ -29,6 +29,6 @@ func DummyDirGetattr(ctx context.Context, fs *IRODSFS, path string, vpathReadonl
 	}
 
 	mode := IRODSGetACL(ctx, fs, entry, vpathReadonly)
-	setAttrOutForIRODSEntry(entry, fs.uid, fs.gid, mode, &out.Attr)
+	setAttrOutForIRODSEntry(fs.inodeManager, entry, fs.uid, fs.gid, mode, &out.Attr)
 	return fusefs.OK
 }
