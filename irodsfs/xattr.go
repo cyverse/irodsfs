@@ -8,6 +8,8 @@ func IsUnhandledAttr(attr string) bool {
 		return true
 	case "security.selinux":
 		return true
+	case "trusted.overlay.opaque":
+		return true
 	default:
 		return false
 	}

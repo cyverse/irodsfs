@@ -78,6 +78,9 @@ func UnmountFuse(mountPoint string) (err error) {
 }
 
 func fusermountBinary() (string, error) {
+	if path, err := lookPathFallback("fusermount3", "/bin"); err == nil {
+		return path, nil
+	}
 	return lookPathFallback("fusermount", "/bin")
 }
 
