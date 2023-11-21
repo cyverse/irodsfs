@@ -200,6 +200,10 @@ func run(config *commons.Config, isChildProcess bool) error {
 	if err != nil {
 		configErr := xerrors.Errorf("invalid configuration: %w", err)
 		logger.Errorf("%+v", configErr)
+
+		if isChildProcess {
+			cmd_commons.ReportChildProcessError()
+		}
 		return err
 	}
 

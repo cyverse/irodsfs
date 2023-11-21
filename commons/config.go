@@ -75,7 +75,6 @@ type Config struct {
 	GID               int                                 `yaml:"gid"`
 	SystemUser        string                              `yaml:"system_user"`
 	MountPath         string                              `yaml:"mount_path,omitempty"`
-	DummyAtFail       bool                                `yaml:"dummy_at_fail,omitempty"`
 
 	DataRootPath string `yaml:"data_root_path,omitempty"`
 
@@ -135,7 +134,6 @@ func NewDefaultConfig() *Config {
 		UID:               uid,
 		GID:               gid,
 		SystemUser:        systemUser,
-		DummyAtFail:       false,
 
 		DataRootPath: GetDefaultDataRootDirPath(),
 

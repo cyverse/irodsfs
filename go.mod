@@ -7,6 +7,7 @@ require (
 	github.com/cyverse/irodsfs-common v0.0.0-20231120220933-13fb224cd866
 	github.com/cyverse/irodsfs-monitor v0.0.0-20220809235922-daf13261a2dc
 	github.com/cyverse/irodsfs-pool v0.6.20
+	github.com/fsnotify/fsnotify v1.7.0
 	github.com/hanwen/go-fuse/v2 v2.3.0
 	github.com/pkg/profile v1.7.0
 	github.com/rs/xid v1.3.0
