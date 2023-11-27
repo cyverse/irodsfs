@@ -531,8 +531,10 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if fuseOptionsFlag != nil {
 		fuseOptionsString := fuseOptionsFlag.Value.String()
 		fuseOptionsString = strings.Trim(fuseOptionsString, "[]")
-		fuseOptionsStringArray := strings.Split(fuseOptionsString, ",")
-		config.FuseOptions = fuseOptionsStringArray
+		if len(fuseOptionsString) > 0 {
+			fuseOptionsStringArray := strings.Split(fuseOptionsString, ",")
+			config.FuseOptions = fuseOptionsStringArray
+		}
 	}
 
 	profilePortFlag := command.Flags().Lookup("profile_port")
