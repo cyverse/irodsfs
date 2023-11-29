@@ -195,7 +195,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	logger.Info("Initializing virtual path mappings")
 	vpathManager, err := irodsfs_common_vpath.NewVPathManager(fsClient, inodeManager, config.PathMappings)
 	if err != nil {
-		vpathErr := xerrors.Errorf("failed to create Virtual Path Manager: %v", err)
+		vpathErr := xerrors.Errorf("failed to create Virtual Path Manager: %w", err)
 		logger.Errorf("%+v", vpathErr)
 		return nil, vpathErr
 	}
