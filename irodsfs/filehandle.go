@@ -153,8 +153,8 @@ func (handle *FileHandle) Getattr(ctx context.Context, out *fuse.AttrOut) syscal
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := handle.fs.GetNextOperationID()
-	logger.Infof("Calling Getattr (%d) - %s", operID, handle.file.path)
-	defer logger.Infof("Called Getattr (%d) - %s", operID, handle.file.path)
+	logger.Infof("Calling Getattr (%d) - %q", operID, handle.file.path)
+	defer logger.Infof("Called Getattr (%d) - %q", operID, handle.file.path)
 
 	return handle.file.Getattr(ctx, handle, out)
 }
@@ -174,8 +174,8 @@ func (handle *FileHandle) Setattr(ctx context.Context, in *fuse.SetAttrIn, out *
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := handle.fs.GetNextOperationID()
-	logger.Infof("Calling Setattr (%d) - %s", operID, handle.file.path)
-	defer logger.Infof("Called Setattr (%d) - %s", operID, handle.file.path)
+	logger.Infof("Calling Setattr (%d) - %q", operID, handle.file.path)
+	defer logger.Infof("Called Setattr (%d) - %q", operID, handle.file.path)
 
 	if size, ok := in.GetSize(); ok {
 		// truncate file
@@ -207,21 +207,21 @@ func (handle *FileHandle) Read(ctx context.Context, dest []byte, offset int64) (
 
 	size := len(dest)
 
-	logger.Debugf("Calling Read - %s, %d Offset, %d Bytes", handle.file.path, offset, size)
-	defer logger.Debugf("Called Read - %s, %d Offset, %d Bytes", handle.file.path, offset, size)
+	logger.Debugf("Calling Read - %q, %d Offset, %d Bytes", handle.file.path, offset, size)
+	defer logger.Debugf("Called Read - %q, %d Offset, %d Bytes", handle.file.path, offset, size)
 
 	if handle.fileHandle == nil {
-		logger.Errorf("failed to get a file handle - %s", handle.file.path)
+		logger.Errorf("failed to get a file handle - %q", handle.file.path)
 		return nil, syscall.EBADFD
 	}
 
 	if !handle.fileHandle.IsReadMode() {
-		logger.Errorf("failed to read file opened with writeonly mode - %s", handle.file.path)
+		logger.Errorf("failed to read file opened with writeonly mode - %q", handle.file.path)
 		return nil, syscall.EBADFD
 	}
 
 	if handle.reader == nil {
-		logger.Errorf("failed read file from nil reader - %s", handle.file.path)
+		logger.Errorf("failed read file from nil reader - %q", handle.file.path)
 		return nil, syscall.EBADFD
 	}
 
@@ -256,21 +256,21 @@ func (handle *FileHandle) Write(ctx context.Context, data []byte, offset int64) 
 
 	size := len(data)
 
-	logger.Debugf("Calling Write - %s, %d Offset, %d Bytes", handle.file.path, offset, size)
-	defer logger.Debugf("Called Write - %s, %d Offset, %d Bytes", handle.file.path, offset, size)
+	logger.Debugf("Calling Write - %q, %d Offset, %d Bytes", handle.file.path, offset, size)
+	defer logger.Debugf("Called Write - %q, %d Offset, %d Bytes", handle.file.path, offset, size)
 
 	if handle.fileHandle == nil {
-		logger.Errorf("failed to get a file handle - %s", handle.file.path)
+		logger.Errorf("failed to get a file handle - %q", handle.file.path)
 		return 0, syscall.EBADFD
 	}
 
 	if !handle.fileHandle.IsWriteMode() {
-		logger.Errorf("failed to write file opened with readonly mode - %s", handle.file.path)
+		logger.Errorf("failed to write file opened with readonly mode - %q", handle.file.path)
 		return 0, syscall.EBADFD
 	}
 
 	if handle.writer == nil {
-		logger.Errorf("failed to write file opened with readonly mode - %s", handle.file.path)
+		logger.Errorf("failed to write file opened with readonly mode - %q", handle.file.path)
 		return 0, syscall.EBADFD
 	}
 
@@ -305,16 +305,16 @@ func (handle *FileHandle) Truncate(ctx context.Context, size uint64) syscall.Err
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	logger.Infof("Calling Truncate - %s, %d Bytes", handle.file.path, size)
-	defer logger.Infof("Called Truncate - %s, %d Bytes", handle.file.path, size)
+	logger.Infof("Calling Truncate - %q, %d Bytes", handle.file.path, size)
+	defer logger.Infof("Called Truncate - %q, %d Bytes", handle.file.path, size)
 
 	if handle.fileHandle == nil {
-		logger.Errorf("failed to get a file handle - %s", handle.file.path)
+		logger.Errorf("failed to get a file handle - %q", handle.file.path)
 		return syscall.EBADFD
 	}
 
 	if !handle.fileHandle.IsWriteMode() {
-		logger.Errorf("failed to truncate file opened with readonly mode - %s", handle.file.path)
+		logger.Errorf("failed to truncate file opened with readonly mode - %q", handle.file.path)
 		return syscall.EBADFD
 	}
 
@@ -341,11 +341,11 @@ func (handle *FileHandle) Flush(ctx context.Context) syscall.Errno {
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	logger.Debugf("Calling Flush - %s", handle.file.path)
-	defer logger.Debugf("Called Flush - %s", handle.file.path)
+	logger.Debugf("Calling Flush - %q", handle.file.path)
+	defer logger.Debugf("Called Flush - %q", handle.file.path)
 
 	if handle.fileHandle == nil {
-		logger.Errorf("failed to get a file handle - %s", handle.file.path)
+		logger.Errorf("failed to get a file handle - %q", handle.file.path)
 		return syscall.EREMOTEIO
 	}
 
@@ -375,11 +375,11 @@ func (handle *FileHandle) Fsync(ctx context.Context, flags uint32) syscall.Errno
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	logger.Debugf("Calling Fsync - %s", handle.file.path)
-	defer logger.Debugf("Called Fsync - %s", handle.file.path)
+	logger.Debugf("Calling Fsync - %q", handle.file.path)
+	defer logger.Debugf("Called Fsync - %q", handle.file.path)
 
 	if handle.fileHandle == nil {
-		logger.Errorf("failed to get a file handle - %s", handle.file.path)
+		logger.Errorf("failed to get a file handle - %q", handle.file.path)
 		return syscall.EREMOTEIO
 	}
 
@@ -409,11 +409,11 @@ func (handle *FileHandle) Release(ctx context.Context) syscall.Errno {
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	logger.Infof("Calling Release - %s", handle.file.path)
-	defer logger.Infof("Called Release - %s", handle.file.path)
+	logger.Infof("Calling Release - %q", handle.file.path)
+	defer logger.Infof("Called Release - %q", handle.file.path)
 
 	if handle.fileHandle == nil {
-		logger.Errorf("failed to get a file handle - %s", handle.file.path)
+		logger.Errorf("failed to get a file handle - %q", handle.file.path)
 		return syscall.EREMOTEIO
 	}
 
@@ -489,8 +489,8 @@ func (handle *FileHandle) Getlk(ctx context.Context, owner uint64, lk *fuse.File
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := handle.fs.GetNextOperationID()
-	logger.Infof("Calling Getlk (%d) - %s", operID, handle.file.path)
-	defer logger.Infof("Called Getlk (%d) - %s", operID, handle.file.path)
+	logger.Infof("Calling Getlk (%d) - %q", operID, handle.file.path)
+	defer logger.Infof("Called Getlk (%d) - %q", operID, handle.file.path)
 
 	return handle.file.Getlk(ctx, handle, owner, lk, flags, out)
 }
@@ -510,8 +510,8 @@ func (handle *FileHandle) Setlk(ctx context.Context, owner uint64, lk *fuse.File
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := handle.fs.GetNextOperationID()
-	logger.Infof("Calling Setlk (%d) - %s", operID, handle.file.path)
-	defer logger.Infof("Called Setlk (%d) - %s", operID, handle.file.path)
+	logger.Infof("Calling Setlk (%d) - %q", operID, handle.file.path)
+	defer logger.Infof("Called Setlk (%d) - %q", operID, handle.file.path)
 
 	return handle.file.Setlk(ctx, handle, owner, lk, flags)
 }
@@ -530,8 +530,8 @@ func (handle *FileHandle) Setlkw(ctx context.Context, owner uint64, lk *fuse.Fil
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	logger.Debugf("Calling Setlkw - %s", handle.file.path)
-	defer logger.Debugf("Called Setlkw - %s", handle.file.path)
+	logger.Debugf("Calling Setlkw - %q", handle.file.path)
+	defer logger.Debugf("Called Setlkw - %q", handle.file.path)
 
 	return handle.file.Setlkw(ctx, handle, owner, lk, flags)
 }
@@ -551,8 +551,8 @@ func (handle *FileHandle) GetLocalLock(ctx context.Context, owner uint64, lk *fu
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := handle.fs.GetNextOperationID()
-	logger.Infof("Calling GetLocalLock (%d) - %s", operID, handle.file.path)
-	defer logger.Infof("Called GetLocalLock (%d) - %s", operID, handle.file.path)
+	logger.Infof("Calling GetLocalLock (%d) - %q", operID, handle.file.path)
+	defer logger.Infof("Called GetLocalLock (%d) - %q", operID, handle.file.path)
 
 	logger.Debugf("owner %d, type %d, start %d, end %d, pid %d, flags %d", owner, lk.Typ, lk.Start, lk.End, lk.Pid, flags)
 
@@ -594,8 +594,8 @@ func (handle *FileHandle) SetLocalLock(ctx context.Context, owner uint64, lk *fu
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := handle.fs.GetNextOperationID()
-	logger.Infof("Calling SetLocalLock (%d) - %s", operID, handle.file.path)
-	defer logger.Infof("Called SetLocalLock (%d) - %s", operID, handle.file.path)
+	logger.Infof("Calling SetLocalLock (%d) - %q", operID, handle.file.path)
+	defer logger.Infof("Called SetLocalLock (%d) - %q", operID, handle.file.path)
 
 	logger.Debugf("owner %d, type %d, start %d, end %d, pid %d, flags %d", owner, lk.Typ, lk.Start, lk.End, lk.Pid, flags)
 
@@ -639,8 +639,8 @@ func (handle *FileHandle) SetLocalLockW(ctx context.Context, owner uint64, lk *f
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	logger.Debugf("Calling SetLocalLockW - %s", handle.file.path)
-	defer logger.Debugf("Called SetLocalLockW - %s", handle.file.path)
+	logger.Debugf("Calling SetLocalLockW - %q", handle.file.path)
+	defer logger.Debugf("Called SetLocalLockW - %q", handle.file.path)
 
 	logger.Debugf("owner %d, type %d, start %d, end %d, pid %d, flags %d", owner, lk.Typ, lk.Start, lk.End, lk.Pid, flags)
 

@@ -30,14 +30,14 @@ func parseIrodsUrl(inputURL string) (*IRODSAccessURL, error) {
 	})
 
 	if !strings.HasPrefix(inputURL, "irods://") {
-		urlErr := xerrors.Errorf("failed to parse source URL %s", inputURL)
+		urlErr := xerrors.Errorf("failed to parse source URL %q", inputURL)
 		logger.Errorf("%+v", urlErr)
 		return nil, urlErr
 	}
 
 	u, err := url.Parse(inputURL)
 	if err != nil {
-		urlErr := xerrors.Errorf("failed to parse source URL %s: %w", inputURL, err)
+		urlErr := xerrors.Errorf("failed to parse source URL %q: %w", inputURL, err)
 		logger.Errorf("%+v", urlErr)
 		return nil, urlErr
 	}
@@ -63,7 +63,7 @@ func parseIrodsUrl(inputURL string) (*IRODSAccessURL, error) {
 	if len(u.Port()) > 0 {
 		port64, err := strconv.ParseInt(u.Port(), 10, 32)
 		if err != nil {
-			parseErr := xerrors.Errorf("failed to parse source URL's port number %s: %w", u.Port(), err)
+			parseErr := xerrors.Errorf("failed to parse source URL's port number %q: %w", u.Port(), err)
 			logger.Errorf("%+v", parseErr)
 			return nil, parseErr
 		}
@@ -74,7 +74,7 @@ func parseIrodsUrl(inputURL string) (*IRODSAccessURL, error) {
 	zone := ""
 	irodsPath := "/"
 	if len(fullpath) == 0 || fullpath[0] != '/' {
-		pathErr := xerrors.Errorf("path (%s) must contain an absolute path", u.Path)
+		pathErr := xerrors.Errorf("path %q must contain an absolute path", u.Path)
 		logger.Errorf("%+v", pathErr)
 		return nil, pathErr
 	}
@@ -90,7 +90,7 @@ func parseIrodsUrl(inputURL string) (*IRODSAccessURL, error) {
 	}
 
 	if len(zone) == 0 || len(irodsPath) == 0 {
-		pathErr := xerrors.Errorf("path (%s) must contain an absolute path", inputURL)
+		pathErr := xerrors.Errorf("path %q must contain an absolute path", inputURL)
 		logger.Errorf("%+v", pathErr)
 		return nil, pathErr
 	}

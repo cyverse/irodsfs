@@ -194,7 +194,7 @@ func run(config *commons.Config, isChildProcess bool) error {
 	}
 
 	versionInfo := commons.GetVersion()
-	logger.Infof("iRODS FUSE Lite version - %s, commit - %s", versionInfo.ClientVersion, versionInfo.GitCommit)
+	logger.Infof("iRODS FUSE Lite version %q, commit %q", versionInfo.ClientVersion, versionInfo.GitCommit)
 
 	err := config.Validate()
 	if err != nil {
@@ -212,7 +212,7 @@ func run(config *commons.Config, isChildProcess bool) error {
 		go func() {
 			profileServiceAddr := fmt.Sprintf(":%d", config.ProfileServicePort)
 
-			logger.Infof("Starting profile service at %s", profileServiceAddr)
+			logger.Infof("Starting profile service at %q", profileServiceAddr)
 			http.ListenAndServe(profileServiceAddr, nil)
 		}()
 

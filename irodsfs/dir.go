@@ -88,15 +88,15 @@ func (dir *Dir) Getattr(ctx context.Context, fh fusefs.FileHandle, out *fuse.Att
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := dir.fs.GetNextOperationID()
-	logger.Infof("Calling Getattr (%d) - %s", operID, dir.path)
-	defer logger.Infof("Called Getattr (%d) - %s", operID, dir.path)
+	logger.Infof("Calling Getattr (%d) - %q", operID, dir.path)
+	defer logger.Infof("Called Getattr (%d) - %q", operID, dir.path)
 
 	dir.mutex.RLock()
 	defer dir.mutex.RUnlock()
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(dir.path)
 	if vpathEntry == nil {
-		logger.Errorf("failed to get VPath Entry for %s", dir.path)
+		logger.Errorf("failed to get VPath Entry for %q", dir.path)
 		return syscall.EREMOTEIO
 	}
 
@@ -115,7 +115,7 @@ func (dir *Dir) Getattr(ctx context.Context, fh fusefs.FileHandle, out *fuse.Att
 		logger.Errorf("%+v", err)
 		if isTransitiveConnectionError(err) {
 			// return dummy
-			logger.Errorf("returning dummy attr for path %s", dir.path)
+			logger.Errorf("returning dummy attr for path %q", dir.path)
 			setAttrOutForDummy(dir.fs.inodeManager, dir.path, dir.fs.uid, dir.fs.gid, true, &out.Attr)
 			return fusefs.OK
 		}
@@ -175,7 +175,7 @@ func (dir *Dir) Setattr(ctx context.Context, fh fusefs.FileHandle, in *fuse.SetA
 		} else if size, ok := in.GetSize(); ok {
 			// is this to truncate a file?
 			// not supported
-			logger.Errorf("cannot handle truncation of a directory - %s, size %d", dir.path, size)
+			logger.Errorf("cannot handle truncation of a directory - %q, size %q", dir.path, size)
 			return syscall.EOPNOTSUPP
 		}
 	*/
@@ -202,15 +202,15 @@ func (dir *Dir) Listxattr(ctx context.Context, dest []byte) (uint32, syscall.Err
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := dir.fs.GetNextOperationID()
-	logger.Infof("Calling Listxattr (%d) - %s", operID, dir.path)
-	defer logger.Infof("Called Listxattr (%d) - %s", operID, dir.path)
+	logger.Infof("Calling Listxattr (%d) - %q", operID, dir.path)
+	defer logger.Infof("Called Listxattr (%d) - %q", operID, dir.path)
 
 	dir.mutex.RLock()
 	defer dir.mutex.RUnlock()
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(dir.path)
 	if vpathEntry == nil {
-		logger.Errorf("failed to get VPath Entry for %s", dir.path)
+		logger.Errorf("failed to get VPath Entry for %q", dir.path)
 		return 0, syscall.EREMOTEIO
 	}
 
@@ -258,15 +258,15 @@ func (dir *Dir) Getxattr(ctx context.Context, attr string, dest []byte) (uint32,
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := dir.fs.GetNextOperationID()
-	logger.Infof("Calling Getxattr (%d) - %s, name %s", operID, dir.path, attr)
-	defer logger.Infof("Called Getxattr (%d) - %s, name %s", operID, dir.path, attr)
+	logger.Infof("Calling Getxattr (%d) - %q, name %q", operID, dir.path, attr)
+	defer logger.Infof("Called Getxattr (%d) - %q, name %q", operID, dir.path, attr)
 
 	dir.mutex.RLock()
 	defer dir.mutex.RUnlock()
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(dir.path)
 	if vpathEntry == nil {
-		logger.Errorf("failed to get VPath Entry for %s", dir.path)
+		logger.Errorf("failed to get VPath Entry for %q", dir.path)
 		return 0, syscall.EREMOTEIO
 	}
 
@@ -307,8 +307,8 @@ func (dir *Dir) Setxattr(ctx context.Context, attr string, data []byte, flags ui
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := dir.fs.GetNextOperationID()
-	logger.Infof("Calling Setxattr (%d) - %s", operID, dir.path)
-	defer logger.Infof("Called Setxattr (%d) - %s", operID, dir.path)
+	logger.Infof("Calling Setxattr (%d) - %q", operID, dir.path)
+	defer logger.Infof("Called Setxattr (%d) - %q", operID, dir.path)
 
 	if IsUnhandledAttr(attr) {
 		return syscall.EINVAL
@@ -319,7 +319,7 @@ func (dir *Dir) Setxattr(ctx context.Context, attr string, data []byte, flags ui
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(dir.path)
 	if vpathEntry == nil {
-		logger.Errorf("failed to get VPath Entry for %s", dir.path)
+		logger.Errorf("failed to get VPath Entry for %q", dir.path)
 		return syscall.EREMOTEIO
 	}
 
@@ -360,15 +360,15 @@ func (dir *Dir) Removexattr(ctx context.Context, attr string) syscall.Errno {
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := dir.fs.GetNextOperationID()
-	logger.Infof("Calling Removexattr (%d) - %s", operID, dir.path)
-	defer logger.Infof("Called Removexattr (%d) - %s", operID, dir.path)
+	logger.Infof("Calling Removexattr (%d) - %q", operID, dir.path)
+	defer logger.Infof("Called Removexattr (%d) - %q", operID, dir.path)
 
 	dir.mutex.RLock()
 	defer dir.mutex.RUnlock()
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(dir.path)
 	if vpathEntry == nil {
-		logger.Errorf("failed to get VPath Entry for %s", dir.path)
+		logger.Errorf("failed to get VPath Entry for %q", dir.path)
 		return syscall.EREMOTEIO
 	}
 
@@ -410,15 +410,15 @@ func (dir *Dir) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*f
 	targetPath := irodsfs_common_utils.JoinPath(dir.path, name)
 
 	operID := dir.fs.GetNextOperationID()
-	logger.Infof("Calling Lookup (%d) - %s", operID, targetPath)
-	defer logger.Infof("Called Lookup (%d) - %s", operID, targetPath)
+	logger.Infof("Calling Lookup (%d) - %q", operID, targetPath)
+	defer logger.Infof("Called Lookup (%d) - %q", operID, targetPath)
 
 	dir.mutex.RLock()
 	defer dir.mutex.RUnlock()
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(targetPath)
 	if vpathEntry == nil {
-		logger.Errorf("failed to get VPath Entry for %s", targetPath)
+		logger.Errorf("failed to get VPath Entry for %q", targetPath)
 		return nil, syscall.EREMOTEIO
 	}
 
@@ -475,8 +475,8 @@ func (dir *Dir) Opendir(ctx context.Context) syscall.Errno {
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := dir.fs.GetNextOperationID()
-	logger.Infof("Calling Opendir (%d) - %s", operID, dir.path)
-	defer logger.Infof("Called Opendir (%d) - %s", operID, dir.path)
+	logger.Infof("Calling Opendir (%d) - %q", operID, dir.path)
+	defer logger.Infof("Called Opendir (%d) - %q", operID, dir.path)
 
 	// we must not lock here.
 	// rename locks mutex and calls opendir, so goes deadlock
@@ -485,7 +485,7 @@ func (dir *Dir) Opendir(ctx context.Context) syscall.Errno {
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(dir.path)
 	if vpathEntry == nil {
-		logger.Errorf("failed to get VPath Entry for %s", dir.path)
+		logger.Errorf("failed to get VPath Entry for %q", dir.path)
 		return syscall.EREMOTEIO
 	}
 
@@ -503,7 +503,7 @@ func (dir *Dir) Opendir(ctx context.Context) syscall.Errno {
 		logger.Errorf("%+v", err)
 		if isTransitiveConnectionError(err) {
 			// return dummy
-			logger.Errorf("opening dummy dir for path %s", dir.path)
+			logger.Errorf("opening dummy dir for path %q", dir.path)
 			return fusefs.OK
 		}
 
@@ -534,15 +534,15 @@ func (dir *Dir) Readdir(ctx context.Context) (fusefs.DirStream, syscall.Errno) {
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := dir.fs.GetNextOperationID()
-	logger.Infof("Calling Readdir (%d) - %s", operID, dir.path)
-	defer logger.Infof("Called Readdir (%d) - %s", operID, dir.path)
+	logger.Infof("Calling Readdir (%d) - %q", operID, dir.path)
+	defer logger.Infof("Called Readdir (%d) - %q", operID, dir.path)
 
 	dir.mutex.RLock()
 	defer dir.mutex.RUnlock()
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(dir.path)
 	if vpathEntry == nil {
-		logger.Errorf("failed to get VPath Entry for %s", dir.path)
+		logger.Errorf("failed to get VPath Entry for %q", dir.path)
 		return nil, syscall.EREMOTEIO
 	}
 
@@ -591,7 +591,7 @@ func (dir *Dir) Readdir(ctx context.Context) (fusefs.DirStream, syscall.Errno) {
 		logger.Errorf("%+v", err)
 		if isTransitiveConnectionError(err) {
 			// return dummy
-			logger.Errorf("returning dummy dir entries for path %s", dir.path)
+			logger.Errorf("returning dummy dir entries for path %q", dir.path)
 			return fusefs.NewListDirStream(dirEntries), fusefs.OK
 		}
 
@@ -627,21 +627,21 @@ func (dir *Dir) Rmdir(ctx context.Context, name string) syscall.Errno {
 	targetPath := irodsfs_common_utils.JoinPath(dir.path, name)
 
 	operID := dir.fs.GetNextOperationID()
-	logger.Infof("Calling Rmdir (%d) - %s", operID, targetPath)
-	defer logger.Infof("Called Rmdir (%d) - %s", operID, targetPath)
+	logger.Infof("Calling Rmdir (%d) - %q", operID, targetPath)
+	defer logger.Infof("Called Rmdir (%d) - %q", operID, targetPath)
 
 	dir.mutex.Lock()
 	defer dir.mutex.Unlock()
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(targetPath)
 	if vpathEntry == nil {
-		logger.Errorf("failed to get VPath Entry for %s", targetPath)
+		logger.Errorf("failed to get VPath Entry for %q", targetPath)
 		return syscall.EREMOTEIO
 	}
 
 	if isVPathEntryUnmodifiable(vpathEntry, targetPath) {
 		// failed to remove. read only
-		err := xerrors.Errorf("failed to remove readonly vpath mapping entry %s", vpathEntry.Path)
+		err := xerrors.Errorf("failed to remove readonly vpath mapping entry %q", vpathEntry.Path)
 		logger.Error(err)
 		return syscall.EPERM
 	}
@@ -679,21 +679,21 @@ func (dir *Dir) Unlink(ctx context.Context, name string) syscall.Errno {
 	targetPath := irodsfs_common_utils.JoinPath(dir.path, name)
 
 	operID := dir.fs.GetNextOperationID()
-	logger.Infof("Calling Unlink (%d) - %s", operID, targetPath)
-	defer logger.Infof("Called Unlink (%d) - %s", operID, targetPath)
+	logger.Infof("Calling Unlink (%d) - %q", operID, targetPath)
+	defer logger.Infof("Called Unlink (%d) - %q", operID, targetPath)
 
 	dir.mutex.Lock()
 	defer dir.mutex.Unlock()
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(targetPath)
 	if vpathEntry == nil {
-		logger.Errorf("failed to get VPath Entry for %s", targetPath)
+		logger.Errorf("failed to get VPath Entry for %q", targetPath)
 		return syscall.EREMOTEIO
 	}
 
 	if isVPathEntryUnmodifiable(vpathEntry, targetPath) {
 		// failed to remove. read only
-		err := xerrors.Errorf("failed to remove readonly vpath mapping entry %s", vpathEntry.Path)
+		err := xerrors.Errorf("failed to remove readonly vpath mapping entry %q", vpathEntry.Path)
 		logger.Error(err)
 		return syscall.EPERM
 	}
@@ -731,21 +731,21 @@ func (dir *Dir) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.E
 	targetPath := irodsfs_common_utils.JoinPath(dir.path, name)
 
 	operID := dir.fs.GetNextOperationID()
-	logger.Infof("Calling Mkdir (%d) - %s", operID, targetPath)
-	defer logger.Infof("Called Mkdir (%d) - %s", operID, targetPath)
+	logger.Infof("Calling Mkdir (%d) - %q", operID, targetPath)
+	defer logger.Infof("Called Mkdir (%d) - %q", operID, targetPath)
 
 	dir.mutex.Lock()
 	defer dir.mutex.Unlock()
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(targetPath)
 	if vpathEntry == nil {
-		logger.Errorf("failed to get VPath Entry for %s", targetPath)
+		logger.Errorf("failed to get VPath Entry for %q", targetPath)
 		return nil, syscall.EREMOTEIO
 	}
 
 	if isVPathEntryUnmodifiable(vpathEntry, targetPath) {
 		// failed to remove. read only
-		err := xerrors.Errorf("failed to remove readonly vpath mapping entry %s", vpathEntry.Path)
+		err := xerrors.Errorf("failed to remove readonly vpath mapping entry %q", vpathEntry.Path)
 		logger.Error(err)
 		return nil, syscall.EPERM
 	}
@@ -788,7 +788,7 @@ func (dir *Dir) renameNode(srcPath string, destPath string, node *fusefs.Inode) 
 		}
 
 		newPath := irodsfs_common_utils.JoinPath(destPath, relPath)
-		logger.Debugf("renaming a dir node %s to %s", fsnode.path, newPath)
+		logger.Debugf("renaming a dir node %q to %q", fsnode.path, newPath)
 
 		fsnode.path = newPath
 
@@ -806,7 +806,7 @@ func (dir *Dir) renameNode(srcPath string, destPath string, node *fusefs.Inode) 
 		}
 
 		newPath := irodsfs_common_utils.JoinPath(destPath, relPath)
-		logger.Debugf("renaming a file node %s to %s", fsnode.path, newPath)
+		logger.Debugf("renaming a file node %q to %q", fsnode.path, newPath)
 
 		fsnode.path = newPath
 	default:
@@ -841,8 +841,8 @@ func (dir *Dir) Rename(ctx context.Context, name string, newParent fusefs.InodeE
 	targetDestPath := irodsfs_common_utils.JoinPath(newdir.path, newName)
 
 	operID := dir.fs.GetNextOperationID()
-	logger.Infof("Calling Rename (%d) - %s to %s", operID, targetSrcPath, targetDestPath)
-	defer logger.Infof("Called Rename (%d) - %s to %s", operID, targetSrcPath, targetDestPath)
+	logger.Infof("Calling Rename (%d) - %q to %q", operID, targetSrcPath, targetDestPath)
+	defer logger.Infof("Called Rename (%d) - %q to %q", operID, targetSrcPath, targetDestPath)
 
 	dir.mutex.Lock()
 	defer dir.mutex.Unlock()
@@ -854,26 +854,26 @@ func (dir *Dir) Rename(ctx context.Context, name string, newParent fusefs.InodeE
 
 	vpathSrcEntry := dir.fs.vpathManager.GetClosestEntry(targetSrcPath)
 	if vpathSrcEntry == nil {
-		logger.Errorf("failed to get VPath Entry for %s", targetSrcPath)
+		logger.Errorf("failed to get VPath Entry for %q", targetSrcPath)
 		return syscall.EREMOTEIO
 	}
 
 	vpathDestEntry := dir.fs.vpathManager.GetClosestEntry(targetDestPath)
 	if vpathDestEntry == nil {
-		logger.Errorf("failed to get VPath Entry for path %s", targetDestPath)
+		logger.Errorf("failed to get VPath Entry for path %q", targetDestPath)
 		return syscall.EREMOTEIO
 	}
 
 	if isVPathEntryUnmodifiable(vpathSrcEntry, targetSrcPath) {
 		// failed to remove. read only
-		err := xerrors.Errorf("failed to rename readonly vpath mapping entry %s", vpathSrcEntry.Path)
+		err := xerrors.Errorf("failed to rename readonly vpath mapping entry %q", vpathSrcEntry.Path)
 		logger.Error(err)
 		return syscall.EPERM
 	}
 
 	if isVPathEntryUnmodifiable(vpathDestEntry, targetDestPath) {
 		// failed to remove. read only
-		err := xerrors.Errorf("failed to rename to readonly vpath mapping entry %s", vpathDestEntry.Path)
+		err := xerrors.Errorf("failed to rename to readonly vpath mapping entry %q", vpathDestEntry.Path)
 		logger.Error(err)
 		return syscall.EPERM
 	}
@@ -929,7 +929,7 @@ func (dir *Dir) Rename(ctx context.Context, name string, newParent fusefs.InodeE
 	// update
 	childNode := dir.GetChild(name)
 	if childNode == nil {
-		logger.Errorf("failed to update the file or dir node - %s", irodsSrcPath)
+		logger.Errorf("failed to update the file or dir node - %q", irodsSrcPath)
 		return syscall.EREMOTEIO
 	}
 
@@ -962,21 +962,21 @@ func (dir *Dir) Create(ctx context.Context, name string, flags uint32, mode uint
 	targetPath := irodsfs_common_utils.JoinPath(dir.path, name)
 
 	operID := dir.fs.GetNextOperationID()
-	logger.Infof("Calling Create (%d) - %s, mode(%d)", operID, targetPath, flags)
-	defer logger.Infof("Called Create (%d) - %s, mode(%d)", operID, targetPath, flags)
+	logger.Infof("Calling Create (%d) - %q, mode %q", operID, targetPath, flags)
+	defer logger.Infof("Called Create (%d) - %q, mode %q", operID, targetPath, flags)
 
 	dir.mutex.Lock()
 	defer dir.mutex.Unlock()
 
 	vpathEntry := dir.fs.vpathManager.GetClosestEntry(targetPath)
 	if vpathEntry == nil {
-		logger.Errorf("failed to get VPath Entry for %s", targetPath)
+		logger.Errorf("failed to get VPath Entry for %q", targetPath)
 		return nil, nil, 0, syscall.EREMOTEIO
 	}
 
 	if isVPathEntryUnmodifiable(vpathEntry, targetPath) {
 		// failed to remove. read only
-		err := xerrors.Errorf("failed to rename readonly vpath mapping entry %s", vpathEntry.Path)
+		err := xerrors.Errorf("failed to rename readonly vpath mapping entry %q", vpathEntry.Path)
 		logger.Error(err)
 		return nil, nil, 0, syscall.EPERM
 	}
@@ -1024,8 +1024,8 @@ func (dir *Dir) Fsync(ctx context.Context, fh fusefs.FileHandle, flags uint32) s
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := dir.fs.GetNextOperationID()
-	logger.Infof("Calling Fsync (%d) - %s", operID, dir.path)
-	defer logger.Infof("Called Fsync (%d) - %s", operID, dir.path)
+	logger.Infof("Calling Fsync (%d) - %q", operID, dir.path)
+	defer logger.Infof("Called Fsync (%d) - %q", operID, dir.path)
 
 	// do nothing
 	return fusefs.OK

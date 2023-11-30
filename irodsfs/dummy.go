@@ -20,7 +20,7 @@ func DummyDirGetattr(ctx context.Context, fs *IRODSFS, path string, vpathReadonl
 	entry, err := fs.fsClient.Stat(path)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find file or dir for path %s", path)
+			logger.Debugf("failed to find file or dir for path %q", path)
 			return syscall.ENOENT
 		}
 

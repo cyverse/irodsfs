@@ -72,7 +72,7 @@ func UnmountFuse(mountPoint string) (err error) {
 	cmd.Stderr = &errBuf
 	err = cmd.Run()
 	if errBuf.Len() > 0 {
-		return xerrors.Errorf("%s (code %v)", errBuf.String(), err)
+		return xerrors.Errorf("%q (code %v)", errBuf.String(), err)
 	}
 	return err
 }

@@ -22,7 +22,7 @@ func ensureVPathEntryIsIRODSDir(fsClient irodsfs_common_irods.IRODSFSClient, vpa
 
 func ensureVPathEntryIsIRODSEntry(fsClient irodsfs_common_irods.IRODSFSClient, vpathEntry *irodsfs_common_vpath.VPathEntry) error {
 	if !vpathEntry.IsIRODSEntry() {
-		return xerrors.Errorf("VPath Entry %s is not iRODS entry", vpathEntry.Path)
+		return xerrors.Errorf("VPath Entry %q is not iRODS entry", vpathEntry.Path)
 	}
 
 	if vpathEntry.RequireIRODSEntryUpdate() {

@@ -58,13 +58,13 @@ func LoadICommandsEnvironmentDir(configDirPath string) (*Config, error) {
 
 	// check if it is iRODS FUSE Lite Config YAML or iCommands JSON file
 	if isICommandsEnvDir(configDirPath) {
-		logger.Debugf("reading iCommands environment dir - %s", configDirPath)
+		logger.Debugf("reading iCommands environment dir %q", configDirPath)
 
 		envFilePath := filepath.Join(configDirPath, "irods_environment.json")
 		return LoadICommandsEnvironmentFile(envFilePath)
 	}
 
-	return nil, xerrors.Errorf("failed to read iCommands environment dir %s", configDirPath)
+	return nil, xerrors.Errorf("failed to read iCommands environment dir %q", configDirPath)
 }
 
 func LoadICommandsEnvironmentFile(configPath string) (*Config, error) {
@@ -78,7 +78,7 @@ func LoadICommandsEnvironmentFile(configPath string) (*Config, error) {
 		return nil, err
 	}
 
-	logger.Debugf("reading iCommands environment file - %s", configPath)
+	logger.Debugf("reading iCommands environment file %q", configPath)
 
 	// read from iCommands JSON File
 	iCommandsEnvMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager()

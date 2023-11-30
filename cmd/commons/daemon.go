@@ -198,7 +198,7 @@ func ChildProcessReadConfigViaSTDIN() (*commons.Config, io.WriteCloser, error) {
 		logWriter, childLogFilePath := getLogWriterForChildProcess(logFilePath)
 		log.SetOutput(logWriter)
 
-		logger.Infof("Logging to %s", childLogFilePath)
+		logger.Infof("Logging to %q", childLogFilePath)
 		return config, logWriter, nil
 	} else {
 		var nilWriter NilWriter

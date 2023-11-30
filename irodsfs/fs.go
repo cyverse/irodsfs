@@ -103,7 +103,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		return nil, accountErr
 	}
 
-	logger.Infof("Connect to IRODS server using %s auth scheme", string(authScheme))
+	logger.Infof("Connect to IRODS server using %q auth scheme", string(authScheme))
 
 	if authScheme == irodsclient_types.AuthSchemePAM {
 		sslConfig, err := irodsclient_types.CreateIRODSSSLConfig(config.CACertificateFile, config.EncryptionKeySize,
@@ -168,7 +168,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		poolClient := irodspoolclient.NewPoolServiceClient(config.PoolEndpoint, time.Duration(config.OperationTimeout), config.InstanceID)
 		err = poolClient.Connect()
 		if err != nil {
-			clientErr := xerrors.Errorf("failed to connect to irodsfs-pool server %s: %w", config.PoolEndpoint, err)
+			clientErr := xerrors.Errorf("failed to connect to irodsfs-pool server %q: %w", config.PoolEndpoint, err)
 			logger.Errorf("%+v", clientErr)
 			return nil, clientErr
 		}
@@ -240,7 +240,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 
 	userGroups, err := fsClient.ListUserGroups(account.ClientUser)
 	if err != nil {
-		ugErr := xerrors.Errorf("failed to list groups for a user '%s': %w", account.ClientUser, err)
+		ugErr := xerrors.Errorf("failed to list groups for a user %q: %w", account.ClientUser, err)
 		logger.Errorf("%+v", ugErr)
 		return nil, ugErr
 	}
@@ -313,7 +313,7 @@ func (fs *IRODSFS) Start() error {
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	// mount
-	logger.Infof("Starting iRODS FUSE Lite, connecting to FUSE on %s", fs.config.MountPath)
+	logger.Infof("Starting iRODS FUSE Lite, connecting to FUSE on %q", fs.config.MountPath)
 
 	rootDir, err := fs.Root()
 	if err != nil {
@@ -329,7 +329,7 @@ func (fs *IRODSFS) Start() error {
 
 	fs.fuseServer = fuseServer
 
-	logger.Infof("Connected to FUSE, mount on %s", fs.config.MountPath)
+	logger.Infof("Connected to FUSE, mount on %q", fs.config.MountPath)
 
 	return nil
 }

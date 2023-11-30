@@ -266,22 +266,22 @@ func (config *Config) makeDir(path string) error {
 			// make
 			mkdirErr := os.MkdirAll(path, 0775)
 			if mkdirErr != nil {
-				return xerrors.Errorf("making a dir (%s) error: %w", path, mkdirErr)
+				return xerrors.Errorf("making a dir %q error: %w", path, mkdirErr)
 			}
 
 			return nil
 		}
 
-		return xerrors.Errorf("stating a dir (%s) error: %w", path, err)
+		return xerrors.Errorf("stating a dir %q error: %w", path, err)
 	}
 
 	if !dirInfo.IsDir() {
-		return xerrors.Errorf("a file (%s) exist, not a directory", path)
+		return xerrors.Errorf("a file %q exist, not a directory", path)
 	}
 
 	dirPerm := dirInfo.Mode().Perm()
 	if dirPerm&0200 != 0200 {
-		return xerrors.Errorf("a dir (%s) exist, but does not have the write permission", path)
+		return xerrors.Errorf("a dir %q exist, but does not have the write permission", path)
 	}
 
 	return nil
@@ -340,16 +340,16 @@ func (config *Config) Validate() error {
 
 	mountDirInfo, err := os.Stat(config.MountPath)
 	if err != nil {
-		return xerrors.Errorf("mountpoint (%s) error: %w", config.MountPath, err)
+		return xerrors.Errorf("mountpoint %q error: %w", config.MountPath, err)
 	}
 
 	if !mountDirInfo.IsDir() {
-		return xerrors.Errorf("mountpoint (%s) must be a directory", config.MountPath)
+		return xerrors.Errorf("mountpoint %q must be a directory", config.MountPath)
 	}
 
 	mountDirPerm := mountDirInfo.Mode().Perm()
 	if mountDirPerm&0200 != 0200 {
-		return xerrors.Errorf("mountpoint (%s) must have write permission", config.MountPath)
+		return xerrors.Errorf("mountpoint %q must have write permission", config.MountPath)
 	}
 
 	if len(config.DataRootPath) == 0 {
@@ -425,9 +425,9 @@ func ParsePoolServiceEndpoint(endpoint string) (string, string, error) {
 		if len(u.Host) > 0 {
 			return "tcp", u.Host, nil
 		}
-		return "", "", xerrors.Errorf("unknown host: %s", u.Host)
+		return "", "", xerrors.Errorf("unknown host: %q", u.Host)
 	default:
-		return "", "", xerrors.Errorf("unsupported protocol: %s", scheme)
+		return "", "", xerrors.Errorf("unsupported protocol: %q", scheme)
 	}
 }
 

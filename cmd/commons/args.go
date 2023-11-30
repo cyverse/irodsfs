@@ -183,7 +183,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 					// YAML file
 					yamlBytes, err := os.ReadFile(configPath)
 					if err != nil {
-						readErr := xerrors.Errorf("failed to read config file %s: %w", configPath, err)
+						readErr := xerrors.Errorf("failed to read config file %q: %w", configPath, err)
 						logger.Errorf("%+v", readErr)
 						return nil, nil, false, readErr // stop here
 					}
@@ -306,7 +306,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 		mw := io.MultiWriter(os.Stderr, parentLogWriter)
 		log.SetOutput(mw)
 
-		logger.Infof("Logging to %s", parentLogFilePath)
+		logger.Infof("Logging to %q", parentLogFilePath)
 	}
 
 	hostFlag := command.Flags().Lookup("host")
@@ -386,7 +386,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 			// YAML file
 			yamlBytes, err := os.ReadFile(pathMappingFile)
 			if err != nil {
-				readErr := xerrors.Errorf("failed to read path mapping from file %s: %w", pathMappingFile, err)
+				readErr := xerrors.Errorf("failed to read path mapping from file %q: %w", pathMappingFile, err)
 				logger.Errorf("%+v", readErr)
 				return nil, logWriter, false, readErr // stop here
 			}
@@ -407,7 +407,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if readaheadFlag != nil {
 		readahead, err := strconv.ParseInt(readaheadFlag.Value.String(), 10, 32)
 		if err != nil {
-			parseErr := xerrors.Errorf("failed to convert input '%s' to int64: %w", readaheadFlag.Value.String(), err)
+			parseErr := xerrors.Errorf("failed to convert input %q to int64: %w", readaheadFlag.Value.String(), err)
 			logger.Errorf("%+v", parseErr)
 			return nil, logWriter, false, parseErr // stop here
 		}
@@ -421,7 +421,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if connectionMaxFlag != nil {
 		connectionMax, err := strconv.ParseInt(connectionMaxFlag.Value.String(), 10, 32)
 		if err != nil {
-			parseErr := xerrors.Errorf("failed to convert input '%s' to int64: %w", connectionMaxFlag.Value.String(), err)
+			parseErr := xerrors.Errorf("failed to convert input %q to int64: %w", connectionMaxFlag.Value.String(), err)
 			logger.Errorf("%+v", parseErr)
 			return nil, logWriter, false, parseErr // stop here
 		}
@@ -435,7 +435,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if operationTimeoutFlag != nil {
 		operationTimeout, err := time.ParseDuration(operationTimeoutFlag.Value.String())
 		if err != nil {
-			parseErr := xerrors.Errorf("failed to convert input '%s' to duration: %w", operationTimeoutFlag.Value.String(), err)
+			parseErr := xerrors.Errorf("failed to convert input %q to duration: %w", operationTimeoutFlag.Value.String(), err)
 			logger.Errorf("%+v", parseErr)
 			return nil, logWriter, false, parseErr // stop here
 		}
@@ -447,7 +447,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if connectionIdleTimeoutFlag != nil {
 		connectionIdleTimeout, err := time.ParseDuration(connectionIdleTimeoutFlag.Value.String())
 		if err != nil {
-			parseErr := xerrors.Errorf("failed to convert input '%s' to duration: %w", connectionIdleTimeoutFlag.Value.String(), err)
+			parseErr := xerrors.Errorf("failed to convert input %q to duration: %w", connectionIdleTimeoutFlag.Value.String(), err)
 			logger.Errorf("%+v", parseErr)
 			return nil, logWriter, false, parseErr // stop here
 		}
@@ -459,7 +459,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if metadataCacheTimeoutFlag != nil {
 		metadataCacheTimeout, err := time.ParseDuration(metadataCacheTimeoutFlag.Value.String())
 		if err != nil {
-			parseErr := xerrors.Errorf("failed to convert input '%s' to duration: %w", metadataCacheTimeoutFlag.Value.String(), err)
+			parseErr := xerrors.Errorf("failed to convert input %q to duration: %w", metadataCacheTimeoutFlag.Value.String(), err)
 			logger.Errorf("%+v", parseErr)
 			return nil, logWriter, false, parseErr // stop here
 		}
@@ -471,7 +471,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if metadataCacheCleanupTimeFlag != nil {
 		metadataCacheCleanupTime, err := time.ParseDuration(metadataCacheCleanupTimeFlag.Value.String())
 		if err != nil {
-			parseErr := xerrors.Errorf("failed to convert input '%s' to duration: %w", metadataCacheCleanupTimeFlag.Value.String(), err)
+			parseErr := xerrors.Errorf("failed to convert input %q to duration: %w", metadataCacheCleanupTimeFlag.Value.String(), err)
 			logger.Errorf("%+v", parseErr)
 			return nil, logWriter, false, parseErr // stop here
 		}
@@ -495,7 +495,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if uidFlag != nil {
 		uid, err := strconv.ParseInt(uidFlag.Value.String(), 10, 32)
 		if err != nil {
-			parseErr := xerrors.Errorf("failed to convert input '%s' to int: %w", uidFlag.Value.String(), err)
+			parseErr := xerrors.Errorf("failed to convert input %q to int: %w", uidFlag.Value.String(), err)
 			logger.Errorf("%+v", parseErr)
 			return nil, logWriter, false, parseErr // stop here
 		}
@@ -509,7 +509,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if gidFlag != nil {
 		gid, err := strconv.ParseInt(gidFlag.Value.String(), 10, 32)
 		if err != nil {
-			parseErr := xerrors.Errorf("failed to convert input '%s' to int: %w", gidFlag.Value.String(), err)
+			parseErr := xerrors.Errorf("failed to convert input %q to int: %w", gidFlag.Value.String(), err)
 			logger.Errorf("%+v", parseErr)
 			return nil, logWriter, false, parseErr // stop here
 		}
@@ -541,7 +541,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if profilePortFlag != nil {
 		profilePort, err := strconv.ParseInt(profilePortFlag.Value.String(), 10, 32)
 		if err != nil {
-			parseErr := xerrors.Errorf("failed to convert input '%s' to int: %w", profilePortFlag.Value.String(), err)
+			parseErr := xerrors.Errorf("failed to convert input %q to int: %w", profilePortFlag.Value.String(), err)
 			logger.Errorf("%+v", parseErr)
 			return nil, logWriter, false, parseErr // stop here
 		}
@@ -597,7 +597,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	// the second argument is local directory that irodsfs will be mounted
 	mountpoint, err := filepath.Abs(mountPath)
 	if err != nil {
-		absErr := xerrors.Errorf("failed to get abs path for %s: %w", mountPath, err)
+		absErr := xerrors.Errorf("failed to get abs path for %q: %w", mountPath, err)
 		logger.Errorf("%+v", absErr)
 		return nil, logWriter, false, absErr // stop here
 	}

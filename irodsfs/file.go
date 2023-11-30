@@ -68,15 +68,15 @@ func (file *File) Getattr(ctx context.Context, fh fusefs.FileHandle, out *fuse.A
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := file.fs.GetNextOperationID()
-	logger.Infof("Calling Getattr (%d) - %s", operID, file.path)
-	defer logger.Infof("Called Getattr (%d) - %s", operID, file.path)
+	logger.Infof("Calling Getattr (%d) - %q", operID, file.path)
+	defer logger.Infof("Called Getattr (%d) - %q", operID, file.path)
 
 	file.mutex.RLock()
 	defer file.mutex.RUnlock()
 
 	vpathEntry := file.fs.vpathManager.GetClosestEntry(file.path)
 	if vpathEntry == nil {
-		logger.Errorf("failed to get VPath Entry for %s", file.path)
+		logger.Errorf("failed to get VPath Entry for %q", file.path)
 		return syscall.EREMOTEIO
 	}
 
@@ -117,8 +117,8 @@ func (file *File) Setattr(ctx context.Context, fh fusefs.FileHandle, in *fuse.Se
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := file.fs.GetNextOperationID()
-	logger.Infof("Calling Setattr (%d) - %s", operID, file.path)
-	defer logger.Infof("Called Setattr (%d) - %s", operID, file.path)
+	logger.Infof("Calling Setattr (%d) - %q", operID, file.path)
+	defer logger.Infof("Called Setattr (%d) - %q", operID, file.path)
 
 	// do not return EOPNOTSUPP as it causes client errors, like git clone
 	/*
@@ -181,15 +181,15 @@ func (file *File) Listxattr(ctx context.Context, dest []byte) (uint32, syscall.E
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := file.fs.GetNextOperationID()
-	logger.Infof("Calling Listxattr (%d) - %s", operID, file.path)
-	defer logger.Infof("Called Listxattr (%d) - %s", operID, file.path)
+	logger.Infof("Calling Listxattr (%d) - %q", operID, file.path)
+	defer logger.Infof("Called Listxattr (%d) - %q", operID, file.path)
 
 	file.mutex.RLock()
 	defer file.mutex.RUnlock()
 
 	vpathEntry := file.fs.vpathManager.GetClosestEntry(file.path)
 	if vpathEntry == nil {
-		logger.Errorf("failed to get VPath Entry for %s", file.path)
+		logger.Errorf("failed to get VPath Entry for %q", file.path)
 		return 0, syscall.EREMOTEIO
 	}
 
@@ -237,15 +237,15 @@ func (file *File) Getxattr(ctx context.Context, attr string, dest []byte) (uint3
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := file.fs.GetNextOperationID()
-	logger.Infof("Calling Getxattr (%d) - %s, attr %s", operID, file.path, attr)
-	defer logger.Infof("Called Getxattr (%d) - %s, attr %s", operID, file.path, attr)
+	logger.Infof("Calling Getxattr (%d) - %q, attr %q", operID, file.path, attr)
+	defer logger.Infof("Called Getxattr (%d) - %q, attr %q", operID, file.path, attr)
 
 	file.mutex.RLock()
 	defer file.mutex.RUnlock()
 
 	vpathEntry := file.fs.vpathManager.GetClosestEntry(file.path)
 	if vpathEntry == nil {
-		logger.Errorf("failed to get VPath Entry for %s", file.path)
+		logger.Errorf("failed to get VPath Entry for %q", file.path)
 		return 0, syscall.EREMOTEIO
 	}
 
@@ -287,8 +287,8 @@ func (file *File) Setxattr(ctx context.Context, attr string, data []byte, flags 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := file.fs.GetNextOperationID()
-	logger.Infof("Calling Setxattr (%d) - %s", operID, file.path)
-	defer logger.Infof("Called Setxattr (%d) - %s", operID, file.path)
+	logger.Infof("Calling Setxattr (%d) - %q", operID, file.path)
+	defer logger.Infof("Called Setxattr (%d) - %q", operID, file.path)
 
 	if IsUnhandledAttr(attr) {
 		return syscall.EINVAL
@@ -299,7 +299,7 @@ func (file *File) Setxattr(ctx context.Context, attr string, data []byte, flags 
 
 	vpathEntry := file.fs.vpathManager.GetClosestEntry(file.path)
 	if vpathEntry == nil {
-		logger.Errorf("failed to get VPath Entry for %s", file.path)
+		logger.Errorf("failed to get VPath Entry for %q", file.path)
 		return syscall.EREMOTEIO
 	}
 
@@ -341,15 +341,15 @@ func (file *File) Removexattr(ctx context.Context, attr string) syscall.Errno {
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := file.fs.GetNextOperationID()
-	logger.Infof("Calling Removexattr (%d) - %s", operID, file.path)
-	defer logger.Infof("Called Removexattr (%d) - %s", operID, file.path)
+	logger.Infof("Calling Removexattr (%d) - %q", operID, file.path)
+	defer logger.Infof("Called Removexattr (%d) - %q", operID, file.path)
 
 	file.mutex.RLock()
 	defer file.mutex.RUnlock()
 
 	vpathEntry := file.fs.vpathManager.GetClosestEntry(file.path)
 	if vpathEntry == nil {
-		logger.Errorf("failed to get VPath Entry for %s", file.path)
+		logger.Errorf("failed to get VPath Entry for %q", file.path)
 		return syscall.EREMOTEIO
 	}
 
@@ -390,15 +390,15 @@ func (file *File) Truncate(ctx context.Context, size uint64) syscall.Errno {
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := file.fs.GetNextOperationID()
-	logger.Infof("Calling Truncate (%d) - %s, %d", operID, file.path, size)
-	defer logger.Infof("Called Truncate (%d) - %s, %d", operID, file.path, size)
+	logger.Infof("Calling Truncate (%d) - %q, %d", operID, file.path, size)
+	defer logger.Infof("Called Truncate (%d) - %q, %d", operID, file.path, size)
 
 	file.mutex.Lock()
 	defer file.mutex.Unlock()
 
 	vpathEntry := file.fs.vpathManager.GetClosestEntry(file.path)
 	if vpathEntry == nil {
-		logger.Errorf("failed to get VPath Entry for %s", file.path)
+		logger.Errorf("failed to get VPath Entry for %q", file.path)
 		return syscall.EREMOTEIO
 	}
 
@@ -424,7 +424,7 @@ func (file *File) Truncate(ctx context.Context, size uint64) syscall.Errno {
 	irodsEntry, err := IRODSStat(ctx, file.fs, irodsPath)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find a file - %s", file.path)
+			logger.Debugf("failed to find a file - %q", file.path)
 			return syscall.ENOENT
 		}
 
@@ -439,11 +439,11 @@ func (file *File) Truncate(ctx context.Context, size uint64) syscall.Errno {
 	for _, handle := range handlesOpened {
 		if handle.fileHandle.IsWriteMode() {
 			// is writing
-			logger.Infof("Found opened file handle %s - %s", handle.file.path, handle.fileHandle.GetID())
+			logger.Infof("Found opened file handle %q - %q", handle.file.path, handle.fileHandle.GetID())
 
 			errno := handle.Truncate(ctx, size)
 			if errno != 0 {
-				logger.Errorf("failed to truncate a file - %s, %d", irodsEntry.Path, size)
+				logger.Errorf("failed to truncate a file - %q, %d", irodsEntry.Path, size)
 				return errno
 			}
 
@@ -459,7 +459,7 @@ func (file *File) Truncate(ctx context.Context, size uint64) syscall.Errno {
 			err = file.fs.fsClient.TruncateFile(irodsEntry.Path, int64(size))
 			if err != nil {
 				if irodsclient_types.IsFileNotFoundError(err) {
-					logger.Debugf("failed to find a file - %s", irodsEntry.Path)
+					logger.Debugf("failed to find a file - %q", irodsEntry.Path)
 					return syscall.ENOENT
 				}
 
@@ -491,22 +491,22 @@ func (file *File) Open(ctx context.Context, flags uint32) (fusefs.FileHandle, ui
 	//fuseFlag |= fuse.FOPEN_DIRECT_IO
 
 	operID := file.fs.GetNextOperationID()
-	logger.Infof("Calling Open (%d) - %s, mode(%d)", operID, file.path, flags)
-	defer logger.Infof("Called Open (%d) - %s, mode(%d)", operID, file.path, flags)
+	logger.Infof("Calling Open (%d) - %q, mode %q", operID, file.path, flags)
+	defer logger.Infof("Called Open (%d) - %q, mode %q", operID, file.path, flags)
 
 	file.mutex.RLock()
 	defer file.mutex.RUnlock()
 
 	vpathEntry := file.fs.vpathManager.GetClosestEntry(file.path)
 	if vpathEntry == nil {
-		logger.Errorf("failed to get VPath Entry for %s", file.path)
+		logger.Errorf("failed to get VPath Entry for %q", file.path)
 		return nil, 0, syscall.EREMOTEIO
 	}
 
 	// Virtual Dir
 	if vpathEntry.IsVirtualDirEntry() {
 		// failed to open directory
-		err := xerrors.Errorf("failed to open mapped directory entry - %s", vpathEntry.Path)
+		err := xerrors.Errorf("failed to open mapped directory entry - %q", vpathEntry.Path)
 		logger.Error(err)
 		return nil, 0, syscall.EPERM
 	}
@@ -561,17 +561,17 @@ func (file *File) Getlk(ctx context.Context, fh fusefs.FileHandle, owner uint64,
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := file.fs.GetNextOperationID()
-	logger.Infof("Calling Getattr (%d) - %s", operID, file.path)
-	defer logger.Infof("Called Getattr (%d) - %s", operID, file.path)
+	logger.Infof("Calling Getattr (%d) - %q", operID, file.path)
+	defer logger.Infof("Called Getattr (%d) - %q", operID, file.path)
 
 	fileHandle, ok := fh.(*FileHandle)
 	if !ok {
-		logger.Errorf("failed to convert fh to a file handle - %s", fileHandle.file.path)
+		logger.Errorf("failed to convert fh to a file handle - %q", fileHandle.file.path)
 		return syscall.EREMOTEIO
 	}
 
 	if fileHandle.fileHandle == nil {
-		logger.Errorf("failed to get a file handle - %s", fileHandle.file.path)
+		logger.Errorf("failed to get a file handle - %q", fileHandle.file.path)
 		return syscall.EREMOTEIO
 	}
 
@@ -593,17 +593,17 @@ func (file *File) Setlk(ctx context.Context, fh fusefs.FileHandle, owner uint64,
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := file.fs.GetNextOperationID()
-	logger.Infof("Calling Setlk (%d) - %s", operID, file.path)
-	defer logger.Infof("Called Setlk (%d) - %s", operID, file.path)
+	logger.Infof("Calling Setlk (%d) - %q", operID, file.path)
+	defer logger.Infof("Called Setlk (%d) - %q", operID, file.path)
 
 	fileHandle, ok := fh.(*FileHandle)
 	if !ok {
-		logger.Errorf("failed to convert fh to a file handle - %s", fileHandle.file.path)
+		logger.Errorf("failed to convert fh to a file handle - %q", fileHandle.file.path)
 		return syscall.EREMOTEIO
 	}
 
 	if fileHandle.fileHandle == nil {
-		logger.Errorf("failed to get a file handle - %s", fileHandle.file.path)
+		logger.Errorf("failed to get a file handle - %q", fileHandle.file.path)
 		return syscall.EREMOTEIO
 	}
 
@@ -625,17 +625,17 @@ func (file *File) Setlkw(ctx context.Context, fh fusefs.FileHandle, owner uint64
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
 	operID := file.fs.GetNextOperationID()
-	logger.Infof("Calling Setlkw (%d) - %s", operID, file.path)
-	defer logger.Infof("Called Setlkw (%d) - %s", operID, file.path)
+	logger.Infof("Calling Setlkw (%d) - %q", operID, file.path)
+	defer logger.Infof("Called Setlkw (%d) - %q", operID, file.path)
 
 	fileHandle, ok := fh.(*FileHandle)
 	if !ok {
-		logger.Errorf("failed to convert fh to a file handle - %s", fileHandle.file.path)
+		logger.Errorf("failed to convert fh to a file handle - %q", fileHandle.file.path)
 		return syscall.EREMOTEIO
 	}
 
 	if fileHandle.fileHandle == nil {
-		logger.Errorf("failed to get a file handle - %s", fileHandle.file.path)
+		logger.Errorf("failed to get a file handle - %q", fileHandle.file.path)
 		return syscall.EREMOTEIO
 	}
 

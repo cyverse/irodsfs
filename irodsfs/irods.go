@@ -72,8 +72,8 @@ func IRODSGetACL(ctx context.Context, fs *IRODSFS, entry *irodsclient_fs.Entry, 
 		return 0o700
 	}
 
-	logger.Debugf("Checking ACL information of the Entry for %s and user %s", entry.Path, fs.config.ClientUser)
-	defer logger.Debugf("Checked ACL information of the Entry for %s and user %s", entry.Path, fs.config.ClientUser)
+	logger.Debugf("Checking ACL information of the Entry for %q and user %q", entry.Path, fs.config.ClientUser)
+	defer logger.Debugf("Checked ACL information of the Entry for %q and user %q", entry.Path, fs.config.ClientUser)
 
 	var err error
 	var accesses []*irodsclient_types.IRODSAccess
@@ -84,7 +84,7 @@ func IRODSGetACL(ctx context.Context, fs *IRODSFS, entry *irodsclient_fs.Entry, 
 	}
 
 	if err != nil {
-		logger.Errorf("failed to get ACL information of the Entry for %s", entry.Path)
+		logger.Errorf("failed to get ACL information of the Entry for %q", entry.Path)
 		return 0o500
 	}
 
@@ -114,7 +114,7 @@ func IRODSGetACL(ctx context.Context, fs *IRODSFS, entry *irodsclient_fs.Entry, 
 		}
 	}
 
-	logger.Debugf("failed to find ACL information of the Entry for %s and user %s", entry.Path, fs.config.ClientUser)
+	logger.Debugf("failed to find ACL information of the Entry for %q and user %q", entry.Path, fs.config.ClientUser)
 	return highestPermission
 }
 
@@ -133,14 +133,14 @@ func IRODSGetattr(ctx context.Context, fs *IRODSFS, path string, vpathReadonly b
 	entry, err := fs.fsClient.Stat(path)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find file or dir for path %s", path)
+			logger.Debugf("failed to find file or dir for path %q", path)
 			return syscall.ENOENT
 		}
 
 		logger.Errorf("%+v", err)
 		if isTransitiveConnectionError(err) {
 			// return dummy
-			logger.Errorf("returning dummy attr for path %s", path)
+			logger.Errorf("returning dummy attr for path %q", path)
 			setAttrOutForDummy(fs.inodeManager, path, fs.uid, fs.gid, true, &out.Attr)
 			return fusefs.OK
 		}
@@ -163,7 +163,7 @@ func IRODSLookup(ctx context.Context, fs *IRODSFS, dir *Dir, path string, vpathR
 	entry, err := fs.fsClient.Stat(path)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find file or dir for path %s", path)
+			logger.Debugf("failed to find file or dir for path %q", path)
 			return 0, false, syscall.ENOENT
 		}
 
@@ -187,7 +187,7 @@ func IRODSListxattr(ctx context.Context, fs *IRODSFS, path string, dest []byte) 
 	irodsMetadata, err := fs.fsClient.ListXattr(path)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find file or dir for path %s", path)
+			logger.Debugf("failed to find file or dir for path %q", path)
 			return 0, syscall.ENOENT
 		}
 
@@ -227,7 +227,7 @@ func IRODSGetxattr(ctx context.Context, fs *IRODSFS, path string, attr string, d
 	irodsMeta, err := fs.fsClient.GetXattr(path, attr)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find file or dir for path %s", path)
+			logger.Debugf("failed to find file or dir for path %q", path)
 			return 0, syscall.ENOENT
 		}
 
@@ -259,7 +259,7 @@ func IRODSSetxattr(ctx context.Context, fs *IRODSFS, path string, attr string, d
 	err := fs.fsClient.SetXattr(path, attr, string(data))
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find file or dir for path %s", path)
+			logger.Debugf("failed to find file or dir for path %q", path)
 			return syscall.ENOENT
 		}
 
@@ -280,7 +280,7 @@ func IRODSRemovexattr(ctx context.Context, fs *IRODSFS, path string, attr string
 	irodsMeta, err := fs.fsClient.GetXattr(path, attr)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find file or dir for path %s", path)
+			logger.Debugf("failed to find file or dir for path %q", path)
 			return syscall.ENOENT
 		}
 
@@ -295,7 +295,7 @@ func IRODSRemovexattr(ctx context.Context, fs *IRODSFS, path string, attr string
 	err = fs.fsClient.RemoveXattr(path, attr)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find file or dir for path %s", path)
+			logger.Debugf("failed to find file or dir for path %q", path)
 			return syscall.ENOENT
 		}
 
@@ -316,14 +316,14 @@ func IRODSOpendir(ctx context.Context, fs *IRODSFS, path string) syscall.Errno {
 	entry, err := fs.fsClient.Stat(path)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find file or dir for path %s", path)
+			logger.Debugf("failed to find file or dir for path %q", path)
 			return syscall.ENOENT
 		}
 
 		logger.Errorf("%+v", err)
 		if isTransitiveConnectionError(err) {
 			// return dummy
-			logger.Errorf("opening dummy dir for path %s", path)
+			logger.Errorf("opening dummy dir for path %q", path)
 			return fusefs.OK
 		}
 
@@ -331,7 +331,7 @@ func IRODSOpendir(ctx context.Context, fs *IRODSFS, path string) syscall.Errno {
 	}
 
 	if !entry.IsDir() {
-		logger.Errorf("entry type for path %s is not a directory", path)
+		logger.Errorf("entry type for path %q is not a directory", path)
 		return syscall.EREMOTEIO
 	}
 
@@ -350,14 +350,14 @@ func IRODSReaddir(ctx context.Context, fs *IRODSFS, path string) ([]fuse.DirEntr
 	entries, err := fs.fsClient.List(path)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find dir for path %s", path)
+			logger.Debugf("failed to find dir for path %q", path)
 			return nil, syscall.ENOENT
 		}
 
 		logger.Errorf("%+v", err)
 		if isTransitiveConnectionError(err) {
 			// return dummy
-			logger.Errorf("returning dummy dir entries for path %s", path)
+			logger.Errorf("returning dummy dir entries for path %q", path)
 			return dirEntries, fusefs.OK
 		}
 
@@ -393,7 +393,7 @@ func IRODSRmdir(ctx context.Context, fs *IRODSFS, path string) syscall.Errno {
 	entry, err := fs.fsClient.Stat(path)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find dir for path %s", path)
+			logger.Debugf("failed to find dir for path %q", path)
 			return syscall.ENOENT
 		}
 
@@ -402,7 +402,7 @@ func IRODSRmdir(ctx context.Context, fs *IRODSFS, path string) syscall.Errno {
 	}
 
 	if !entry.IsDir() {
-		logger.Errorf("failed to remove a file %s using rmdir", entry.Path)
+		logger.Errorf("failed to remove a file %q using rmdir", entry.Path)
 		return syscall.EREMOTEIO
 	}
 
@@ -410,10 +410,10 @@ func IRODSRmdir(ctx context.Context, fs *IRODSFS, path string) syscall.Errno {
 	err = fs.fsClient.RemoveDir(entry.Path, false, false)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find dir for path %s", entry.Path)
+			logger.Debugf("failed to find dir for path %q", entry.Path)
 			return syscall.ENOENT
 		} else if irodsclient_types.IsCollectionNotEmptyError(err) {
-			logger.Debugf("the dir is not empty %s", entry.Path)
+			logger.Debugf("the dir is not empty %q", entry.Path)
 			return syscall.ENOTEMPTY
 		}
 
@@ -434,7 +434,7 @@ func IRODSUnlink(ctx context.Context, fs *IRODSFS, path string) syscall.Errno {
 	entry, err := fs.fsClient.Stat(path)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find file for path %s", path)
+			logger.Debugf("failed to find file for path %q", path)
 			return syscall.ENOENT
 		}
 
@@ -443,7 +443,7 @@ func IRODSUnlink(ctx context.Context, fs *IRODSFS, path string) syscall.Errno {
 	}
 
 	if entry.IsDir() {
-		logger.Errorf("failed to remove a dir %s using unlink", entry.Path)
+		logger.Errorf("failed to remove a dir %q using unlink", entry.Path)
 		return syscall.EREMOTEIO
 	}
 
@@ -451,7 +451,7 @@ func IRODSUnlink(ctx context.Context, fs *IRODSFS, path string) syscall.Errno {
 	err = fs.fsClient.RemoveFile(entry.Path, false)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find file for path %s", path)
+			logger.Debugf("failed to find file for path %q", path)
 			return syscall.ENOENT
 		}
 
@@ -502,7 +502,7 @@ func IRODSRename(ctx context.Context, fs *IRODSFS, dir *Dir, srcPath string, des
 	srcEntry, err := fs.fsClient.Stat(srcPath)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find file or dir for path %s", srcPath)
+			logger.Debugf("failed to find file or dir for path %q", srcPath)
 			return syscall.ENOENT
 		}
 
@@ -523,7 +523,7 @@ func IRODSRename(ctx context.Context, fs *IRODSFS, dir *Dir, srcPath string, des
 	destEntry, err := fs.fsClient.Stat(destPath)
 	if err != nil {
 		if !irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find file or dir for path %s", destPath)
+			logger.Debugf("failed to find file or dir for path %q", destPath)
 			return syscall.EREMOTEIO
 		}
 	} else {
@@ -557,7 +557,7 @@ func IRODSCreate(ctx context.Context, fs *IRODSFS, dir *Dir, path string, flags 
 	})
 
 	openMode := IRODSGetOpenFlags(flags)
-	logger.Infof("Create file %s with flag %d (%s)", path, flags, openMode)
+	logger.Infof("Create file %q with flag %q, mode %q", path, flags, openMode)
 
 	handle, err := fs.fsClient.CreateFile(path, "", string(openMode))
 	if err != nil {
@@ -568,7 +568,7 @@ func IRODSCreate(ctx context.Context, fs *IRODSFS, dir *Dir, path string, flags 
 	entry, err := fs.fsClient.Stat(path)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find file or dir for path %s", path)
+			logger.Debugf("failed to find file or dir for path %q", path)
 			return 0, nil, syscall.EREMOTEIO
 		}
 
@@ -600,12 +600,12 @@ func IRODSOpen(ctx context.Context, fs *IRODSFS, file *File, path string, flags 
 	})
 
 	openMode := IRODSGetOpenFlags(flags)
-	logger.Infof("Open file %s with flag %d (%s)", path, flags, openMode)
+	logger.Infof("Open file %q with flag %q, mode %q", path, flags, openMode)
 
 	handle, err := fs.fsClient.OpenFile(path, "", string(openMode))
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			logger.Debugf("failed to find a file %s", path)
+			logger.Debugf("failed to find a file %q", path)
 			return nil, syscall.ENOENT
 		}
 
