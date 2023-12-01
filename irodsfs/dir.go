@@ -962,8 +962,8 @@ func (dir *Dir) Create(ctx context.Context, name string, flags uint32, mode uint
 	targetPath := irodsfs_common_utils.JoinPath(dir.path, name)
 
 	operID := dir.fs.GetNextOperationID()
-	logger.Infof("Calling Create (%d) - %q, mode %q", operID, targetPath, flags)
-	defer logger.Infof("Called Create (%d) - %q, mode %q", operID, targetPath, flags)
+	logger.Infof("Calling Create (%d) - %q, mode %d", operID, targetPath, flags)
+	defer logger.Infof("Called Create (%d) - %q, mode %d", operID, targetPath, flags)
 
 	dir.mutex.Lock()
 	defer dir.mutex.Unlock()

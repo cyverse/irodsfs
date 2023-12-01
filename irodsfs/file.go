@@ -491,8 +491,8 @@ func (file *File) Open(ctx context.Context, flags uint32) (fusefs.FileHandle, ui
 	//fuseFlag |= fuse.FOPEN_DIRECT_IO
 
 	operID := file.fs.GetNextOperationID()
-	logger.Infof("Calling Open (%d) - %q, mode %q", operID, file.path, flags)
-	defer logger.Infof("Called Open (%d) - %q, mode %q", operID, file.path, flags)
+	logger.Infof("Calling Open (%d) - %q, mode %d", operID, file.path, flags)
+	defer logger.Infof("Called Open (%d) - %q, mode %d", operID, file.path, flags)
 
 	file.mutex.RLock()
 	defer file.mutex.RUnlock()

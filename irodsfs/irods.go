@@ -557,7 +557,7 @@ func IRODSCreate(ctx context.Context, fs *IRODSFS, dir *Dir, path string, flags 
 	})
 
 	openMode := IRODSGetOpenFlags(flags)
-	logger.Infof("Create file %q with flag %q, mode %q", path, flags, openMode)
+	logger.Infof("Create file %q with flag %d, mode %q", path, flags, openMode)
 
 	handle, err := fs.fsClient.CreateFile(path, "", string(openMode))
 	if err != nil {
@@ -600,7 +600,7 @@ func IRODSOpen(ctx context.Context, fs *IRODSFS, file *File, path string, flags 
 	})
 
 	openMode := IRODSGetOpenFlags(flags)
-	logger.Infof("Open file %q with flag %q, mode %q", path, flags, openMode)
+	logger.Infof("Open file %q with flag %d, mode %q", path, flags, openMode)
 
 	handle, err := fs.fsClient.OpenFile(path, "", string(openMode))
 	if err != nil {

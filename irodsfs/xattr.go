@@ -7,6 +7,10 @@ func IsUnhandledAttr(attr string) bool {
 	// overlay fs related attributes
 	if strings.HasPrefix(attr, "trusted.overlay.") {
 		return true
+	} else if strings.HasPrefix(attr, "user.overlay.") {
+		return true
+	} else if strings.HasPrefix(attr, "user.fuseoverlayfs.") {
+		return true
 	}
 
 	switch attr {
