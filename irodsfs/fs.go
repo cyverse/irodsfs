@@ -384,7 +384,8 @@ func (fs *IRODSFS) Root() (*Dir, error) {
 	}
 
 	if vpathEntry.IsVirtualDirEntry() {
-		return NewDir(fs, vpathEntry.VirtualDirEntry.ID, "/"), nil
+		inodeID := fs.inodeManager.GetInodeIDForVPathEntryID(vpathEntry.VirtualDirEntry.ID)
+		return NewDir(fs, inodeID, "/"), nil
 	}
 
 	return NewIRODSRoot(fs, vpathEntry)

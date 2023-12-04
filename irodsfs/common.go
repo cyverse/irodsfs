@@ -14,7 +14,7 @@ import (
 )
 
 func setAttrOutForVirtualDirEntry(inodeManager *irodsfs_common_inode.InodeManager, entry *irodsfs_common_vpath.VPathVirtualDirEntry, uid uint32, gid uint32, out *fuse.Attr) {
-	out.Ino = entry.ID
+	out.Ino = inodeManager.GetInodeIDForVPathEntryID(entry.ID)
 	out.Uid = uid
 	out.Gid = gid
 	out.SetTimes(&entry.ModifyTime, &entry.ModifyTime, &entry.ModifyTime)

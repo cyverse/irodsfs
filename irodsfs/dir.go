@@ -425,7 +425,8 @@ func (dir *Dir) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*f
 	// Virtual Dir
 	if vpathEntry.IsVirtualDirEntry() {
 		if vpathEntry.Path == targetPath {
-			_, subDirInode := NewSubDirInode(ctx, dir, vpathEntry.VirtualDirEntry.ID, targetPath)
+			inodeID := dir.fs.inodeManager.GetInodeIDForVPathEntryID(vpathEntry.VirtualDirEntry.ID)
+			_, subDirInode := NewSubDirInode(ctx, dir, inodeID, targetPath)
 			setAttrOutForVirtualDirEntry(dir.fs.inodeManager, vpathEntry.VirtualDirEntry, dir.fs.uid, dir.fs.gid, &out.Attr)
 			return subDirInode, fusefs.OK
 		}
@@ -554,8 +555,9 @@ func (dir *Dir) Readdir(ctx context.Context) (fusefs.DirStream, syscall.Errno) {
 			for _, entry := range vpathEntry.VirtualDirEntry.DirEntries {
 				if entry.IsVirtualDirEntry() {
 					// Virtual Dir entry
+					inodeID := dir.fs.inodeManager.GetInodeIDForVPathEntryID(entry.VirtualDirEntry.ID)
 					dirEntry := fuse.DirEntry{
-						Ino:  entry.VirtualDirEntry.ID,
+						Ino:  inodeID,
 						Mode: uint32(fuse.S_IFDIR),
 						Name: entry.VirtualDirEntry.Name,
 					}

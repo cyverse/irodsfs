@@ -588,7 +588,6 @@ func IRODSCreate(ctx context.Context, fs *IRODSFS, dir *Dir, path string, flags 
 
 	mode := IRODSGetACL(ctx, fs, entry, false)
 	setAttrOutForIRODSEntry(fs.inodeManager, entry, fs.uid, fs.gid, mode, &out.Attr)
-
 	return entry.ID, fileHandle, fusefs.OK
 }
 
