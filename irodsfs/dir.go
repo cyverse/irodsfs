@@ -310,6 +310,10 @@ func (dir *Dir) Setxattr(ctx context.Context, attr string, data []byte, flags ui
 	logger.Infof("Calling Setxattr (%d) - %q", operID, dir.path)
 	defer logger.Infof("Called Setxattr (%d) - %q", operID, dir.path)
 
+	if dir.fs.config.NoSetXattr {
+		return syscall.EACCES
+	}
+
 	if IsUnhandledAttr(attr) {
 		return syscall.EACCES
 	}

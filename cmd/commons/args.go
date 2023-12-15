@@ -58,6 +58,7 @@ func SetCommonFlags(command *cobra.Command) {
 	command.Flags().Duration("metadata_cache_timeout", commons.MetadataCacheTimeoutDefault, "Set file system metadata cache timeout")
 	command.Flags().Duration("metadata_cache_cleanup_time", commons.MetadataCacheCleanupTimeDefault, "Set file system metadata cache cleanup time")
 	command.Flags().Bool("no_permission_check", false, "Disable permission check for performance")
+	command.Flags().Bool("no_set_xattr", false, "Disable set xattr")
 	command.Flags().Bool("no_transaction", false, "Disable transaction for performance")
 
 	command.Flags().Int("uid", -1, "Set UID of file/directory owner")
@@ -483,6 +484,12 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if noPermissionCheckFlag != nil {
 		noPermissionCheck, _ := strconv.ParseBool(noPermissionCheckFlag.Value.String())
 		config.NoPermissionCheck = noPermissionCheck
+	}
+
+	noSetXattrFlag := command.Flags().Lookup("no_set_xattr")
+	if noSetXattrFlag != nil {
+		noSetXattr, _ := strconv.ParseBool(noSetXattrFlag.Value.String())
+		config.NoSetXattr = noSetXattr
 	}
 
 	noTransactionFlag := command.Flags().Lookup("no_transaction")
