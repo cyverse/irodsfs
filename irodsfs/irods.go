@@ -624,3 +624,21 @@ func IRODSOpen(ctx context.Context, fs *IRODSFS, file *File, path string, flags 
 
 	return fileHandle, fusefs.OK
 }
+
+// IRODSOpenLazy opens file for the given irods path lazily when it first read or write
+func IRODSOpenLazy(ctx context.Context, fs *IRODSFS, file *File, path string, flags uint32) (*FileHandle, syscall.Errno) {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"function": "IRODSOpenLazy",
+	})
+
+	openMode := IRODSGetOpenFlags(flags)
+
+	fileHandle, err := NewFileHandleLazy(fs, path, openMode)
+	if err != nil {
+		logger.Errorf("%+v", err)
+		return nil, syscall.EREMOTEIO
+	}
+
+	return fileHandle, fusefs.OK
+}

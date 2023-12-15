@@ -437,9 +437,9 @@ func (file *File) Truncate(ctx context.Context, size uint64) syscall.Errno {
 	callFtruncate := false
 	handlesOpened := file.fs.fileHandleMap.ListByPath(irodsEntry.Path)
 	for _, handle := range handlesOpened {
-		if handle.fileHandle.IsWriteMode() {
+		if handle.openMode.IsWrite() {
 			// is writing
-			logger.Infof("Found opened file handle %q - %q", handle.file.path, handle.fileHandle.GetID())
+			logger.Infof("Found opened file handle %q - %q", handle.file.path, handle.GetID())
 
 			errno := handle.Truncate(ctx, size)
 			if errno != 0 {
@@ -533,7 +533,7 @@ func (file *File) Open(ctx context.Context, flags uint32) (fusefs.FileHandle, ui
 		return nil, 0, syscall.EREMOTEIO
 	}
 
-	fileHandle, errno := IRODSOpen(ctx, file.fs, file, irodsPath, flags)
+	fileHandle, errno := IRODSOpenLazy(ctx, file.fs, file, irodsPath, flags)
 	if errno != fusefs.OK {
 		return nil, 0, errno
 	}
@@ -570,11 +570,6 @@ func (file *File) Getlk(ctx context.Context, fh fusefs.FileHandle, owner uint64,
 		return syscall.EREMOTEIO
 	}
 
-	if fileHandle.fileHandle == nil {
-		logger.Errorf("failed to get a file handle - %q", fileHandle.file.path)
-		return syscall.EREMOTEIO
-	}
-
 	return fileHandle.GetLocalLock(ctx, owner, lk, flags, out)
 }
 
@@ -602,11 +597,6 @@ func (file *File) Setlk(ctx context.Context, fh fusefs.FileHandle, owner uint64,
 		return syscall.EREMOTEIO
 	}
 
-	if fileHandle.fileHandle == nil {
-		logger.Errorf("failed to get a file handle - %q", fileHandle.file.path)
-		return syscall.EREMOTEIO
-	}
-
 	return fileHandle.SetLocalLock(ctx, owner, lk, flags)
 }
 
@@ -631,11 +621,6 @@ func (file *File) Setlkw(ctx context.Context, fh fusefs.FileHandle, owner uint64
 	fileHandle, ok := fh.(*FileHandle)
 	if !ok {
 		logger.Errorf("failed to convert fh to a file handle - %q", fileHandle.file.path)
-		return syscall.EREMOTEIO
-	}
-
-	if fileHandle.fileHandle == nil {
-		logger.Errorf("failed to get a file handle - %q", fileHandle.file.path)
 		return syscall.EREMOTEIO
 	}
 

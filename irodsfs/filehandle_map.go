@@ -26,8 +26,8 @@ func (fileHandleMap *FileHandleMap) Add(handle *FileHandle) {
 	fileHandleMap.mutex.Lock()
 	defer fileHandleMap.mutex.Unlock()
 
-	handleID := handle.fileHandle.GetID()
-	handlePath := handle.fileHandle.GetEntry().Path
+	handleID := handle.GetID()
+	handlePath := handle.GetPath()
 
 	fileHandleMap.fileHandles[handleID] = handle
 	if ids, ok := fileHandleMap.filePathID[handlePath]; ok {
@@ -46,7 +46,7 @@ func (fileHandleMap *FileHandleMap) Remove(id string) {
 	if handle != nil {
 		delete(fileHandleMap.fileHandles, id)
 
-		handlePath := handle.fileHandle.GetEntry().Path
+		handlePath := handle.GetPath()
 		if ids, ok := fileHandleMap.filePathID[handlePath]; ok {
 			newIDs := []string{}
 			for _, handleID := range ids {
@@ -120,7 +120,7 @@ func (fileHandleMap *FileHandleMap) Pop(id string) *FileHandle {
 	if handle != nil {
 		delete(fileHandleMap.fileHandles, id)
 
-		handlePath := handle.fileHandle.GetEntry().Path
+		handlePath := handle.GetPath()
 		if ids, ok := fileHandleMap.filePathID[handlePath]; ok {
 			newIDs := []string{}
 			for _, handleID := range ids {

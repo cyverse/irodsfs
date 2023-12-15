@@ -6,6 +6,7 @@ import (
 	"sync"
 	"syscall"
 
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsfscommon_io "github.com/cyverse/irodsfs-common/io"
 	irodsfscommon_irods "github.com/cyverse/irodsfs-common/irods"
 	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
@@ -24,118 +25,150 @@ const (
 
 // FileHandle is a file handle
 type FileHandle struct {
-	fs   *IRODSFS
-	file *File
+	id       string
+	fs       *IRODSFS
+	file     *File
+	path     string
+	openMode irodsclient_types.FileOpenMode
 
 	reader               irodsfscommon_io.Reader
 	writer               irodsfscommon_io.Writer
-	fileHandle           irodsfscommon_irods.IRODSFSFileHandle
+	iRODSFileHandle      irodsfscommon_irods.IRODSFSFileHandle // this may be nil as we can set this handle lazily
 	localFileLockManager *FileHandleLocalLockManager
 
 	mutex sync.Mutex
 }
 
-func NewFileHandle(fs *IRODSFS, fileHandle irodsfscommon_irods.IRODSFSFileHandle) (*FileHandle, error) {
-	var writer irodsfscommon_io.Writer
-	var reader irodsfscommon_io.Reader
-
-	fsClient := fs.fsClient
-
-	openMode := fileHandle.GetOpenMode()
-	if openMode.IsReadOnly() {
-		// writer
-		writer = irodsfscommon_io.NewNilWriter(fsClient, fileHandle)
-
-		// reader
-		syncReader := irodsfscommon_io.NewSyncReader(fsClient, fileHandle, fs.instanceReportClient)
-
-		// use prefetching
-		// requires multiple readers
-		readers := []irodsfscommon_io.Reader{syncReader}
-
-		asyncReader, err := irodsfscommon_io.NewAsyncCacheThroughReader(readers, iRODSIOBlockSize, nil)
-		if err != nil {
-			return nil, err
-		}
-		reader = asyncReader
-	} else if openMode.IsWriteOnly() {
-		// writer
-		syncWriter := irodsfscommon_io.NewSyncWriter(fsClient, fileHandle, fs.instanceReportClient)
-		syncBufferedWriter := irodsfscommon_io.NewSyncBufferedWriter(syncWriter, iRODSIOBlockSize)
-		writer = irodsfscommon_io.NewAsyncWriter(syncBufferedWriter)
-
-		// reader
-		reader = irodsfscommon_io.NewNilReader(fsClient, fileHandle)
-	} else {
-		writer = irodsfscommon_io.NewSyncWriter(fsClient, fileHandle, fs.instanceReportClient)
-		reader = irodsfscommon_io.NewSyncReader(fsClient, fileHandle, fs.instanceReportClient)
-	}
-
+func NewFileHandleLazy(fs *IRODSFS, path string, openMode irodsclient_types.FileOpenMode) (*FileHandle, error) {
 	return &FileHandle{
-		fs:   fs,
-		file: nil,
+		id:       xid.New().String(),
+		fs:       fs,
+		file:     nil,
+		path:     path,
+		openMode: openMode,
 
-		reader:               reader,
-		writer:               writer,
-		fileHandle:           fileHandle,
+		reader:               nil,
+		writer:               nil,
+		iRODSFileHandle:      nil,
 		localFileLockManager: NewFileHandleLocalLockManager(),
 
 		mutex: sync.Mutex{},
 	}, nil
 }
 
-func NewFileHandleWithFile(file *File, fileHandle irodsfscommon_irods.IRODSFSFileHandle) (*FileHandle, error) {
-	var writer irodsfscommon_io.Writer
-	var reader irodsfscommon_io.Reader
-
-	fsClient := file.fs.fsClient
-
+func NewFileHandle(fs *IRODSFS, fileHandle irodsfscommon_irods.IRODSFSFileHandle) (*FileHandle, error) {
 	openMode := fileHandle.GetOpenMode()
-	if openMode.IsReadOnly() {
-		// writer
-		writer = irodsfscommon_io.NewNilWriter(fsClient, fileHandle)
 
-		// reader
-		syncReader := irodsfscommon_io.NewSyncReader(fsClient, fileHandle, file.fs.instanceReportClient)
+	handle := &FileHandle{
+		id:       xid.New().String(),
+		fs:       fs,
+		file:     nil,
+		path:     fileHandle.GetEntry().Path,
+		openMode: openMode,
 
-		// use prefetching
-		// requires multiple readers
-		readers := []irodsfscommon_io.Reader{syncReader}
-
-		asyncReader, err := irodsfscommon_io.NewAsyncCacheThroughReader(readers, iRODSIOBlockSize, nil)
-		if err != nil {
-			return nil, err
-		}
-		reader = asyncReader
-	} else if openMode.IsWriteOnly() {
-		// writer
-		syncWriter := irodsfscommon_io.NewSyncWriter(fsClient, fileHandle, file.fs.instanceReportClient)
-		syncBufferedWriter := irodsfscommon_io.NewSyncBufferedWriter(syncWriter, iRODSIOBlockSize)
-		writer = irodsfscommon_io.NewAsyncWriter(syncBufferedWriter)
-
-		// reader
-		reader = irodsfscommon_io.NewNilReader(fsClient, fileHandle)
-	} else {
-		writer = irodsfscommon_io.NewSyncWriter(fsClient, fileHandle, file.fs.instanceReportClient)
-		reader = irodsfscommon_io.NewSyncReader(fsClient, fileHandle, file.fs.instanceReportClient)
-	}
-
-	return &FileHandle{
-		fs:   file.fs,
-		file: file,
-
-		reader:               reader,
-		writer:               writer,
-		fileHandle:           fileHandle,
+		reader:               nil,
+		writer:               nil,
+		iRODSFileHandle:      fileHandle,
 		localFileLockManager: NewFileHandleLocalLockManager(),
 
 		mutex: sync.Mutex{},
-	}, nil
+	}
+
+	err := handle.initReaderWriter()
+	if err != nil {
+		return nil, err
+	}
+
+	return handle, nil
+}
+
+// GetID returns ID
+func (handle *FileHandle) GetID() string {
+	return handle.id
+}
+
+// GetPath returns path
+func (handle *FileHandle) GetPath() string {
+	return handle.path
 }
 
 // SetFile sets File
 func (handle *FileHandle) SetFile(file *File) {
 	handle.file = file
+}
+
+func (handle *FileHandle) initLazy() error {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"struct":   "FileHandle",
+		"function": "initLazy",
+	})
+
+	// init
+	handle.mutex.Lock()
+	defer handle.mutex.Unlock()
+
+	if handle.iRODSFileHandle == nil {
+		logger.Infof("Open file %q with mode %q", handle.path, handle.openMode)
+
+		irodsHandle, err := handle.fs.fsClient.OpenFile(handle.path, "", string(handle.openMode))
+		if err != nil {
+			return err
+		}
+
+		if handle.fs.instanceReportClient != nil {
+			handle.fs.instanceReportClient.StartFileAccess(irodsHandle)
+		}
+
+		handle.iRODSFileHandle = irodsHandle
+
+		err = handle.initReaderWriter()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (handle *FileHandle) initReaderWriter() error {
+	var writer irodsfscommon_io.Writer
+	var reader irodsfscommon_io.Reader
+
+	fsClient := handle.fs.fsClient
+
+	if handle.openMode.IsReadOnly() {
+		// writer
+		writer = irodsfscommon_io.NewNilWriter(fsClient, handle.iRODSFileHandle)
+
+		// reader
+		syncReader := irodsfscommon_io.NewSyncReader(fsClient, handle.iRODSFileHandle, handle.fs.instanceReportClient)
+
+		// use prefetching
+		// requires multiple readers
+		readers := []irodsfscommon_io.Reader{syncReader}
+
+		asyncReader, err := irodsfscommon_io.NewAsyncCacheThroughReader(readers, iRODSIOBlockSize, nil)
+		if err != nil {
+			return err
+		}
+		reader = asyncReader
+	} else if handle.openMode.IsWriteOnly() {
+		// writer
+		syncWriter := irodsfscommon_io.NewSyncWriter(fsClient, handle.iRODSFileHandle, handle.fs.instanceReportClient)
+		syncBufferedWriter := irodsfscommon_io.NewSyncBufferedWriter(syncWriter, iRODSIOBlockSize)
+		writer = irodsfscommon_io.NewAsyncWriter(syncBufferedWriter)
+
+		// reader
+		reader = irodsfscommon_io.NewNilReader(fsClient, handle.iRODSFileHandle)
+	} else {
+		writer = irodsfscommon_io.NewSyncWriter(fsClient, handle.iRODSFileHandle, handle.fs.instanceReportClient)
+		reader = irodsfscommon_io.NewSyncReader(fsClient, handle.iRODSFileHandle, handle.fs.instanceReportClient)
+	}
+
+	handle.reader = reader
+	handle.writer = writer
+	return nil
 }
 
 // Getattr returns stat of file entry
@@ -173,6 +206,12 @@ func (handle *FileHandle) Setattr(ctx context.Context, in *fuse.SetAttrIn, out *
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
+	err := handle.initLazy()
+	if err != nil {
+		logger.Errorf("%+v", err)
+		return syscall.EREMOTEIO
+	}
+
 	operID := handle.fs.GetNextOperationID()
 	logger.Infof("Calling Setattr (%d) - %q", operID, handle.file.path)
 	defer logger.Infof("Called Setattr (%d) - %q", operID, handle.file.path)
@@ -205,17 +244,23 @@ func (handle *FileHandle) Read(ctx context.Context, dest []byte, offset int64) (
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
+	err := handle.initLazy()
+	if err != nil {
+		logger.Errorf("%+v", err)
+		return nil, syscall.EREMOTEIO
+	}
+
 	size := len(dest)
 
 	logger.Debugf("Calling Read - %q, %d Offset, %d Bytes", handle.file.path, offset, size)
 	defer logger.Debugf("Called Read - %q, %d Offset, %d Bytes", handle.file.path, offset, size)
 
-	if handle.fileHandle == nil {
+	if handle.iRODSFileHandle == nil {
 		logger.Errorf("failed to get a file handle - %q", handle.file.path)
 		return nil, syscall.EBADFD
 	}
 
-	if !handle.fileHandle.IsReadMode() {
+	if !handle.openMode.IsRead() {
 		logger.Errorf("failed to read file opened with writeonly mode - %q", handle.file.path)
 		return nil, syscall.EBADFD
 	}
@@ -225,7 +270,7 @@ func (handle *FileHandle) Read(ctx context.Context, dest []byte, offset int64) (
 		return nil, syscall.EBADFD
 	}
 
-	if offset > handle.fileHandle.GetEntry().Size {
+	if offset > handle.iRODSFileHandle.GetEntry().Size {
 		return fuse.ReadResultData(dest[:0]), fusefs.OK
 	}
 
@@ -241,7 +286,7 @@ func (handle *FileHandle) Read(ctx context.Context, dest []byte, offset int64) (
 }
 
 // Write writes file content
-func (handle *FileHandle) Write(ctx context.Context, data []byte, offset int64) (written uint32, errno syscall.Errno) {
+func (handle *FileHandle) Write(ctx context.Context, data []byte, offset int64) (uint32, syscall.Errno) {
 	if handle.fs.terminated {
 		return 0, syscall.ECONNABORTED
 	}
@@ -254,17 +299,23 @@ func (handle *FileHandle) Write(ctx context.Context, data []byte, offset int64) 
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
+	err := handle.initLazy()
+	if err != nil {
+		logger.Errorf("%+v", err)
+		return 0, syscall.EREMOTEIO
+	}
+
 	size := len(data)
 
 	logger.Debugf("Calling Write - %q, %d Offset, %d Bytes", handle.file.path, offset, size)
 	defer logger.Debugf("Called Write - %q, %d Offset, %d Bytes", handle.file.path, offset, size)
 
-	if handle.fileHandle == nil {
+	if handle.iRODSFileHandle == nil {
 		logger.Errorf("failed to get a file handle - %q", handle.file.path)
 		return 0, syscall.EBADFD
 	}
 
-	if !handle.fileHandle.IsWriteMode() {
+	if !handle.openMode.IsWrite() {
 		logger.Errorf("failed to write file opened with readonly mode - %q", handle.file.path)
 		return 0, syscall.EBADFD
 	}
@@ -305,20 +356,26 @@ func (handle *FileHandle) Truncate(ctx context.Context, size uint64) syscall.Err
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
+	err := handle.initLazy()
+	if err != nil {
+		logger.Errorf("%+v", err)
+		return syscall.EREMOTEIO
+	}
+
 	logger.Infof("Calling Truncate - %q, %d Bytes", handle.file.path, size)
 	defer logger.Infof("Called Truncate - %q, %d Bytes", handle.file.path, size)
 
-	if handle.fileHandle == nil {
+	if handle.iRODSFileHandle == nil {
 		logger.Errorf("failed to get a file handle - %q", handle.file.path)
 		return syscall.EBADFD
 	}
 
-	if !handle.fileHandle.IsWriteMode() {
+	if !handle.openMode.IsWrite() {
 		logger.Errorf("failed to truncate file opened with readonly mode - %q", handle.file.path)
 		return syscall.EBADFD
 	}
 
-	err := handle.fileHandle.Truncate(int64(size))
+	err = handle.iRODSFileHandle.Truncate(int64(size))
 	if err != nil {
 		logger.Errorf("%+v", err)
 		return syscall.EREMOTEIO
@@ -341,10 +398,18 @@ func (handle *FileHandle) Flush(ctx context.Context) syscall.Errno {
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
+	handle.mutex.Lock()
+	if handle.iRODSFileHandle == nil {
+		// do nothing
+		handle.mutex.Unlock()
+		return fusefs.OK
+	}
+	handle.mutex.Unlock()
+
 	logger.Debugf("Calling Flush - %q", handle.file.path)
 	defer logger.Debugf("Called Flush - %q", handle.file.path)
 
-	if handle.fileHandle == nil {
+	if handle.iRODSFileHandle == nil {
 		logger.Errorf("failed to get a file handle - %q", handle.file.path)
 		return syscall.EREMOTEIO
 	}
@@ -375,10 +440,18 @@ func (handle *FileHandle) Fsync(ctx context.Context, flags uint32) syscall.Errno
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
+	handle.mutex.Lock()
+	if handle.iRODSFileHandle == nil {
+		// do nothing
+		handle.mutex.Unlock()
+		return fusefs.OK
+	}
+	handle.mutex.Unlock()
+
 	logger.Debugf("Calling Fsync - %q", handle.file.path)
 	defer logger.Debugf("Called Fsync - %q", handle.file.path)
 
-	if handle.fileHandle == nil {
+	if handle.iRODSFileHandle == nil {
 		logger.Errorf("failed to get a file handle - %q", handle.file.path)
 		return syscall.EREMOTEIO
 	}
@@ -409,10 +482,22 @@ func (handle *FileHandle) Release(ctx context.Context) syscall.Errno {
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
+	handle.mutex.Lock()
+	if handle.iRODSFileHandle == nil {
+		// do nothing
+
+		// remove the handle from file handle map
+		handle.fs.fileHandleMap.Remove(handle.GetID())
+
+		handle.mutex.Unlock()
+		return fusefs.OK
+	}
+	handle.mutex.Unlock()
+
 	logger.Infof("Calling Release - %q", handle.file.path)
 	defer logger.Infof("Called Release - %q", handle.file.path)
 
-	if handle.fileHandle == nil {
+	if handle.iRODSFileHandle == nil {
 		logger.Errorf("failed to get a file handle - %q", handle.file.path)
 		return syscall.EREMOTEIO
 	}
@@ -447,24 +532,23 @@ func (handle *FileHandle) Release(ctx context.Context) syscall.Errno {
 		defer handle.mutex.Unlock()
 
 		// remove the handle from file handle map
-		handle.fs.fileHandleMap.Remove(handle.fileHandle.GetID())
+		handle.fs.fileHandleMap.Remove(handle.GetID())
 
 		// Report
 		if handle.fs.instanceReportClient != nil {
-			err := handle.fs.instanceReportClient.DoneFileAccess(handle.fileHandle)
+			err := handle.fs.instanceReportClient.DoneFileAccess(handle.iRODSFileHandle)
 			if err != nil {
 				logger.Errorf("%+v", err)
 			}
 		}
 
-		err := handle.fileHandle.Close()
+		err := handle.iRODSFileHandle.Close()
 		if err != nil {
 			logger.Errorf("%+v", err)
 		}
 	}
 
-	openMode := handle.fileHandle.GetOpenMode()
-	if openMode.IsReadOnly() {
+	if handle.openMode.IsReadOnly() {
 		// close it asynchronously
 		go closeFunc()
 	} else {
