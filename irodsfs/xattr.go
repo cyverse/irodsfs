@@ -17,7 +17,7 @@ func IsUnhandledAttr(attr string) bool {
 	// we suppress attr "system.posix_acl_access" as it may cause wrong permission check
 	case "system.posix_acl_access", "system.posix_acl_default", "system.dos_attrib":
 		return true
-	case "security.selinux", "security.apparmor":
+	case "security.selinux", "security.apparmor", "security.capability":
 		return true
 	case "user.xdg.origin.url", "user.xdg.referrer.url":
 		return true

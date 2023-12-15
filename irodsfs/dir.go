@@ -311,7 +311,7 @@ func (dir *Dir) Setxattr(ctx context.Context, attr string, data []byte, flags ui
 	defer logger.Infof("Called Setxattr (%d) - %q", operID, dir.path)
 
 	if IsUnhandledAttr(attr) {
-		return syscall.EINVAL
+		return syscall.EACCES
 	}
 
 	dir.mutex.RLock()
