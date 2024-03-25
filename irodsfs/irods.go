@@ -15,12 +15,12 @@ import (
 // IRODSGetACL returns permission flag from iRODS access level type
 func IRODSGetPermission(level irodsclient_types.IRODSAccessLevelType) os.FileMode {
 	switch level {
-	case irodsclient_types.IRODSAccessLevelOwner, irodsclient_types.IRODSAccessLevelWrite:
+	case irodsclient_types.IRODSAccessLevelAdministerObject, irodsclient_types.IRODSAccessLevelOwner, irodsclient_types.IRODSAccessLevelModifyObject, irodsclient_types.IRODSAccessLevelCreateObject:
 		return 0o700
-	case irodsclient_types.IRODSAccessLevelRead:
+	case irodsclient_types.IRODSAccessLevelReadObject, irodsclient_types.IRODSAccessLevelExecute, irodsclient_types.IRODSAccessLevelCurate:
 		return 0o500
-	case irodsclient_types.IRODSAccessLevelNone:
-		return 0o0
+	case irodsclient_types.IRODSAccessLevelNull:
+		fallthrough
 	default:
 		return 0o0
 	}

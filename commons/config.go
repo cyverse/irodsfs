@@ -87,6 +87,7 @@ type Config struct {
 	ClientServerNegotiation bool   `yaml:"cs_negotiation"`
 	CSNegotiationPolicy     string `yaml:"cs_negotiation_policy"`
 	CACertificateFile       string `yaml:"ssl_ca_cert_file"`
+	CACertificatePath       string `yaml:"ssl_ca_sert_path"`
 	EncryptionKeySize       int    `yaml:"ssl_encryption_key_size"`
 	EncryptionAlgorithm     string `yaml:"ssl_encryption_algorithm"`
 	SaltSize                int    `yaml:"ssl_encryption_salt_size"`
@@ -147,6 +148,7 @@ func NewDefaultConfig() *Config {
 		ClientServerNegotiation: false,
 		CSNegotiationPolicy:     CSNegotiationDefault,
 		CACertificateFile:       "",
+		CACertificatePath:       "",
 		EncryptionKeySize:       EncryptionKeySizeDefault,
 		EncryptionAlgorithm:     EncryptionAlgorithmDefault,
 		SaltSize:                SaltSizeDefault,
@@ -366,22 +368,19 @@ func (config *Config) Validate() error {
 		return xerrors.Errorf("connection max must be equal or greater than 1")
 	}
 
-	authScheme, err := irodsclient_types.GetAuthScheme(config.AuthScheme)
-	if err != nil {
-		return err
-	}
-
+	authScheme := irodsclient_types.GetAuthScheme(config.AuthScheme)
 	if config.ClientServerNegotiation {
 		if len(config.CSNegotiationPolicy) == 0 {
 			return xerrors.Errorf("CS negotiation policy must be given")
 		}
 	}
 
-	if authScheme == irodsclient_types.AuthSchemePAM {
-		if _, err := os.Stat(config.CACertificateFile); os.IsNotExist(err) {
-			return xerrors.Errorf("SSL CA Certificate file error: %w", err)
-		}
+	policy, err := irodsclient_types.GetCSNegotiationPolicy(config.CSNegotiationPolicy)
+	if err != nil {
+		policy = irodsclient_types.CSNegotiationUseTCP
+	}
 
+	if authScheme == irodsclient_types.AuthSchemePAM || policy == irodsclient_types.CSNegotiationUseSSL {
 		if config.EncryptionKeySize <= 0 {
 			return xerrors.Errorf("SSL encryption key size must be given")
 		}

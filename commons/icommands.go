@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
-	irodsclient_icommands "github.com/cyverse/go-irodsclient/utils/icommands"
+	irodsclient_icommands "github.com/cyverse/go-irodsclient/icommands"
 	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/xerrors"
@@ -21,28 +22,24 @@ func isICommandsEnvDir(dirPath string) bool {
 		return false
 	}
 
-	envFilePath := filepath.Join(dirPath, "irods_environment.json")
-	passFilePath := filepath.Join(dirPath, ".irodsA")
-
-	stEnv, err := os.Stat(envFilePath)
+	entries, err := os.ReadDir(dirPath)
 	if err != nil {
 		return false
 	}
 
-	if stEnv.IsDir() {
-		return false
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			if strings.HasPrefix(entry.Name(), "irods_environment.json.") {
+				return true
+			} else if entry.Name() == "irods_environment.json" {
+				return true
+			} else if entry.Name() == ".irodsA" {
+				return true
+			}
+		}
 	}
 
-	stPass, err := os.Stat(passFilePath)
-	if err != nil {
-		return false
-	}
-
-	if stPass.IsDir() {
-		return false
-	}
-
-	return true
+	return false
 }
 
 func LoadICommandsEnvironmentDir(configDirPath string) (*Config, error) {
@@ -112,6 +109,7 @@ func LoadICommandsEnvironmentFile(configPath string) (*Config, error) {
 	config.Password = loadedAccount.Password
 	config.Resource = loadedAccount.DefaultResource
 	config.CACertificateFile = loadedAccount.SSLConfiguration.CACertificateFile
+	config.CACertificatePath = loadedAccount.SSLConfiguration.CACertificatePath
 	config.EncryptionKeySize = loadedAccount.SSLConfiguration.EncryptionKeySize
 	config.EncryptionAlgorithm = loadedAccount.SSLConfiguration.EncryptionAlgorithm
 	config.SaltSize = loadedAccount.SSLConfiguration.SaltSize

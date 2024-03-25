@@ -84,9 +84,9 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	authScheme, err := irodsclient_types.GetAuthScheme(config.AuthScheme)
-	if err != nil {
-		return nil, err
+	authScheme := irodsclient_types.GetAuthScheme(config.AuthScheme)
+	if authScheme == irodsclient_types.AuthSchemeUnknown {
+		authScheme = irodsclient_types.AuthSchemeNative
 	}
 
 	csNegotiation, err := irodsclient_types.GetCSNegotiationRequire(config.CSNegotiationPolicy)
@@ -105,34 +105,26 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 
 	logger.Infof("Connect to IRODS server using %q auth scheme", string(authScheme))
 
-	if authScheme == irodsclient_types.AuthSchemePAM {
-		sslConfig, err := irodsclient_types.CreateIRODSSSLConfig(config.CACertificateFile, config.EncryptionKeySize,
-			config.EncryptionAlgorithm, config.SaltSize, config.HashRounds)
-		if err != nil {
-			sslErr := xerrors.Errorf("failed to create IRODS SSL Config: %w", err)
-			logger.Errorf("%+v", sslErr)
-			return nil, sslErr
-		}
+	// optional for ssl,
+	// no harm if it is not ssl
+	sslConfig, err := irodsclient_types.CreateIRODSSSLConfig(config.CACertificateFile, config.CACertificatePath, config.EncryptionKeySize,
+		config.EncryptionAlgorithm, config.SaltSize, config.HashRounds)
+	if err != nil {
+		sslErr := xerrors.Errorf("failed to create IRODS SSL Config: %w", err)
+		logger.Errorf("%+v", sslErr)
+		return nil, sslErr
+	}
 
+	if authScheme == irodsclient_types.AuthSchemePAM {
 		logger.Info("PAM requires SSL, enabling CS negotiation")
 
 		account.SetSSLConfiguration(sslConfig)
 		account.SetCSNegotiation(true, irodsclient_types.CSNegotiationRequireSSL)
 	} else if config.ClientServerNegotiation {
-		if len(config.CACertificateFile) > 0 {
-			sslConfig, err := irodsclient_types.CreateIRODSSSLConfig(config.CACertificateFile, config.EncryptionKeySize,
-				config.EncryptionAlgorithm, config.SaltSize, config.HashRounds)
-			if err != nil {
-				sslErr := xerrors.Errorf("failed to create IRODS SSL Config: %w", err)
-				logger.Errorf("%+v", sslErr)
-				return nil, sslErr
-			}
+		logger.Info("Enabling CS negotiation to turn on SSL")
 
-			logger.Info("Enabling CS negotiation to turn on SSL")
-
-			account.SetSSLConfiguration(sslConfig)
-			account.SetCSNegotiation(config.ClientServerNegotiation, csNegotiation)
-		}
+		account.SetSSLConfiguration(sslConfig)
+		account.SetCSNegotiation(config.ClientServerNegotiation, csNegotiation)
 	}
 
 	cacheTimeoutSettings := []irodsclient_fs.MetadataCacheTimeoutSetting{}
