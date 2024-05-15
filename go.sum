@@ -4,10 +4,10 @@ github.com/chzyer/logex v1.1.10/go.mod h1:+Ywpsq7O8HXn0nuIou7OrIPyXbp3wmkHB+jjWR
 github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e/go.mod h1:nSuG5e5PlCu98SY8svDHJxuZscDgtXS6KTTbou5AhLI=
 github.com/chzyer/test v0.0.0-20180213035817-a1ea475d72b1/go.mod h1:Q3SI9o4m/ZMnBNeIyt5eFwwo7qiLfzFZmjNmxjkiQlU=
 github.com/cpuguy83/go-md2man/v2 v2.0.2/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
-github.com/cyverse/go-irodsclient v0.14.3 h1:B6BI3H2nUoh6pu76EB0eKBPdFY9lq1qppuHfDbz9UB0=
-github.com/cyverse/go-irodsclient v0.14.3/go.mod h1:eBXha3cwfrM0p1ijYVqsrLJQHpRwTfpA4c5dKCQsQFc=
-github.com/cyverse/irodsfs-common v0.0.0-20240326211011-08f17c8d7705 h1:KjgIEJIeKPsDw6zuG4dvalAHxsVGJQKLHi/n+HKWuQ4=
-github.com/cyverse/irodsfs-common v0.0.0-20240326211011-08f17c8d7705/go.mod h1:rfkRjk+9zSLQhV+r7080HDnNvmOvscB85GzNrR7stH4=
+github.com/cyverse/go-irodsclient v0.14.6 h1:otPfQIZ7JVIU8liWkwKfUpds/tu9a35weliIrNzB/Tc=
+github.com/cyverse/go-irodsclient v0.14.6/go.mod h1:eBXha3cwfrM0p1ijYVqsrLJQHpRwTfpA4c5dKCQsQFc=
+github.com/cyverse/irodsfs-common v0.0.0-20240515234832-d03d2aed3573 h1:wH2im8WO5AYo0oPqpoHxezUXJxu6aHfDIBLmdyImu2o=
+github.com/cyverse/irodsfs-common v0.0.0-20240515234832-d03d2aed3573/go.mod h1:ZA5U4jo7dXwux7x5ymn3eeXixNFe/Uo3XB5YAZsxByg=
 github.com/cyverse/irodsfs-monitor v0.0.0-20220809235922-daf13261a2dc h1:gIpG0ETQOEZloFwB5iU2zljVsoUDTpUEl/3WF19gLNk=
 github.com/cyverse/irodsfs-monitor v0.0.0-20220809235922-daf13261a2dc/go.mod h1:8UE1mT26+0vAsqS9UJ6Q/vlKq3da6FLdt5p6Tt1AIC4=
 github.com/cyverse/irodsfs-pool v0.6.25 h1:6RPfidGu8T3wR/5mKIX9Vxc/AKC8e/mWIDIxL+Y7st8=
