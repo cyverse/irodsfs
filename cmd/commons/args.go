@@ -51,12 +51,12 @@ func SetCommonFlags(command *cobra.Command) {
 	command.Flags().String("resource", "", "Set iRODS resource")
 
 	command.Flags().String("path_mapping_file", "", "Set path mapping file (yaml)")
-	command.Flags().Int("readahead", commons.ReadAheadMaxDefault, "Set read-ahead size")
-	command.Flags().Int("connection_max", commons.ConnectionMaxDefault, "Set max data transfer connections")
-	command.Flags().Duration("operation_timeout", commons.OperationTimeoutDefault, "Set filesystem operation timeout")
-	command.Flags().Duration("connection_idle_timeout", commons.ConnectionIdleTimeoutDefault, "Set idle connection timeout")
-	command.Flags().Duration("metadata_cache_timeout", commons.MetadataCacheTimeoutDefault, "Set file system metadata cache timeout")
-	command.Flags().Duration("metadata_cache_cleanup_time", commons.MetadataCacheCleanupTimeDefault, "Set file system metadata cache cleanup time")
+	command.Flags().Int("readahead", 0, "Set read-ahead size")
+	command.Flags().Int("connection_max", 0, "Set max data transfer connections")
+	command.Flags().Duration("operation_timeout", 0, "Set filesystem operation timeout")
+	command.Flags().Duration("connection_idle_timeout", 0, "Set idle connection timeout")
+	command.Flags().Duration("metadata_cache_timeout", 0, "Set file system metadata cache timeout")
+	command.Flags().Duration("metadata_cache_cleanup_time", 0, "Set file system metadata cache cleanup time")
 	command.Flags().Bool("no_permission_check", false, "Disable permission check for performance")
 	command.Flags().Bool("no_set_xattr", false, "Disable set xattr")
 	command.Flags().Bool("no_transaction", false, "Disable transaction for performance")
@@ -69,7 +69,7 @@ func SetCommonFlags(command *cobra.Command) {
 
 	command.Flags().String("data_root", "", "Set data root dir path")
 
-	command.Flags().Int("profile_port", -1, "Set profile service port")
+	command.Flags().Int("profile_port", 11021, "Set profile service port")
 	command.Flags().String("pool_endpoint", "", "Set iRODS FUSE Lite Pool Service endpoint")
 	command.Flags().String("monitor_url", "", "Set monitoring service URL")
 
@@ -84,38 +84,38 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 
 	logLevel := ""
 	logLevelFlag := command.Flags().Lookup("log_level")
-	if logLevelFlag != nil {
+	if logLevelFlag != nil && logLevelFlag.Changed {
 		logLevelStr := logLevelFlag.Value.String()
 		logLevel = logLevelStr
 	}
 
 	debug := false
 	debugFlag := command.Flags().Lookup("debug")
-	if debugFlag != nil {
+	if debugFlag != nil && debugFlag.Changed {
 		debug, _ = strconv.ParseBool(debugFlag.Value.String())
 	}
 
 	foreground := false
 	foregroundFlag := command.Flags().Lookup("foreground")
-	if foregroundFlag != nil {
+	if foregroundFlag != nil && foregroundFlag.Changed {
 		foreground, _ = strconv.ParseBool(foregroundFlag.Value.String())
 	}
 
 	profile := false
 	profileFlag := command.Flags().Lookup("profile")
-	if profileFlag != nil {
+	if profileFlag != nil && profileFlag.Changed {
 		profile, _ = strconv.ParseBool(profileFlag.Value.String())
 	}
 
 	allowOther := false
 	allowOtherFlag := command.Flags().Lookup("allow_other")
-	if allowOtherFlag != nil {
+	if allowOtherFlag != nil && allowOtherFlag.Changed {
 		allowOther, _ = strconv.ParseBool(allowOtherFlag.Value.String())
 	}
 
 	childProcess := false
 	childProcessFlag := command.Flags().Lookup(ChildProcessArgument)
-	if childProcessFlag != nil {
+	if childProcessFlag != nil && childProcessFlag.Changed {
 		childProcess, _ = strconv.ParseBool(childProcessFlag.Value.String())
 	}
 
@@ -133,7 +133,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	helpFlag := command.Flags().Lookup("help")
-	if helpFlag != nil {
+	if helpFlag != nil && helpFlag.Changed {
 		help, _ := strconv.ParseBool(helpFlag.Value.String())
 		if help {
 			PrintHelp(command)
@@ -142,7 +142,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	versionFlag := command.Flags().Lookup("version")
-	if versionFlag != nil {
+	if versionFlag != nil && versionFlag.Changed {
 		version, _ := strconv.ParseBool(versionFlag.Value.String())
 		if version {
 			PrintVersion(command)
@@ -155,7 +155,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 
 	stdinClosed := false
 	configFlag := command.Flags().Lookup("config")
-	if configFlag != nil {
+	if configFlag != nil && configFlag.Changed {
 		configPath := configFlag.Value.String()
 		if len(configPath) > 0 {
 			if configPath == "-" {
@@ -262,7 +262,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	instanceIdFlag := command.Flags().Lookup("instance_id")
-	if instanceIdFlag != nil {
+	if instanceIdFlag != nil && instanceIdFlag.Changed {
 		instanceId := instanceIdFlag.Value.String()
 		if len(instanceId) > 0 {
 			config.InstanceID = instanceId
@@ -270,7 +270,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	logPathFlag := command.Flags().Lookup("log_path")
-	if logPathFlag != nil {
+	if logPathFlag != nil && logPathFlag.Changed {
 		logPath := logPathFlag.Value.String()
 		if len(logPath) > 0 {
 			config.LogPath = logPath
@@ -278,7 +278,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	dataRootFlag := command.Flags().Lookup("data_root")
-	if dataRootFlag != nil {
+	if dataRootFlag != nil && dataRootFlag.Changed {
 		dataRoot := dataRootFlag.Value.String()
 		if len(dataRoot) > 0 {
 			config.DataRootPath = dataRoot
@@ -311,7 +311,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	hostFlag := command.Flags().Lookup("host")
-	if hostFlag != nil {
+	if hostFlag != nil && hostFlag.Changed {
 		host := hostFlag.Value.String()
 		if len(host) > 0 {
 			config.Host = host
@@ -319,7 +319,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	portFlag := command.Flags().Lookup("port")
-	if portFlag != nil {
+	if portFlag != nil && portFlag.Changed {
 		port, err := strconv.ParseInt(portFlag.Value.String(), 10, 32)
 		if err != nil {
 			parseErr := xerrors.Errorf("failed to convert input to int: %w", err)
@@ -333,7 +333,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	zoneFlag := command.Flags().Lookup("zone")
-	if zoneFlag != nil {
+	if zoneFlag != nil && zoneFlag.Changed {
 		zone := zoneFlag.Value.String()
 		if len(zone) > 0 {
 			config.Zone = zone
@@ -341,7 +341,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	proxyUserFlag := command.Flags().Lookup("proxy_user")
-	if proxyUserFlag != nil {
+	if proxyUserFlag != nil && proxyUserFlag.Changed {
 		proxyUser := proxyUserFlag.Value.String()
 		if len(proxyUser) > 0 {
 			config.ProxyUser = proxyUser
@@ -349,7 +349,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	userFlag := command.Flags().Lookup("user")
-	if userFlag != nil {
+	if userFlag != nil && userFlag.Changed {
 		user := userFlag.Value.String()
 		if len(user) > 0 {
 			config.ProxyUser = user
@@ -357,7 +357,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	clientUserFlag := command.Flags().Lookup("client_user")
-	if clientUserFlag != nil {
+	if clientUserFlag != nil && clientUserFlag.Changed {
 		clientUser := clientUserFlag.Value.String()
 		if len(clientUser) > 0 {
 			config.ClientUser = clientUser
@@ -365,7 +365,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	passwordFlag := command.Flags().Lookup("password")
-	if passwordFlag != nil {
+	if passwordFlag != nil && passwordFlag.Changed {
 		password := passwordFlag.Value.String()
 		if len(password) > 0 {
 			config.Password = password
@@ -373,7 +373,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	resourceFlag := command.Flags().Lookup("resource")
-	if resourceFlag != nil {
+	if resourceFlag != nil && resourceFlag.Changed {
 		resource := resourceFlag.Value.String()
 		if len(resource) > 0 {
 			config.Resource = resource
@@ -381,7 +381,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	pathMappingFileFlag := command.Flags().Lookup("path_mapping_file")
-	if pathMappingFileFlag != nil {
+	if pathMappingFileFlag != nil && pathMappingFileFlag.Changed {
 		pathMappingFile := pathMappingFileFlag.Value.String()
 		if len(pathMappingFile) > 0 {
 			// YAML file
@@ -405,7 +405,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	readaheadFlag := command.Flags().Lookup("readahead")
-	if readaheadFlag != nil {
+	if readaheadFlag != nil && readaheadFlag.Changed {
 		readahead, err := strconv.ParseInt(readaheadFlag.Value.String(), 10, 32)
 		if err != nil {
 			parseErr := xerrors.Errorf("failed to convert input %q to int64: %w", readaheadFlag.Value.String(), err)
@@ -419,7 +419,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	connectionMaxFlag := command.Flags().Lookup("connection_max")
-	if connectionMaxFlag != nil {
+	if connectionMaxFlag != nil && connectionMaxFlag.Changed {
 		connectionMax, err := strconv.ParseInt(connectionMaxFlag.Value.String(), 10, 32)
 		if err != nil {
 			parseErr := xerrors.Errorf("failed to convert input %q to int64: %w", connectionMaxFlag.Value.String(), err)
@@ -433,7 +433,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	operationTimeoutFlag := command.Flags().Lookup("operation_timeout")
-	if operationTimeoutFlag != nil {
+	if operationTimeoutFlag != nil && operationTimeoutFlag.Changed {
 		operationTimeout, err := time.ParseDuration(operationTimeoutFlag.Value.String())
 		if err != nil {
 			parseErr := xerrors.Errorf("failed to convert input %q to duration: %w", operationTimeoutFlag.Value.String(), err)
@@ -445,7 +445,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	connectionIdleTimeoutFlag := command.Flags().Lookup("connection_idle_timeout")
-	if connectionIdleTimeoutFlag != nil {
+	if connectionIdleTimeoutFlag != nil && connectionIdleTimeoutFlag.Changed {
 		connectionIdleTimeout, err := time.ParseDuration(connectionIdleTimeoutFlag.Value.String())
 		if err != nil {
 			parseErr := xerrors.Errorf("failed to convert input %q to duration: %w", connectionIdleTimeoutFlag.Value.String(), err)
@@ -457,7 +457,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	metadataCacheTimeoutFlag := command.Flags().Lookup("metadata_cache_timeout")
-	if metadataCacheTimeoutFlag != nil {
+	if metadataCacheTimeoutFlag != nil && metadataCacheTimeoutFlag.Changed {
 		metadataCacheTimeout, err := time.ParseDuration(metadataCacheTimeoutFlag.Value.String())
 		if err != nil {
 			parseErr := xerrors.Errorf("failed to convert input %q to duration: %w", metadataCacheTimeoutFlag.Value.String(), err)
@@ -469,7 +469,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	metadataCacheCleanupTimeFlag := command.Flags().Lookup("metadata_cache_timeout")
-	if metadataCacheCleanupTimeFlag != nil {
+	if metadataCacheCleanupTimeFlag != nil && metadataCacheCleanupTimeFlag.Changed {
 		metadataCacheCleanupTime, err := time.ParseDuration(metadataCacheCleanupTimeFlag.Value.String())
 		if err != nil {
 			parseErr := xerrors.Errorf("failed to convert input %q to duration: %w", metadataCacheCleanupTimeFlag.Value.String(), err)
@@ -481,25 +481,25 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	noPermissionCheckFlag := command.Flags().Lookup("no_permission_check")
-	if noPermissionCheckFlag != nil {
+	if noPermissionCheckFlag != nil && noPermissionCheckFlag.Changed {
 		noPermissionCheck, _ := strconv.ParseBool(noPermissionCheckFlag.Value.String())
 		config.NoPermissionCheck = noPermissionCheck
 	}
 
 	noSetXattrFlag := command.Flags().Lookup("no_set_xattr")
-	if noSetXattrFlag != nil {
+	if noSetXattrFlag != nil && noSetXattrFlag.Changed {
 		noSetXattr, _ := strconv.ParseBool(noSetXattrFlag.Value.String())
 		config.NoSetXattr = noSetXattr
 	}
 
 	noTransactionFlag := command.Flags().Lookup("no_transaction")
-	if noTransactionFlag != nil {
+	if noTransactionFlag != nil && noTransactionFlag.Changed {
 		noTransaction, _ := strconv.ParseBool(noTransactionFlag.Value.String())
 		config.StartNewTransaction = !noTransaction
 	}
 
 	uidFlag := command.Flags().Lookup("uid")
-	if uidFlag != nil {
+	if uidFlag != nil && uidFlag.Changed {
 		uid, err := strconv.ParseInt(uidFlag.Value.String(), 10, 32)
 		if err != nil {
 			parseErr := xerrors.Errorf("failed to convert input %q to int: %w", uidFlag.Value.String(), err)
@@ -513,7 +513,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	gidFlag := command.Flags().Lookup("gid")
-	if gidFlag != nil {
+	if gidFlag != nil && gidFlag.Changed {
 		gid, err := strconv.ParseInt(gidFlag.Value.String(), 10, 32)
 		if err != nil {
 			parseErr := xerrors.Errorf("failed to convert input %q to int: %w", gidFlag.Value.String(), err)
@@ -527,7 +527,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	sysUserFlag := command.Flags().Lookup("sys_user")
-	if sysUserFlag != nil {
+	if sysUserFlag != nil && sysUserFlag.Changed {
 		sysUser := sysUserFlag.Value.String()
 		if len(sysUser) > 0 {
 			config.SystemUser = sysUser
@@ -535,7 +535,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	fuseOptionsFlag := command.Flags().Lookup("fuse_option")
-	if fuseOptionsFlag != nil {
+	if fuseOptionsFlag != nil && fuseOptionsFlag.Changed {
 		fuseOptionsString := fuseOptionsFlag.Value.String()
 		fuseOptionsString = strings.Trim(fuseOptionsString, "[]")
 		if len(fuseOptionsString) > 0 {
@@ -545,7 +545,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	profilePortFlag := command.Flags().Lookup("profile_port")
-	if profilePortFlag != nil {
+	if profilePortFlag != nil && profilePortFlag.Changed {
 		profilePort, err := strconv.ParseInt(profilePortFlag.Value.String(), 10, 32)
 		if err != nil {
 			parseErr := xerrors.Errorf("failed to convert input %q to int: %w", profilePortFlag.Value.String(), err)
@@ -559,7 +559,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	poolEndpointFlag := command.Flags().Lookup("pool_endpoint")
-	if poolEndpointFlag != nil {
+	if poolEndpointFlag != nil && poolEndpointFlag.Changed {
 		poolEndpoint := poolEndpointFlag.Value.String()
 		if len(poolEndpoint) > 0 {
 			config.PoolEndpoint = poolEndpoint
@@ -567,7 +567,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	monitorUrlFlag := command.Flags().Lookup("monitor_url")
-	if monitorUrlFlag != nil {
+	if monitorUrlFlag != nil && monitorUrlFlag.Changed {
 		monitorUrl := monitorUrlFlag.Value.String()
 		if len(monitorUrl) > 0 {
 			config.MonitorURL = monitorUrl
