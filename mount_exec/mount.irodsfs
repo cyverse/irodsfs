@@ -46,8 +46,15 @@ def reorderArgs(argv):
                 fokv = fo.split("=")
                 if len(fokv) == 1:
                     # -o xxx
-                    options.append("-o")
-                    options.append(fokv[0])
+                    if fokv[0] == "ro" or fokv[0] == "readonly":
+                        options.append("--readonly")
+                    elif fokv[0] == "allow_other":
+                        options.append("--allow_other")
+                    elif fokv[0] == "f":
+                        options.append("--foreground")
+                    else:
+                        options.append("-o")
+                        options.append(fokv[0])
                 elif len(fokv) == 2:
                     # -o kk=vv
                     if fokv[0] == "mounttimeout":

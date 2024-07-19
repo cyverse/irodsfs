@@ -36,6 +36,7 @@ func SetCommonFlags(command *cobra.Command) {
 	command.Flags().Bool("profile", false, "Enable profiling")
 	command.Flags().BoolP("foreground", "f", false, "Run in foreground")
 	command.Flags().Bool("allow_other", false, "Allow access from other users")
+	command.Flags().Bool("readonly", false, "Set read-only")
 
 	command.Flags().StringP("config", "c", "", "Set config file (yaml)")
 	command.Flags().String("instance_id", "", "Set instance ID")
@@ -111,6 +112,12 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	allowOtherFlag := command.Flags().Lookup("allow_other")
 	if allowOtherFlag != nil && allowOtherFlag.Changed {
 		allowOther, _ = strconv.ParseBool(allowOtherFlag.Value.String())
+	}
+
+	readOnly := false
+	readOnlyFlag := command.Flags().Lookup("readonly")
+	if readOnlyFlag != nil {
+		readOnly, _ = strconv.ParseBool(readOnlyFlag.Value.String())
 	}
 
 	childProcess := false
@@ -253,6 +260,10 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 
 	if allowOther {
 		config.AllowOther = true
+	}
+
+	if readOnly {
+		config.Readonly = true
 	}
 
 	config.ChildProcess = childProcess

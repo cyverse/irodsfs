@@ -113,6 +113,7 @@ type Config struct {
 	LogLevel     string `yaml:"log_level,omitempty"`
 	Debug        bool   `yaml:"debug,omitempty"`
 	AllowOther   bool   `yaml:"allow_other,omitempty"`
+	Readonly     bool   `yaml:"readonly,omitempty"`
 	ChildProcess bool   `yaml:"childprocess,omitempty"`
 
 	InstanceID  string   `yaml:"instanceid,omitempty"`
@@ -174,6 +175,7 @@ func NewDefaultConfig() *Config {
 		LogLevel:     "",
 		Debug:        false,
 		AllowOther:   false,
+		Readonly:     false,
 		ChildProcess: false,
 
 		InstanceID:  GetDefaultInstanceID(),
