@@ -139,18 +139,25 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		}
 	}
 
-	fsConfig := irodsclient_fs.NewFileSystemConfig(
-		FSName,
-		commons.ConnectionErrorTimeout,
-		0,
-		time.Duration(config.ConnectionLifespan),
-		time.Duration(config.OperationTimeout), time.Duration(config.ConnectionIdleTimeout),
-		config.ConnectionMax, commons.TCPBufferSizeDefault,
-		time.Duration(config.MetadataCacheTimeout), time.Duration(config.MetadataCacheCleanupTime),
-		cacheTimeoutSettings,
-		config.StartNewTransaction,
-		config.InvalidateParentEntryCacheImmediately,
-	)
+	fsConfig := irodsclient_fs.NewFileSystemConfig(FSName)
+
+	fsConfig.IOConnection.MaxNumber = config.ConnectionMax
+	fsConfig.IOConnection.TCPBufferSize = commons.TCPBufferSizeDefault
+	fsConfig.IOConnection.OperationTimeout = time.Duration(config.OperationTimeout)
+	fsConfig.IOConnection.IdleTimeout = time.Duration(config.ConnectionIdleTimeout)
+	fsConfig.IOConnection.Lifespan = time.Duration(config.ConnectionLifespan)
+	fsConfig.IOConnection.CreationTimeout = commons.ConnectionErrorTimeout
+	fsConfig.MetadataConnection.TCPBufferSize = commons.TCPBufferSizeDefault
+	fsConfig.MetadataConnection.OperationTimeout = time.Duration(config.OperationTimeout)
+	fsConfig.MetadataConnection.IdleTimeout = time.Duration(config.ConnectionIdleTimeout)
+	fsConfig.MetadataConnection.Lifespan = time.Duration(config.ConnectionLifespan)
+	fsConfig.MetadataConnection.CreationTimeout = commons.ConnectionErrorTimeout
+
+	fsConfig.Cache.Timeout = time.Duration(config.MetadataCacheTimeout)
+	fsConfig.Cache.CleanupTime = time.Duration(config.MetadataCacheCleanupTime)
+	fsConfig.Cache.MetadataTimeoutSettings = cacheTimeoutSettings
+	fsConfig.Cache.StartNewTransaction = config.StartNewTransaction
+	fsConfig.Cache.InvalidateParentEntryCacheImmediately = config.InvalidateParentEntryCacheImmediately
 
 	logger.Info("Initializing an iRODS file system client")
 	var fsClient irodsfs_common_irods.IRODSFSClient = nil
