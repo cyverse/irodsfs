@@ -110,6 +110,9 @@ func LoadICommandsEnvironmentFile(configPath string) (*Config, error) {
 	config.Resource = loadedAccount.DefaultResource
 	config.CACertificateFile = loadedAccount.SSLConfiguration.CACertificateFile
 	config.CACertificatePath = loadedAccount.SSLConfiguration.CACertificatePath
+	if loadedAccount.SkipVerifyTLS {
+		config.VerifyServer = ""
+	}
 	config.EncryptionKeySize = loadedAccount.SSLConfiguration.EncryptionKeySize
 	config.EncryptionAlgorithm = loadedAccount.SSLConfiguration.EncryptionAlgorithm
 	config.SaltSize = loadedAccount.SSLConfiguration.SaltSize

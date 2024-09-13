@@ -37,6 +37,7 @@ const (
 	EncryptionAlgorithmDefault string = "AES-256-CBC"
 	SaltSizeDefault            int    = 8
 	HashRoundsDefault          int    = 16
+	SSLVerifyServerDefault     string = "hostname"
 
 	ProfileServicePortDefault int = 11021
 )
@@ -84,14 +85,15 @@ type Config struct {
 	PoolEndpoint string `yaml:"pool_endpoint,omitempty"`
 
 	AuthScheme              string `yaml:"auth_scheme"`
-	ClientServerNegotiation bool   `yaml:"cs_negotiation"`
-	CSNegotiationPolicy     string `yaml:"cs_negotiation_policy"`
-	CACertificateFile       string `yaml:"ssl_ca_cert_file"`
-	CACertificatePath       string `yaml:"ssl_ca_sert_path"`
-	EncryptionKeySize       int    `yaml:"ssl_encryption_key_size"`
-	EncryptionAlgorithm     string `yaml:"ssl_encryption_algorithm"`
-	SaltSize                int    `yaml:"ssl_encryption_salt_size"`
-	HashRounds              int    `yaml:"ssl_encryption_hash_rounds"`
+	ClientServerNegotiation bool   `yaml:"cs_negotiation,omitempty"`
+	CSNegotiationPolicy     string `yaml:"cs_negotiation_policy,omitempty"`
+	CACertificateFile       string `yaml:"ssl_ca_cert_file,omitempty"`
+	CACertificatePath       string `yaml:"ssl_ca_sert_path,omitempty"`
+	VerifyServer            string `yaml:"ssl_verify_server,omitempty"`
+	EncryptionKeySize       int    `yaml:"ssl_encryption_key_size,omitempty"`
+	EncryptionAlgorithm     string `yaml:"ssl_encryption_algorithm,omitempty"`
+	SaltSize                int    `yaml:"ssl_encryption_salt_size,omitempty"`
+	HashRounds              int    `yaml:"ssl_encryption_hash_rounds,omitempty"`
 
 	ReadAheadMax                          int                           `yaml:"read_ahead_max"`
 	OperationTimeout                      irodsfs_common_utils.Duration `yaml:"operation_timeout"`
@@ -150,6 +152,7 @@ func NewDefaultConfig() *Config {
 		CSNegotiationPolicy:     CSNegotiationDefault,
 		CACertificateFile:       "",
 		CACertificatePath:       "",
+		VerifyServer:            SSLVerifyServerDefault,
 		EncryptionKeySize:       EncryptionKeySizeDefault,
 		EncryptionAlgorithm:     EncryptionAlgorithmDefault,
 		SaltSize:                SaltSizeDefault,

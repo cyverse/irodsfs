@@ -115,6 +115,8 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		return nil, sslErr
 	}
 
+	account.SkipVerifyTLS = config.VerifyServer == "hostname"
+
 	if authScheme.IsPAM() {
 		logger.Info("PAM requires SSL, enabling CS negotiation")
 
