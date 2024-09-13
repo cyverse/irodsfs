@@ -382,7 +382,7 @@ func (config *Config) Validate() error {
 		policy = irodsclient_types.CSNegotiationUseTCP
 	}
 
-	if authScheme == irodsclient_types.AuthSchemePAM || policy == irodsclient_types.CSNegotiationUseSSL {
+	if authScheme.IsPAM() || policy == irodsclient_types.CSNegotiationUseSSL {
 		if config.EncryptionKeySize <= 0 {
 			return xerrors.Errorf("SSL encryption key size must be given")
 		}

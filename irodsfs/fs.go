@@ -115,7 +115,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		return nil, sslErr
 	}
 
-	if authScheme == irodsclient_types.AuthSchemePAM {
+	if authScheme.IsPAM() {
 		logger.Info("PAM requires SSL, enabling CS negotiation")
 
 		account.SetSSLConfiguration(sslConfig)
