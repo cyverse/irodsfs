@@ -9,16 +9,11 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
-
-	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
-	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 
 	"github.com/cyverse/irodsfs/commons"
 	"golang.org/x/term"
 	"golang.org/x/xerrors"
 	"gopkg.in/natefinch/lumberjack.v2"
-	"gopkg.in/yaml.v2"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -38,32 +33,26 @@ func SetCommonFlags(command *cobra.Command) {
 	command.Flags().Bool("allow_other", false, "Allow access from other users")
 	command.Flags().Bool("readonly", false, "Set read-only")
 
-	command.Flags().StringP("config", "c", "", "Set config file (yaml)")
+	command.Flags().StringP("config", "c", commons.GetDefaultIRODSConfigPath(), "Set config file or directory")
 	command.Flags().String("instance_id", "", "Set instance ID")
 	command.Flags().String("log_path", "", "Set log file path")
 
 	command.Flags().String("host", "", "Set iRODS host")
 	command.Flags().Int("port", 1247, "Set iRODS port")
-	command.Flags().String("zone", "", "Set iRODS zone")
-	command.Flags().String("proxy_user", "", "Set iRODS proxy user")
-	command.Flags().String("client_user", "", "Set iRODS client user")
-	command.Flags().StringP("user", "u", "", "Set iRODS user")
+	command.Flags().String("zone", "", "Set iRODS zone name")
+	command.Flags().String("client_zone", "", "Set client iRODS zone name")
+	command.Flags().StringP("username", "u", "", "Set iRODS username")
+	command.Flags().String("client_username", "", "Set iRODS client username")
 	command.Flags().StringP("password", "p", "", "Set iRODS password")
-	command.Flags().String("resource", "", "Set iRODS resource")
+	command.Flags().String("resource", "", "Set default iRODS resource")
 
-	command.Flags().String("path_mapping_file", "", "Set path mapping file (yaml)")
-	command.Flags().Int("readahead", 0, "Set read-ahead size")
-	command.Flags().Int("connection_max", 0, "Set max data transfer connections")
-	command.Flags().Duration("operation_timeout", 0, "Set filesystem operation timeout")
-	command.Flags().Duration("connection_idle_timeout", 0, "Set idle connection timeout")
-	command.Flags().Duration("metadata_cache_timeout", 0, "Set file system metadata cache timeout")
-	command.Flags().Duration("metadata_cache_cleanup_time", 0, "Set file system metadata cache cleanup time")
+	command.Flags().Int("read_ahead_max", 0, "Set read-ahead size")
 	command.Flags().Bool("no_permission_check", false, "Disable permission check for performance")
 	command.Flags().Bool("no_set_xattr", false, "Disable set xattr")
 	command.Flags().Bool("no_transaction", false, "Disable transaction for performance")
 
-	command.Flags().Int("uid", -1, "Set UID of file/directory owner")
-	command.Flags().Int("gid", -1, "Set GID of file/directory owner")
+	command.Flags().Int("uid", os.Geteuid(), "Set UID of file/directory owner")
+	command.Flags().Int("gid", os.Getegid(), "Set GID of file/directory owner")
 	command.Flags().String("sys_user", "", "Set System User of file/directory owner")
 
 	command.Flags().StringArrayP("fuse_option", "o", []string{}, "Set FUSE options")
@@ -72,7 +61,6 @@ func SetCommonFlags(command *cobra.Command) {
 
 	command.Flags().Int("profile_port", 11021, "Set profile service port")
 	command.Flags().String("pool_endpoint", "", "Set iRODS FUSE Lite Pool Service endpoint")
-	command.Flags().String("monitor_url", "", "Set monitoring service URL")
 
 	command.Flags().Bool(ChildProcessArgument, false, "")
 }
@@ -157,73 +145,58 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 		}
 	}
 
-	readConfig := false
-	var config *commons.Config
+	configFilePath := commons.GetDefaultIRODSConfigPath()
 
-	stdinClosed := false
+	// find config file location from env
+	if irodsEnvironmentFileEnvVal, ok := os.LookupEnv(commons.IRODSEnvironmentFileEnvKey); ok {
+		if len(irodsEnvironmentFileEnvVal) > 0 {
+			configFilePath = irodsEnvironmentFileEnvVal
+		}
+	}
+
 	configFlag := command.Flags().Lookup("config")
 	if configFlag != nil && configFlag.Changed {
 		configPath := configFlag.Value.String()
 		if len(configPath) > 0 {
-			if configPath == "-" {
-				// read from stdin
-				stdinReader := bufio.NewReader(os.Stdin)
-				yamlBytes, err := io.ReadAll(stdinReader)
-				if err != nil {
-					readErr := xerrors.Errorf("failed to read config from stdin: %w", err)
-					logger.Errorf("%+v", readErr)
-					return nil, nil, false, readErr // stop here
-				}
-
-				serverConfig, err := commons.NewConfigFromYAML(yamlBytes)
-				if err != nil {
-					logger.Errorf("%+v", err)
-					return nil, nil, false, err // stop here
-				}
-
-				// overwrite config
-				config = serverConfig
-				readConfig = true
-				stdinClosed = true
-			} else {
-				// read from a file
-				if commons.IsYAMLFile(configPath) {
-					// YAML file
-					yamlBytes, err := os.ReadFile(configPath)
-					if err != nil {
-						readErr := xerrors.Errorf("failed to read config file %q: %w", configPath, err)
-						logger.Errorf("%+v", readErr)
-						return nil, nil, false, readErr // stop here
-					}
-
-					serverConfig, err := commons.NewConfigFromYAML(yamlBytes)
-					if err != nil {
-						logger.Errorf("%+v", err)
-						return nil, nil, false, err // stop here
-					}
-
-					// overwrite config
-					config = serverConfig
-					readConfig = true
-				} else {
-					// icommands environment
-					serverConfig, err := commons.LoadICommandsEnvironmentDir(configPath)
-					if err != nil {
-						logger.Errorf("%+v", err)
-						return nil, nil, false, err // stop here
-					}
-
-					// overwrite config
-					config = serverConfig
-					readConfig = true
-				}
-			}
+			// user defined config file
+			configFilePath = configPath
 		}
 	}
 
 	// default config
-	if !readConfig {
-		config = commons.NewDefaultConfig()
+	config := commons.NewDefaultConfig()
+	stdinClosed := false
+
+	if configFilePath == "-" {
+		// read from stdin
+		stdinReader := bufio.NewReader(os.Stdin)
+		yamlBytes, err := io.ReadAll(stdinReader)
+		if err != nil {
+			readErr := xerrors.Errorf("failed to read config from stdin: %w", err)
+			logger.Errorf("%+v", readErr)
+			return nil, nil, false, readErr // stop here
+		}
+
+		newConfig, err := commons.NewConfigFromYAML(config, yamlBytes)
+		if err != nil {
+			logger.Errorf("%+v", err)
+			return nil, nil, false, err // stop here
+		}
+
+		// overwrite config
+		config = newConfig
+		stdinClosed = true
+	} else {
+		// read from a file
+		newConfig, err := commons.NewConfigFromFile(config, configFilePath)
+		if err != nil {
+			logger.Errorf("%+v", err)
+			return nil, nil, false, err // stop here
+		}
+
+		// overwrite config
+		config = newConfig
+		stdinClosed = true
 	}
 
 	if len(config.LogLevel) > 0 {
@@ -347,31 +320,31 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if zoneFlag != nil && zoneFlag.Changed {
 		zone := zoneFlag.Value.String()
 		if len(zone) > 0 {
-			config.Zone = zone
+			config.ZoneName = zone
 		}
 	}
 
-	proxyUserFlag := command.Flags().Lookup("proxy_user")
-	if proxyUserFlag != nil && proxyUserFlag.Changed {
-		proxyUser := proxyUserFlag.Value.String()
-		if len(proxyUser) > 0 {
-			config.ProxyUser = proxyUser
+	clientZoneFlag := command.Flags().Lookup("client_zone")
+	if clientZoneFlag != nil && clientZoneFlag.Changed {
+		clientZone := clientZoneFlag.Value.String()
+		if len(clientZone) > 0 {
+			config.ClientZoneName = clientZone
 		}
 	}
 
-	userFlag := command.Flags().Lookup("user")
-	if userFlag != nil && userFlag.Changed {
-		user := userFlag.Value.String()
-		if len(user) > 0 {
-			config.ProxyUser = user
+	usernameFlag := command.Flags().Lookup("username")
+	if usernameFlag != nil && usernameFlag.Changed {
+		username := usernameFlag.Value.String()
+		if len(username) > 0 {
+			config.Username = username
 		}
 	}
 
-	clientUserFlag := command.Flags().Lookup("client_user")
-	if clientUserFlag != nil && clientUserFlag.Changed {
-		clientUser := clientUserFlag.Value.String()
-		if len(clientUser) > 0 {
-			config.ClientUser = clientUser
+	clientUsernameFlag := command.Flags().Lookup("client_username")
+	if clientUsernameFlag != nil && clientUsernameFlag.Changed {
+		clientUsername := clientUsernameFlag.Value.String()
+		if len(clientUsername) > 0 {
+			config.ClientUsername = clientUsername
 		}
 	}
 
@@ -387,108 +360,22 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if resourceFlag != nil && resourceFlag.Changed {
 		resource := resourceFlag.Value.String()
 		if len(resource) > 0 {
-			config.Resource = resource
+			config.DefaultResource = resource
 		}
 	}
 
-	pathMappingFileFlag := command.Flags().Lookup("path_mapping_file")
-	if pathMappingFileFlag != nil && pathMappingFileFlag.Changed {
-		pathMappingFile := pathMappingFileFlag.Value.String()
-		if len(pathMappingFile) > 0 {
-			// YAML file
-			yamlBytes, err := os.ReadFile(pathMappingFile)
-			if err != nil {
-				readErr := xerrors.Errorf("failed to read path mapping from file %q: %w", pathMappingFile, err)
-				logger.Errorf("%+v", readErr)
-				return nil, logWriter, false, readErr // stop here
-			}
-
-			pathMappings := []irodsfs_common_vpath.VPathMapping{}
-			err = yaml.Unmarshal(yamlBytes, &pathMappings)
-			if err != nil {
-				yamlErr := xerrors.Errorf("failed to unmarshal yaml into path mapping: %w", err)
-				logger.Errorf("%+v", yamlErr)
-				return nil, logWriter, false, yamlErr // stop here
-			}
-
-			config.PathMappings = pathMappings
-		}
-	}
-
-	readaheadFlag := command.Flags().Lookup("readahead")
-	if readaheadFlag != nil && readaheadFlag.Changed {
-		readahead, err := strconv.ParseInt(readaheadFlag.Value.String(), 10, 32)
+	readAheadMaxFlag := command.Flags().Lookup("read_ahead_max")
+	if readAheadMaxFlag != nil && readAheadMaxFlag.Changed {
+		readAheadMax, err := strconv.ParseInt(readAheadMaxFlag.Value.String(), 10, 32)
 		if err != nil {
-			parseErr := xerrors.Errorf("failed to convert input %q to int64: %w", readaheadFlag.Value.String(), err)
+			parseErr := xerrors.Errorf("failed to convert input %q to int64: %w", readAheadMaxFlag.Value.String(), err)
 			logger.Errorf("%+v", parseErr)
 			return nil, logWriter, false, parseErr // stop here
 		}
 
-		if readahead > 0 {
-			config.ReadAheadMax = int(readahead)
+		if readAheadMax > 0 {
+			config.ReadAheadMax = int(readAheadMax)
 		}
-	}
-
-	connectionMaxFlag := command.Flags().Lookup("connection_max")
-	if connectionMaxFlag != nil && connectionMaxFlag.Changed {
-		connectionMax, err := strconv.ParseInt(connectionMaxFlag.Value.String(), 10, 32)
-		if err != nil {
-			parseErr := xerrors.Errorf("failed to convert input %q to int64: %w", connectionMaxFlag.Value.String(), err)
-			logger.Errorf("%+v", parseErr)
-			return nil, logWriter, false, parseErr // stop here
-		}
-
-		if connectionMax > 0 {
-			config.ConnectionMax = int(connectionMax)
-		}
-	}
-
-	operationTimeoutFlag := command.Flags().Lookup("operation_timeout")
-	if operationTimeoutFlag != nil && operationTimeoutFlag.Changed {
-		operationTimeout, err := time.ParseDuration(operationTimeoutFlag.Value.String())
-		if err != nil {
-			parseErr := xerrors.Errorf("failed to convert input %q to duration: %w", operationTimeoutFlag.Value.String(), err)
-			logger.Errorf("%+v", parseErr)
-			return nil, logWriter, false, parseErr // stop here
-		}
-
-		config.OperationTimeout = irodsfs_common_utils.Duration(operationTimeout)
-	}
-
-	connectionIdleTimeoutFlag := command.Flags().Lookup("connection_idle_timeout")
-	if connectionIdleTimeoutFlag != nil && connectionIdleTimeoutFlag.Changed {
-		connectionIdleTimeout, err := time.ParseDuration(connectionIdleTimeoutFlag.Value.String())
-		if err != nil {
-			parseErr := xerrors.Errorf("failed to convert input %q to duration: %w", connectionIdleTimeoutFlag.Value.String(), err)
-			logger.Errorf("%+v", parseErr)
-			return nil, logWriter, false, parseErr // stop here
-		}
-
-		config.ConnectionIdleTimeout = irodsfs_common_utils.Duration(connectionIdleTimeout)
-	}
-
-	metadataCacheTimeoutFlag := command.Flags().Lookup("metadata_cache_timeout")
-	if metadataCacheTimeoutFlag != nil && metadataCacheTimeoutFlag.Changed {
-		metadataCacheTimeout, err := time.ParseDuration(metadataCacheTimeoutFlag.Value.String())
-		if err != nil {
-			parseErr := xerrors.Errorf("failed to convert input %q to duration: %w", metadataCacheTimeoutFlag.Value.String(), err)
-			logger.Errorf("%+v", parseErr)
-			return nil, logWriter, false, parseErr // stop here
-		}
-
-		config.MetadataCacheTimeout = irodsfs_common_utils.Duration(metadataCacheTimeout)
-	}
-
-	metadataCacheCleanupTimeFlag := command.Flags().Lookup("metadata_cache_timeout")
-	if metadataCacheCleanupTimeFlag != nil && metadataCacheCleanupTimeFlag.Changed {
-		metadataCacheCleanupTime, err := time.ParseDuration(metadataCacheCleanupTimeFlag.Value.String())
-		if err != nil {
-			parseErr := xerrors.Errorf("failed to convert input %q to duration: %w", metadataCacheCleanupTimeFlag.Value.String(), err)
-			logger.Errorf("%+v", parseErr)
-			return nil, logWriter, false, parseErr // stop here
-		}
-
-		config.MetadataCacheCleanupTime = irodsfs_common_utils.Duration(metadataCacheCleanupTime)
 	}
 
 	noPermissionCheckFlag := command.Flags().Lookup("no_permission_check")
@@ -506,7 +393,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	noTransactionFlag := command.Flags().Lookup("no_transaction")
 	if noTransactionFlag != nil && noTransactionFlag.Changed {
 		noTransaction, _ := strconv.ParseBool(noTransactionFlag.Value.String())
-		config.StartNewTransaction = !noTransaction
+		config.Cache.StartNewTransaction = !noTransaction
 	}
 
 	uidFlag := command.Flags().Lookup("uid")
@@ -577,14 +464,6 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 		}
 	}
 
-	monitorUrlFlag := command.Flags().Lookup("monitor_url")
-	if monitorUrlFlag != nil && monitorUrlFlag.Changed {
-		monitorUrl := monitorUrlFlag.Value.String()
-		if len(monitorUrl) > 0 {
-			config.MonitorURL = monitorUrl
-		}
-	}
-
 	// positional arguments
 	mountPath := ""
 	if len(args) == 0 {
@@ -597,12 +476,14 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	if len(args) == 2 {
 		// first arg may be shorthand form of config
 		// the first argument contains irods://HOST:PORT/ZONE/inputPath...
-		err := updateConfigFromIrodsUrl(args[0], config)
+		err := config.FromIRODSUrl(args[0])
 		if err != nil {
 			logger.Errorf("%+v", err)
 			return nil, logWriter, false, err // stop here
 		}
 	}
+
+	config.FixAuthConfiguration()
 
 	if !stdinClosed {
 		err = inputMissingParams(config)
@@ -622,11 +503,13 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 
 	config.MountPath = mountpoint
 
-	err = config.CorrectSystemUser()
+	err = config.FixSystemSystemUserConfiguration()
 	if err != nil {
 		logger.Errorf("%+v", err)
 		return nil, logWriter, false, err // stop here
 	}
+
+	config.FixPathMappings()
 
 	err = config.Validate()
 	if err != nil {
@@ -675,13 +558,13 @@ func getLogWriterForChildProcess(logPath string) (io.WriteCloser, string) {
 
 // inputMissingParams gets user inputs for parameters missing, such as username and password
 func inputMissingParams(config *commons.Config) error {
-	if len(config.ProxyUser) == 0 {
+	if len(config.Username) == 0 {
 		fmt.Print("Username: ")
-		fmt.Scanln(&config.ProxyUser)
+		fmt.Scanln(&config.Username)
 	}
 
-	if len(config.ClientUser) == 0 {
-		config.ClientUser = config.ProxyUser
+	if len(config.ClientUsername) == 0 {
+		config.ClientUsername = config.Username
 	}
 
 	if len(config.Password) == 0 {
@@ -694,6 +577,8 @@ func inputMissingParams(config *commons.Config) error {
 
 		config.Password = string(bytePassword)
 	}
+
+	config.FixAuthConfiguration()
 
 	return nil
 }

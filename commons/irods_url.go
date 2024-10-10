@@ -6,8 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
-	"github.com/cyverse/irodsfs/commons"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/xerrors"
 )
@@ -22,11 +20,11 @@ type IRODSAccessURL struct {
 	Path     string
 }
 
-// parseIrodsUrl parses iRODS Access URL string and returns IRODSAccessURL struct
-func parseIrodsUrl(inputURL string) (*IRODSAccessURL, error) {
+// ParseIRODSUrl parses iRODS Access URL string and returns IRODSAccessURL struct
+func ParseIRODSUrl(inputURL string) (*IRODSAccessURL, error) {
 	logger := log.WithFields(log.Fields{
 		"package":  "commons",
-		"function": "parseIrodsUrl",
+		"function": "ParseIRODSUrl",
 	})
 
 	if !strings.HasPrefix(inputURL, "irods://") {
@@ -103,58 +101,4 @@ func parseIrodsUrl(inputURL string) (*IRODSAccessURL, error) {
 		Zone:     zone,
 		Path:     irodsPath,
 	}, nil
-}
-
-// updateConfigFromIrodsUrl reads info from inputURL and updates config
-func updateConfigFromIrodsUrl(inputURL string, config *commons.Config) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "commons",
-		"function": "updateConfigFromIrodsUrl",
-	})
-
-	// the inputURL contains irods://HOST:PORT/ZONE/inputPath...
-	access, err := parseIrodsUrl(inputURL)
-	if err != nil {
-		logger.Errorf("%+v", err)
-		return err
-	}
-
-	if len(access.Host) > 0 {
-		config.Host = access.Host
-	}
-
-	if access.Port > 0 {
-		config.Port = access.Port
-	}
-
-	if len(access.User) > 0 {
-		config.ProxyUser = access.User
-	}
-
-	if len(access.Password) > 0 {
-		config.Password = access.Password
-	}
-
-	if len(access.Zone) > 0 {
-		config.Zone = access.Zone
-	}
-
-	if len(access.Path) > 0 {
-		config.PathMappings = []irodsfs_common_vpath.VPathMapping{
-			{
-				IRODSPath:           access.Path,
-				MappingPath:         "/",
-				ResourceType:        irodsfs_common_vpath.VPathMappingDirectory,
-				ReadOnly:            false,
-				CreateDir:           false,
-				IgnoreNotExistError: false,
-			},
-		}
-	}
-
-	if len(config.ClientUser) == 0 {
-		config.ClientUser = config.ProxyUser
-	}
-
-	return nil
 }

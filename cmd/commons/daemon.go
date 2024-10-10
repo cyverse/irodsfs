@@ -170,7 +170,7 @@ func ChildProcessReadConfigViaSTDIN() (*commons.Config, io.WriteCloser, error) {
 	}
 	logger.Info("Successfully read configuration from STDIN")
 
-	config, err := commons.NewConfigFromYAML(configBytes)
+	config, err := commons.NewConfigFromYAML(nil, configBytes)
 	if err != nil {
 		logger.Errorf("%+v", err)
 		return nil, nil, err

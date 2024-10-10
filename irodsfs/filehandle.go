@@ -116,10 +116,6 @@ func (handle *FileHandle) initLazy() error {
 			return err
 		}
 
-		if handle.fs.instanceReportClient != nil {
-			handle.fs.instanceReportClient.StartFileAccess(irodsHandle)
-		}
-
 		handle.iRODSFileHandle = irodsHandle
 
 		err = handle.initReaderWriter()
@@ -142,7 +138,7 @@ func (handle *FileHandle) initReaderWriter() error {
 		writer = irodsfscommon_io.NewNilWriter(fsClient, handle.iRODSFileHandle)
 
 		// reader
-		syncReader := irodsfscommon_io.NewSyncReader(fsClient, handle.iRODSFileHandle, handle.fs.instanceReportClient)
+		syncReader := irodsfscommon_io.NewSyncReader(fsClient, handle.iRODSFileHandle)
 
 		// use prefetching
 		// requires multiple readers
@@ -155,15 +151,15 @@ func (handle *FileHandle) initReaderWriter() error {
 		reader = asyncReader
 	} else if handle.openMode.IsWriteOnly() {
 		// writer
-		syncWriter := irodsfscommon_io.NewSyncWriter(fsClient, handle.iRODSFileHandle, handle.fs.instanceReportClient)
+		syncWriter := irodsfscommon_io.NewSyncWriter(fsClient, handle.iRODSFileHandle)
 		syncBufferedWriter := irodsfscommon_io.NewSyncBufferedWriter(syncWriter, iRODSIOBlockSize)
 		writer = irodsfscommon_io.NewAsyncWriter(syncBufferedWriter)
 
 		// reader
 		reader = irodsfscommon_io.NewNilReader(fsClient, handle.iRODSFileHandle)
 	} else {
-		writer = irodsfscommon_io.NewSyncWriter(fsClient, handle.iRODSFileHandle, handle.fs.instanceReportClient)
-		reader = irodsfscommon_io.NewSyncReader(fsClient, handle.iRODSFileHandle, handle.fs.instanceReportClient)
+		writer = irodsfscommon_io.NewSyncWriter(fsClient, handle.iRODSFileHandle)
+		reader = irodsfscommon_io.NewSyncReader(fsClient, handle.iRODSFileHandle)
 	}
 
 	handle.reader = reader
@@ -533,14 +529,6 @@ func (handle *FileHandle) Release(ctx context.Context) syscall.Errno {
 
 		// remove the handle from file handle map
 		handle.fs.fileHandleMap.Remove(handle.GetID())
-
-		// Report
-		if handle.fs.instanceReportClient != nil {
-			err := handle.fs.instanceReportClient.DoneFileAccess(handle.iRODSFileHandle)
-			if err != nil {
-				logger.Errorf("%+v", err)
-			}
-		}
 
 		err := handle.iRODSFileHandle.Close()
 		if err != nil {

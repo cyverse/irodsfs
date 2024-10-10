@@ -8,10 +8,8 @@ import (
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsfs_common_inode "github.com/cyverse/irodsfs-common/inode"
 	irodsfs_common_irods "github.com/cyverse/irodsfs-common/irods"
-	irodsfs_common_report "github.com/cyverse/irodsfs-common/report"
 	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
 	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
-	monitor_types "github.com/cyverse/irodsfs-monitor/types"
 	irodspoolclient "github.com/cyverse/irodsfs-pool/client"
 	"golang.org/x/xerrors"
 
@@ -21,11 +19,6 @@ import (
 	"github.com/cyverse/irodsfs/commons"
 	"github.com/cyverse/irodsfs/utils"
 	log "github.com/sirupsen/logrus"
-)
-
-const (
-	FSName  string = "irodsfs"
-	Subtype string = "irodsfs"
 )
 
 // GetFuseOptions returns fuse options
@@ -44,8 +37,8 @@ func GetFuseOptions(config *commons.Config) *fusefs.Options {
 	options.UID = uint32(config.UID)
 	options.GID = uint32(config.GID)
 	options.MaxReadAhead = config.ReadAheadMax
-	options.FsName = FSName
-	options.Name = Subtype
+	options.FsName = commons.FuseFSName
+	options.Name = commons.FuseFSName
 	options.SingleThreaded = false
 	options.IgnoreSecurityLabels = true
 	options.EnableLocks = true
@@ -67,9 +60,6 @@ type IRODSFS struct {
 	uid uint32
 	gid uint32
 
-	reportClient         irodsfs_common_report.IRODSFSReportClient
-	instanceReportClient irodsfs_common_report.IRODSFSInstanceReportClient
-
 	operationIDCurrent uint64
 
 	terminated bool
@@ -84,89 +74,18 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
-	authScheme := irodsclient_types.GetAuthScheme(config.AuthScheme)
-	if authScheme == irodsclient_types.AuthSchemeUnknown {
-		authScheme = irodsclient_types.AuthSchemeNative
-	}
+	account := config.ToIRODSAccount()
 
-	csNegotiation, err := irodsclient_types.GetCSNegotiationRequire(config.CSNegotiationPolicy)
-	if err != nil {
-		return nil, err
-	}
-
-	account, err := irodsclient_types.CreateIRODSProxyAccount(config.Host, config.Port,
-		config.ClientUser, config.Zone, config.ProxyUser, config.Zone,
-		authScheme, config.Password, config.Resource)
-	if err != nil {
-		accountErr := xerrors.Errorf("failed to create IRODS Account: %w", err)
-		logger.Errorf("%+v", accountErr)
-		return nil, accountErr
-	}
-
-	logger.Infof("Connect to IRODS server using %q auth scheme", string(authScheme))
-
-	// optional for ssl,
-	// no harm if it is not ssl
-	sslConfig, err := irodsclient_types.CreateIRODSSSLConfig(config.CACertificateFile, config.CACertificatePath, config.EncryptionKeySize,
-		config.EncryptionAlgorithm, config.SaltSize, config.HashRounds)
-	if err != nil {
-		sslErr := xerrors.Errorf("failed to create IRODS SSL Config: %w", err)
-		logger.Errorf("%+v", sslErr)
-		return nil, sslErr
-	}
-
-	account.SkipVerifyTLS = config.VerifyServer == "hostname"
-
-	if authScheme.IsPAM() {
-		logger.Info("PAM requires SSL, enabling CS negotiation")
-
-		account.SetSSLConfiguration(sslConfig)
-		account.SetCSNegotiation(true, irodsclient_types.CSNegotiationRequireSSL)
-	} else if config.ClientServerNegotiation {
-		logger.Info("Enabling CS negotiation to turn on SSL")
-
-		account.SetSSLConfiguration(sslConfig)
-		account.SetCSNegotiation(config.ClientServerNegotiation, csNegotiation)
-	}
-
-	cacheTimeoutSettings := []irodsclient_fs.MetadataCacheTimeoutSetting{}
-	for _, metadataCacheTimeoutSetting := range config.MetadataCacheTimeoutSettings {
-		if len(metadataCacheTimeoutSetting.Path) > 0 {
-			cacheTimeoutSetting := irodsclient_fs.MetadataCacheTimeoutSetting{
-				Path:    metadataCacheTimeoutSetting.Path,
-				Timeout: time.Duration(metadataCacheTimeoutSetting.Timeout),
-				Inherit: metadataCacheTimeoutSetting.Inherit,
-			}
-			cacheTimeoutSettings = append(cacheTimeoutSettings, cacheTimeoutSetting)
-		}
-	}
-
-	fsConfig := irodsclient_fs.NewFileSystemConfig(FSName)
-
-	fsConfig.IOConnection.MaxNumber = config.ConnectionMax
-	fsConfig.IOConnection.TCPBufferSize = commons.TCPBufferSizeDefault
-	fsConfig.IOConnection.OperationTimeout = time.Duration(config.OperationTimeout)
-	fsConfig.IOConnection.IdleTimeout = time.Duration(config.ConnectionIdleTimeout)
-	fsConfig.IOConnection.Lifespan = time.Duration(config.ConnectionLifespan)
-	fsConfig.IOConnection.CreationTimeout = commons.ConnectionErrorTimeout
-	fsConfig.MetadataConnection.TCPBufferSize = commons.TCPBufferSizeDefault
-	fsConfig.MetadataConnection.OperationTimeout = time.Duration(config.OperationTimeout)
-	fsConfig.MetadataConnection.IdleTimeout = time.Duration(config.ConnectionIdleTimeout)
-	fsConfig.MetadataConnection.Lifespan = time.Duration(config.ConnectionLifespan)
-	fsConfig.MetadataConnection.CreationTimeout = commons.ConnectionErrorTimeout
-
-	fsConfig.Cache.Timeout = time.Duration(config.MetadataCacheTimeout)
-	fsConfig.Cache.CleanupTime = time.Duration(config.MetadataCacheCleanupTime)
-	fsConfig.Cache.MetadataTimeoutSettings = cacheTimeoutSettings
-	fsConfig.Cache.StartNewTransaction = config.StartNewTransaction
-	fsConfig.Cache.InvalidateParentEntryCacheImmediately = config.InvalidateParentEntryCacheImmediately
+	logger.Infof("Connect to IRODS server using %q auth scheme", string(account.AuthenticationScheme))
 
 	logger.Info("Initializing an iRODS file system client")
-	var fsClient irodsfs_common_irods.IRODSFSClient = nil
+	var fsClient irodsfs_common_irods.IRODSFSClient
+	var err error
+
 	if len(config.PoolEndpoint) > 0 {
 		// use pool driver
 		logger.Info("Initializing irodsfs-pool fs client")
-		poolClient := irodspoolclient.NewPoolServiceClient(config.PoolEndpoint, time.Duration(config.OperationTimeout), config.InstanceID)
+		poolClient := irodspoolclient.NewPoolServiceClient(config.PoolEndpoint, time.Duration(config.MetadataConnection.OperationTimeout), config.InstanceID)
 		err = poolClient.Connect()
 		if err != nil {
 			clientErr := xerrors.Errorf("failed to connect to irodsfs-pool server %q: %w", config.PoolEndpoint, err)
@@ -174,7 +93,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 			return nil, clientErr
 		}
 
-		fsClient, err = poolClient.NewSession(account, FSName)
+		fsClient, err = poolClient.NewSession(account, commons.FuseFSName)
 		if err != nil {
 			sessionErr := xerrors.Errorf("failed to create a new irodsfs-pool fs client: %w", err)
 			logger.Errorf("%+v", sessionErr)
@@ -183,6 +102,11 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	} else {
 		// use go-irodsclient driver
 		logger.Info("Initializing an iRODS native file system client")
+		fsConfig := irodsclient_fs.NewFileSystemConfig(commons.FuseFSName)
+		fsConfig.MetadataConnection = config.MetadataConnection
+		fsConfig.IOConnection = config.IOConnection
+		fsConfig.Cache = config.Cache
+
 		fsClient, err = irodsfs_common_irods.NewIRODSFSClientDirect(account, fsConfig)
 		if err != nil {
 			clientErr := xerrors.Errorf("failed to create a new go-irodsclient fs client: %w", err)
@@ -211,41 +135,6 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	logger.Info("Initializing File Handle Map")
 	fileHandleMap := NewFileHandleMap()
 
-	var reportClient irodsfs_common_report.IRODSFSReportClient
-	var instanceReportClient irodsfs_common_report.IRODSFSInstanceReportClient
-	if len(config.MonitorURL) > 0 {
-		logger.Info("Initializing Monitoring Reporter")
-		reportClient = irodsfs_common_report.NewIRODSFSRestReporter(config.MonitorURL, true, 100, 10)
-
-		instanceInfo := &monitor_types.ReportInstance{
-			Host:                     config.Host,
-			Port:                     config.Port,
-			Zone:                     config.Zone,
-			ClientUser:               config.ClientUser,
-			ProxyUser:                config.ProxyUser,
-			AuthScheme:               string(authScheme),
-			ReadAheadMax:             config.ReadAheadMax,
-			OperationTimeout:         time.Duration(config.OperationTimeout).String(),
-			ConnectionIdleTimeout:    time.Duration(config.ConnectionIdleTimeout).String(),
-			ConnectionMax:            config.ConnectionMax,
-			MetadataCacheTimeout:     time.Duration(config.MetadataCacheTimeout).String(),
-			MetadataCacheCleanupTime: time.Duration(config.MetadataCacheCleanupTime).String(),
-			BufferSizeMax:            0,
-
-			PoolAddress: config.PoolEndpoint,
-
-			InstanceID: config.InstanceID,
-
-			CreationTime: time.Now().UTC(),
-		}
-
-		instanceReportClient, err = reportClient.StartInstance(instanceInfo)
-		if err != nil {
-			logger.Errorf("%+v", err)
-			// keep going.
-		}
-	}
-
 	userGroups, err := fsClient.ListUserGroups(account.ClientUser)
 	if err != nil {
 		ugErr := xerrors.Errorf("failed to list groups for a user %q: %w", account.ClientUser, err)
@@ -270,9 +159,6 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		uid: uint32(config.UID),
 		gid: uint32(config.GID),
 
-		reportClient:         reportClient,
-		instanceReportClient: instanceReportClient,
-
 		operationIDCurrent: 0,
 	}, nil
 }
@@ -288,16 +174,6 @@ func (fs *IRODSFS) Release() {
 	logger.Info("Releasing the iRODS FUSE Lite")
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
-
-	if fs.instanceReportClient != nil {
-		fs.instanceReportClient.Terminate()
-		fs.instanceReportClient = nil
-	}
-
-	if fs.reportClient != nil {
-		fs.reportClient.Release()
-		fs.reportClient = nil
-	}
 
 	if fs.fileHandleMap != nil {
 		fs.fileHandleMap.Clear()

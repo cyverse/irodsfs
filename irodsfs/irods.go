@@ -67,13 +67,13 @@ func IRODSGetACL(ctx context.Context, fs *IRODSFS, entry *irodsclient_fs.Entry, 
 		return 0o700
 	}
 
-	if entry.Owner == fs.config.ClientUser {
+	if entry.Owner == fs.config.ClientUsername {
 		// mine
 		return 0o700
 	}
 
-	logger.Debugf("Checking ACL information of the Entry for %q and user %q", entry.Path, fs.config.ClientUser)
-	defer logger.Debugf("Checked ACL information of the Entry for %q and user %q", entry.Path, fs.config.ClientUser)
+	logger.Debugf("Checking ACL information of the Entry for %q and user %q", entry.Path, fs.config.ClientUsername)
+	defer logger.Debugf("Checked ACL information of the Entry for %q and user %q", entry.Path, fs.config.ClientUsername)
 
 	var err error
 	var accesses []*irodsclient_types.IRODSAccess
@@ -90,7 +90,7 @@ func IRODSGetACL(ctx context.Context, fs *IRODSFS, entry *irodsclient_fs.Entry, 
 
 	var highestPermission os.FileMode = 0o500
 	for _, access := range accesses {
-		if access.UserType == irodsclient_types.IRODSUserRodsUser && access.UserName == fs.config.ClientUser {
+		if access.UserType == irodsclient_types.IRODSUserRodsUser && access.UserName == fs.config.ClientUsername {
 			perm := IRODSGetPermission(access.AccessLevel)
 			if perm == 0o700 {
 				return perm
@@ -114,7 +114,7 @@ func IRODSGetACL(ctx context.Context, fs *IRODSFS, entry *irodsclient_fs.Entry, 
 		}
 	}
 
-	logger.Debugf("failed to find ACL information of the Entry for %q and user %q", entry.Path, fs.config.ClientUser)
+	logger.Debugf("failed to find ACL information of the Entry for %q and user %q", entry.Path, fs.config.ClientUsername)
 	return highestPermission
 }
 
@@ -576,10 +576,6 @@ func IRODSCreate(ctx context.Context, fs *IRODSFS, dir *Dir, path string, flags 
 		return 0, nil, syscall.EREMOTEIO
 	}
 
-	if fs.instanceReportClient != nil {
-		fs.instanceReportClient.StartFileAccess(handle)
-	}
-
 	fileHandle, err := NewFileHandle(fs, handle)
 	if err != nil {
 		logger.Errorf("%+v", err)
@@ -610,10 +606,6 @@ func IRODSOpen(ctx context.Context, fs *IRODSFS, file *File, path string, flags 
 
 		logger.Errorf("%+v", err)
 		return nil, syscall.EREMOTEIO
-	}
-
-	if fs.instanceReportClient != nil {
-		fs.instanceReportClient.StartFileAccess(handle)
 	}
 
 	fileHandle, err := NewFileHandle(fs, handle)

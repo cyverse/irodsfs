@@ -3,10 +3,9 @@ module github.com/cyverse/irodsfs
 go 1.18
 
 require (
-	github.com/cyverse/go-irodsclient v0.15.0
-	github.com/cyverse/irodsfs-common v0.0.0-20240912225751-c7783ba849e7
-	github.com/cyverse/irodsfs-monitor v0.0.0-20220809235922-daf13261a2dc
-	github.com/cyverse/irodsfs-pool v0.7.0
+	github.com/cyverse/go-irodsclient v0.15.5
+	github.com/cyverse/irodsfs-common v0.0.0-20241010190648-fd912aaeb245
+	github.com/cyverse/irodsfs-pool v0.8.1-0.20241010200945-9c04aeb3c637
 	github.com/hanwen/go-fuse/v2 v2.3.0
 	github.com/pkg/profile v1.7.0
 	github.com/rs/xid v1.3.0
@@ -26,6 +25,7 @@ require (
 	github.com/hashicorp/go-rootcerts v1.0.2 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/inconshreveable/mousetrap v1.0.1 // indirect
+	github.com/kelseyhightower/envconfig v1.4.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
@@ -35,5 +35,4 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230525234030-28d5490b6b19 // indirect
 	google.golang.org/grpc v1.57.1 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
