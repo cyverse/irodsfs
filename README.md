@@ -76,6 +76,7 @@ After successful build, you will be able to find the binary in bin directory.
 An iRODS user `iychoi` mounts a collection `/iplant/home/iychoi` in iRODS Server `data.cyverse.org` on a local directory `/mount/irods`.
 
 - iRODS User: `iychoi`
+- iRODS Password: `my_password`
 - iRODS Host: `data.cyverse.org`
 - iRODS Port: `1247`
 - iRODS Zone: `iplant`
@@ -84,7 +85,7 @@ An iRODS user `iychoi` mounts a collection `/iplant/home/iychoi` in iRODS Server
 
 Run `irodsfs`.
 ```shell script
-./bin/irodsfs irods://iychoi@data.cyverse.org:1247/iplant/home/iychoi /mount/irods
+./bin/irodsfs irods://iychoi:my_password@data.cyverse.org:1247/iplant/home/iychoi /mount/irods
 ```
 
 After mounting, `irodsfs` will be executed in the background.
@@ -99,6 +100,7 @@ ls /mount/irods
 An iRODS user `iychoi` mounts a collection `/iplant/home/iychoi` in iRODS Server `data.cyverse.org` on a local directory `/mount/irods`.
 
 - iRODS User: `iychoi`
+- iRODS Password: `my_password`
 - iRODS Host: `data.cyverse.org`
 - iRODS Port: `1247`
 - iRODS Zone: `iplant`
@@ -107,12 +109,11 @@ An iRODS user `iychoi` mounts a collection `/iplant/home/iychoi` in iRODS Server
 
 Create a `config.yaml` file.
 ```yaml
-host: data.cyverse.org
-port: 1247
-proxy_user: iychoi
-client_user: iychoi
-zone: iplant
-password: "your_password" or leave empty to type in later
+irods_host: data.cyverse.org
+irods_port: 1247
+irods_user_name: iychoi
+irods_zone_name: iplant
+irods_user_password: `my_password`
 
 path_mappings:
   - irods_path: /iplant/home/iychoi
@@ -136,6 +137,7 @@ ls /mount/irods
 An iRODS user `iychoi` mounts a collection `/iplant/home/iychoi` in iRODS Server `data.cyverse.org` on a local directory `/mount/irods` with PAM Authentication (with SSL).
 
 - iRODS User: `iychoi`
+- iRODS Password: `my_password`
 - iRODS Host: `data.cyverse.org`
 - iRODS Port: `1247`
 - iRODS Zone: `iplant`
@@ -150,19 +152,18 @@ An iRODS user `iychoi` mounts a collection `/iplant/home/iychoi` in iRODS Server
 
 Create a `config.yaml` file.
 ```yaml
-host: data.cyverse.org
-port: 1247
-proxy_user: iychoi
-client_user: iychoi
-zone: iplant
-password: "your_password" or leave empty to type in later
+irods_host: data.cyverse.org
+irods_port: 1247
+irods_user_name: iychoi
+irods_zone_name: iplant
+irods_user_password: `my_password`
 
-auth_scheme: pam
-ssl_ca_cert_file: "/etc/ssl/certs/ca-certificates.crt"
-ssl_encryption_key_size: 32
-ssl_encryption_algorithm: "AES-256-CBC"
-ssl_encryption_salt_size: 8
-ssl_encryption_hash_rounds: 16
+irods_authentication_scheme: "pam_password"
+irods_ssl_ca_certificate_file: "/home/iychoi/.irods/ca_cert.pem"
+irods_encryption_key_size: 32
+irods_encryption_algorithm: "AES-256-CBC"
+irods_encryption_salt_size: 8
+irods_encryption_num_hash_rounds: 16
 
 path_mappings:
   - irods_path: /iplant/home/iychoi
@@ -194,12 +195,11 @@ An iRODS user `iychoi` mounts a collection `/iplant/home/iychoi/mount1` and `/ip
 
 Create a `config.yaml` file.
 ```yaml
-host: data.cyverse.org
-port: 1247
-proxy_user: iychoi
-client_user: iychoi
-zone: iplant
-password: "your_password" or leave empty to type in later
+irods_host: data.cyverse.org
+irods_port: 1247
+irods_user_name: iychoi
+irods_zone_name: iplant
+irods_user_password: `my_password`
 
 path_mappings:
   - irods_path: /iplant/home/iychoi/mount1
@@ -226,9 +226,9 @@ ls /mount/irods
 
 An iRODS user `iychoi` has iCommands config in `~/.irods`. 
 
-Run `irodsfs` with `--config` or `-c` option.
+Run `irodsfs` without any `--config` or `-c` option.
 ```shell script
-./bin/irodsfs -c ~/.irods /mount/irods
+./bin/irodsfs /mount/irods
 ```
 
 After mounting, `irodsfs` will be executed in the background.
@@ -260,12 +260,11 @@ Command-line argument `--log_level` overrides the log level set in a configurati
 To set the log level using a configuration file, add a `log_level` field.
 
 ```yaml
-host: data.cyverse.org
-port: 1247
-proxy_user: iychoi
-client_user: iychoi
-zone: iplant
-password: "your_password" or leave empty to type in later
+irods_host: data.cyverse.org
+irods_port: 1247
+irods_user_name: iychoi
+irods_zone_name: iplant
+irods_user_password: `my_password`
 log_level: FATAL
 
 path_mappings:
