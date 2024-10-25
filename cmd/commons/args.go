@@ -19,10 +19,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	ChildProcessArgument = "child_process"
-)
-
 func SetCommonFlags(command *cobra.Command) {
 	command.Flags().BoolP("version", "v", false, "Print version")
 	command.Flags().BoolP("help", "h", false, "Print help")
@@ -44,7 +40,7 @@ func SetCommonFlags(command *cobra.Command) {
 	command.Flags().StringP("username", "u", "", "Set iRODS username")
 	command.Flags().String("client_username", "", "Set iRODS client username")
 	command.Flags().StringP("password", "p", "", "Set iRODS password")
-	command.Flags().String("resource", "", "Set default iRODS resource")
+	command.Flags().StringP("resource", "R", "", "Set default iRODS resource")
 
 	command.Flags().Int("read_ahead_max", 0, "Set read-ahead size")
 	command.Flags().Bool("no_permission_check", false, "Disable permission check for performance")
@@ -62,7 +58,18 @@ func SetCommonFlags(command *cobra.Command) {
 	command.Flags().Int("profile_port", 11021, "Set profile service port")
 	command.Flags().String("pool_endpoint", "", "Set iRODS FUSE Lite Pool Service endpoint")
 
-	command.Flags().Bool(ChildProcessArgument, false, "")
+	command.Flags().Bool("child_process", false, "")
+	command.Flags().MarkHidden("child_process")
+}
+
+func IsChildProcess(command *cobra.Command) bool {
+	childProcess := false
+	childProcessFlag := command.Flags().Lookup("child_process")
+	if childProcessFlag != nil && childProcessFlag.Changed {
+		childProcess, _ = strconv.ParseBool(childProcessFlag.Value.String())
+	}
+
+	return childProcess
 }
 
 func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config, io.WriteCloser, bool, error) {
@@ -109,7 +116,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	childProcess := false
-	childProcessFlag := command.Flags().Lookup(ChildProcessArgument)
+	childProcessFlag := command.Flags().Lookup("child_process")
 	if childProcessFlag != nil && childProcessFlag.Changed {
 		childProcess, _ = strconv.ParseBool(childProcessFlag.Value.String())
 	}

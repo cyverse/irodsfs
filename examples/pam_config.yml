@@ -1,16 +1,15 @@
-host: data.cyverse.org
-port: 1247
-proxy_user: iychoi
-client_user: iychoi
-zone: iplant
-password:
+irods_host: data.cyverse.org
+irods_port: 1247
+irods_user_name: iychoi
+irods_zone_name: iplant
+irods_user_password: 
 
-auth_scheme: "pam"
-ssl_ca_cert_file: "/home/iychoi/.irods/ca_cert.pem"
-ssl_encryption_key_size: 32
-ssl_encryption_algorithm: "AES-256-CBC"
-ssl_encryption_salt_size: 8
-ssl_encryption_hash_rounds: 16
+irods_authentication_scheme: "pam"
+irods_ssl_ca_certificate_file: "/home/iychoi/.irods/ca_cert.pem"
+irods_encryption_key_size: 32
+irods_encryption_algorithm: "AES-256-CBC"
+irods_encryption_salt_size: 8
+irods_encryption_num_hash_rounds: 16
 
 foreground: false
 allow_other: false

@@ -1,9 +1,8 @@
-host: data.cyverse.org
-port: 1247
-proxy_user: iychoi
-client_user: iychoi
-zone: iplant
-password: 
+irods_host: data.cyverse.org
+irods_port: 1247
+irods_user_name: iychoi
+irods_zone_name: iplant
+irods_user_password: 
 
 foreground: false
 allow_other: false
@@ -16,9 +15,15 @@ path_mappings:
     mapping_path: /mssa_mrsa
     resource_type: dir
 
-metadata_cache_timeout_path_map:
-  "/": -1
-  "/iplant": -1
-  "/iplant/home": -1
-  "/iplant/home/shared": -1
-  "/iplant/home/shared/*": 3600
+cache:
+  metadata_timeout_settings:
+    - path: "/"
+      timeout: -1
+    - path: "/iplant"
+      timeout: -1
+    - path: "/iplant/home"
+      timeout: -1
+    - path: "/iplant/home/shared"
+      timeout: -1
+    - path: "/iplant/home/shared/*"
+      timeout: 3600

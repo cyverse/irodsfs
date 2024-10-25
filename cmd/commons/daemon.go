@@ -55,8 +55,7 @@ func RunChildProcess(serverExec string) (io.WriteCloser, io.ReadCloser, error) {
 	// run child process in background and pass parameters via stdin PIPE
 	// receives result from the child process
 	logger.Info("Running the child process in the background mode")
-	childProcessArgument := fmt.Sprintf("--%s", ChildProcessArgument)
-	cmd := exec.Command(serverExec, childProcessArgument)
+	cmd := exec.Command(serverExec, "--child_process")
 	childStdin, err := cmd.StdinPipe()
 	if err != nil {
 		pipeErr := xerrors.Errorf("failed to get the child process's STDIN: %w", err)

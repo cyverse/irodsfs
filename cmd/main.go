@@ -20,10 +20,18 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "irodsfs [iRODS URL] mount_point",
-	Short: "Run iRODS FUSE Lite",
-	Long:  "Run iRODS FUSE Lite that mounts iRODS collections on the directory hierarchy.",
-	RunE:  processCommand,
+	Use:           "irodsfs [iRODS URL] mount_point",
+	Short:         "Run iRODS FUSE Lite",
+	Long:          "Run iRODS FUSE Lite that mounts iRODS collections on the directory hierarchy.",
+	RunE:          processCommand,
+	SilenceUsage:  true,
+	SilenceErrors: true,
+	CompletionOptions: cobra.CompletionOptions{
+		DisableDefaultCmd:   true,
+		DisableNoDescFlag:   true,
+		DisableDescriptions: true,
+		HiddenDefaultCmd:    true,
+	},
 }
 
 func Execute() error {
@@ -32,22 +40,9 @@ func Execute() error {
 
 func processCommand(command *cobra.Command, args []string) error {
 	// check if this is subprocess running in the background
-	isChildProc := false
-	childProcessArgument := fmt.Sprintf("-%s", cmd_commons.ChildProcessArgument)
-
-	for _, arg := range os.Args {
-		if len(arg) >= len(childProcessArgument) {
-			if arg == childProcessArgument || arg[1:] == childProcessArgument {
-				// background
-				isChildProc = true
-				break
-			}
-		}
-	}
-
-	if isChildProc {
+	if cmd_commons.IsChildProcess(command) {
 		// child process
-		childMain(command, args)
+		childMain()
 	} else {
 		// parent process
 		parentMain(command, args)
@@ -144,7 +139,7 @@ func parentMain(command *cobra.Command, args []string) {
 }
 
 // childMain runs child process
-func childMain(command *cobra.Command, args []string) {
+func childMain() {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "childMain",
