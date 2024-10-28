@@ -6,7 +6,7 @@ require (
 	github.com/cyverse/go-irodsclient v0.15.6
 	github.com/cyverse/irodsfs-common v0.0.0-20241025231356-4e650ac30aa6
 	github.com/cyverse/irodsfs-pool v0.8.1
-	github.com/hanwen/go-fuse/v2 v2.3.0
+	github.com/hanwen/go-fuse/v2 v2.6.2
 	github.com/pkg/profile v1.7.0
 	github.com/rs/xid v1.3.0
 	github.com/sirupsen/logrus v1.8.1
