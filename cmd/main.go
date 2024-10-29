@@ -174,6 +174,7 @@ func childMain() {
 
 	if logWriter != nil {
 		logWriter.Close()
+		logWriter = nil
 	}
 }
 

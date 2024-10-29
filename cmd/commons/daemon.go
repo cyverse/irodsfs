@@ -34,7 +34,7 @@ func (w *NilWriter) Close() (err error) {
 }
 
 func ReportChildProcessError() {
-	fmt.Fprintln(os.Stderr, InterProcessCommunicationFinishError)
+	fmt.Fprintln(os.Stdout, InterProcessCommunicationFinishError)
 }
 
 func ReportChildProcessStartSuccessfully() {
@@ -70,8 +70,6 @@ func RunChildProcess(serverExec string) (io.WriteCloser, io.ReadCloser, error) {
 		return nil, nil, pipeErr
 	}
 
-	cmd.Stderr = cmd.Stdout
-
 	// start
 	err = cmd.Start()
 	if err != nil {
@@ -99,7 +97,7 @@ func ParentProcessSendConfigViaSTDIN(config *commons.Config, stdin io.WriteClose
 	}
 
 	// send it to child
-	_, err = io.WriteString(stdin, string(configBytes))
+	_, err = stdin.Write(configBytes)
 	if err != nil {
 		writeErr := xerrors.Errorf("failed to send via STDIN: %w", err)
 		logger.Errorf("%+v", writeErr)
@@ -135,8 +133,6 @@ func ParentProcessSendConfigViaSTDIN(config *commons.Config, stdin io.WriteClose
 			}
 		}
 	}
-
-	stdout.Close()
 
 	if childProcessFailed {
 		return xerrors.Errorf("failed to start child process")

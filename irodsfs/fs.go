@@ -43,6 +43,8 @@ func GetFuseOptions(config *commons.Config) *fusefs.Options {
 	options.IgnoreSecurityLabels = true
 	options.EnableLocks = true
 	options.DisableReadDirPlus = true
+	options.ExplicitDataCacheControl = true // experimental
+	options.DirectMount = true              // experimental
 	return options
 }
 
