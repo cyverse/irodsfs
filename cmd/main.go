@@ -43,21 +43,23 @@ func processCommand(command *cobra.Command, args []string) error {
 	if cmd_commons.IsChildProcess(command) {
 		// child process
 		childMain()
-	} else {
-		// parent process
-		parentMain(command, args)
+		return nil
 	}
 
-	return nil
+	// parent process
+	return parentMain(command, args)
 }
 
 func main() {
+	commons.InitTerminalOutput()
+
 	log.SetFormatter(&log.TextFormatter{
 		TimestampFormat: "2006-01-02 15:04:05.000000",
 		FullTimestamp:   true,
 	})
 
 	log.SetLevel(log.InfoLevel)
+	log.SetOutput(commons.GetTerminalWriter())
 
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
@@ -69,73 +71,53 @@ func main() {
 
 	err := Execute()
 	if err != nil {
-		logger.Fatalf("%+v", err)
+		logger.Errorf("%+v", err)
+		commons.PrintErrorf("%+v\n", err)
 		os.Exit(1)
 	}
 }
 
 // parentMain handles command-line parameters and run parent process
-func parentMain(command *cobra.Command, args []string) {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "parentMain",
-	})
-
+func parentMain(command *cobra.Command, args []string) error {
 	config, logWriter, cont, err := cmd_commons.ProcessCommonFlags(command, args)
 	if logWriter != nil {
 		defer logWriter.Close()
 	}
 
 	if err != nil {
-		logger.Errorf("%+v", err)
-		os.Exit(1)
+		return err
 	}
 
 	if !cont {
-		os.Exit(0)
+		return nil
 	}
 
 	// check fuse
-	fuseCheckResult := utils.CheckFuse()
-	switch fuseCheckResult {
-	case utils.CheckFUSEStatusFound:
-		// okay
-		logger.Info("Found FUSE Device. Starting iRODS FUSE Lite.")
-	case utils.CheckFUSEStatusUnknown:
-		// try to go
-		logger.Info("It is not sure whether FUSE is running. Starting iRODS FUSE Lite, anyway.")
-	case utils.CheckFUSEStatusNotFound:
-		logger.Error("FUSE is not running. Terminating iRODS FUSE Lite.")
-		os.Exit(1)
-	case utils.CheckFUSEStatusCannotRun:
-		logger.Error("FUSE is not supported. Terminating iRODS FUSE Lite.")
-		os.Exit(1)
+	err = utils.EnsureFuse()
+	if err != nil {
+		return err
 	}
 
 	if !config.Foreground {
 		// background
 		childStdin, childStdout, err := cmd_commons.RunChildProcess(os.Args[0])
 		if err != nil {
-			childErr := xerrors.Errorf("failed to run iRODS FUSE Lite child process: %w", err)
-			logger.Errorf("%+v", childErr)
-			os.Exit(1)
+			return xerrors.Errorf("failed to run iRODS FUSE Lite child process: %w", err)
 		}
 
 		err = cmd_commons.ParentProcessSendConfigViaSTDIN(config, childStdin, childStdout)
 		if err != nil {
-			sendErr := xerrors.Errorf("failed to send configuration to iRODS FUSE Lite child process: %w", err)
-			logger.Errorf("%+v", sendErr)
-			os.Exit(1)
+			return xerrors.Errorf("failed to send configuration to iRODS FUSE Lite child process: %w", err)
 		}
 	} else {
 		// run foreground
 		err = run(config, false)
 		if err != nil {
-			runErr := xerrors.Errorf("failed to run iRODS FUSE Lite: %w", err)
-			logger.Errorf("%+v", runErr)
-			os.Exit(1)
+			return xerrors.Errorf("failed to run iRODS FUSE Lite: %w", err)
 		}
 	}
+
+	return nil
 }
 
 // childMain runs child process

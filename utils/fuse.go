@@ -61,6 +61,30 @@ func CheckDevFuse() CheckFUSEStatus {
 	return CheckFUSEStatusUnknown
 }
 
+// EnsureFuse raise error if fuse is not found
+func EnsureFuse() error {
+	logger := log.WithFields(log.Fields{
+		"package":  "utils",
+		"function": "EnsureFuse",
+	})
+
+	fuseCheckResult := CheckFuse()
+	switch fuseCheckResult {
+	case CheckFUSEStatusFound:
+		// okay
+		logger.Info("Found FUSE Device.")
+	case CheckFUSEStatusUnknown:
+		// try to go
+		logger.Info("It is not sure whether FUSE is running. Continue...")
+	case CheckFUSEStatusNotFound:
+		return xerrors.Errorf("FUSE is not running.")
+	case CheckFUSEStatusCannotRun:
+		return xerrors.Errorf("FUSE is not supported.")
+	}
+
+	return nil
+}
+
 // Unmount calls fusermount -uz on the mount.
 func UnmountFuse(mountPoint string) (err error) {
 	bin, err := fusermountBinary()

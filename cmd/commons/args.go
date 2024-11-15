@@ -8,10 +8,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/cyverse/irodsfs/commons"
-	"golang.org/x/term"
 	"golang.org/x/xerrors"
 	"gopkg.in/natefinch/lumberjack.v2"
 
@@ -203,7 +201,6 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 
 		// overwrite config
 		config = newConfig
-		stdinClosed = true
 	}
 
 	if len(config.LogLevel) > 0 {
@@ -533,7 +530,7 @@ func PrintVersion(command *cobra.Command) error {
 		return err
 	}
 
-	fmt.Println(info)
+	commons.Println(info)
 	return nil
 }
 
@@ -566,8 +563,7 @@ func getLogWriterForChildProcess(logPath string) (io.WriteCloser, string) {
 // inputMissingParams gets user inputs for parameters missing, such as username and password
 func inputMissingParams(config *commons.Config) error {
 	if len(config.Username) == 0 {
-		fmt.Print("Username: ")
-		fmt.Scanln(&config.Username)
+		config.Username = commons.Input("Username: ")
 	}
 
 	if len(config.ClientUsername) == 0 {
@@ -575,14 +571,7 @@ func inputMissingParams(config *commons.Config) error {
 	}
 
 	if len(config.Password) == 0 {
-		fmt.Print("Password: ")
-		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
-		fmt.Print("\n")
-		if err != nil {
-			return xerrors.Errorf("failed to read password: %w", err)
-		}
-
-		config.Password = string(bytePassword)
+		config.Password = commons.InputPassword("iRODS Password")
 	}
 
 	config.FixAuthConfiguration()
