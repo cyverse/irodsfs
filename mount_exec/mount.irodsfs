@@ -117,11 +117,6 @@ def check_mount(mountPoint, mountTimeout):
         print("fuse mount not found for %s, after %d seconds" % (mountPoint, mountTimeout), file=sys.stderr)
         return False
 
-    accessible = os.access(mountPoint, os.R_OK)
-    if not accessible:
-        print("mount point %s is not accessible" % mountPoint, file=sys.stderr)
-        return False
-
     # done
     return True
 
