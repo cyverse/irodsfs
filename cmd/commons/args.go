@@ -195,12 +195,17 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 		// read from a file
 		newConfig, err := commons.NewConfigFromFile(config, configFilePath)
 		if err != nil {
-			logger.Errorf("%+v", err)
-			return nil, nil, false, err // stop here
+			if os.IsNotExist(err) {
+				logger.Debugf("config file not found at %s", configFilePath)
+				// use default
+			} else {
+				logger.Errorf("%+v", err)
+				return nil, nil, false, err // stop here
+			}
+		} else {
+			// overwrite config
+			config = newConfig
 		}
-
-		// overwrite config
-		config = newConfig
 	}
 
 	if len(config.LogLevel) > 0 {

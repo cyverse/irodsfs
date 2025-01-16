@@ -123,7 +123,7 @@ func NewConfigFromFile(config *Config, filePath string) (*Config, error) {
 	st, err := os.Stat(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, xerrors.Errorf("file %q does not exist: %w", filePath, err)
+			return nil, err
 		}
 
 		return nil, xerrors.Errorf("failed to stat file %q: %w", filePath, err)
