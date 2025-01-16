@@ -23,19 +23,27 @@ import (
 
 // GetFuseOptions returns fuse options
 func GetFuseOptions(config *commons.Config) *fusefs.Options {
+	logger := log.WithFields(log.Fields{
+		"package":  "irodsfs",
+		"function": "GetFuseOptions",
+	})
+
 	options := &fusefs.Options{}
 
 	// TODO: handle fuse specific options in config.FuseOptions
 	options.AllowOther = config.AllowOther
 	if config.Debug && config.Foreground {
 		options.Debug = true
+		logger.Debugf("Debug and foreground mode enabled")
 	}
 
 	options.AttrTimeout = nil
 	options.EntryTimeout = nil
 	options.NegativeTimeout = nil
 	options.UID = uint32(config.UID)
+	logger.Debugf("UID %d is set", config.UID)
 	options.GID = uint32(config.GID)
+	logger.Debugf("GID %d is set", config.GID)
 	options.MaxReadAhead = config.ReadAheadMax
 	options.FsName = commons.FuseFSName
 	options.Name = commons.FuseFSName

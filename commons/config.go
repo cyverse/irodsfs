@@ -83,17 +83,15 @@ type Config struct {
 
 // NewDefaultConfig returns a default config
 func NewDefaultConfig() *Config {
-	systemUser, uid, gid, _ := utils.GetCurrentSystemUser()
-
 	return &Config{
 		Config:            *irodsclient_config.GetDefaultConfig(),
 		PathMappings:      []irodsfs_common_vpath.VPathMapping{},
 		ReadAheadMax:      ReadAheadMaxDefault,
 		NoPermissionCheck: false,
 		NoSetXattr:        false,
-		UID:               uid,
-		GID:               gid,
-		SystemUser:        systemUser,
+		UID:               0,
+		GID:               0,
+		SystemUser:        "",
 		MountPath:         "", // leave it empty
 
 		MetadataConnection: irodsclient_fs.NewDefaultMetadataConnectionConfig(),
@@ -285,8 +283,8 @@ func NewConfigFromYAML(config *Config, yamlBytes []byte) (*Config, error) {
 	return &cfg, nil
 }
 
-// FixSystemSystemUserConfiguration fixes system user configuration
-func (config *Config) FixSystemSystemUserConfiguration() error {
+// FixSystemUserConfiguration fixes system user configuration
+func (config *Config) FixSystemUserConfiguration() error {
 	systemUser, uid, gid, err := utils.CorrectSystemUser(config.SystemUser, config.UID, config.GID)
 	if err != nil {
 		return err

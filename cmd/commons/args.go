@@ -507,12 +507,11 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 
 	config.MountPath = mountpoint
 
-	err = config.FixSystemSystemUserConfiguration()
+	err = config.FixSystemUserConfiguration()
 	if err != nil {
 		logger.Errorf("%+v", err)
 		return nil, logWriter, false, err // stop here
 	}
-
 	config.FixPathMappings()
 
 	err = config.Validate()
