@@ -41,9 +41,9 @@ func GetFuseOptions(config *commons.Config) *fusefs.Options {
 	options.EntryTimeout = nil
 	options.NegativeTimeout = nil
 	options.UID = uint32(config.UID)
-	logger.Debugf("UID %d is set", config.UID)
+	logger.Infof("UID %d is set", config.UID)
 	options.GID = uint32(config.GID)
-	logger.Debugf("GID %d is set", config.GID)
+	logger.Infof("GID %d is set", config.GID)
 	options.MaxReadAhead = config.ReadAheadMax
 	options.FsName = commons.FuseFSName
 	options.Name = commons.FuseFSName
