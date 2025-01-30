@@ -529,25 +529,40 @@ func (config *Config) FromIRODSUrl(inputURL string) error {
 	return nil
 }
 
-// ParsePoolServiceEndpoint parses endpoint string
-func ParsePoolServiceEndpoint(endpoint string) (string, string, error) {
-	u, err := url.Parse(endpoint)
-	if err != nil {
-		return "", "", xerrors.Errorf("could not parse endpoint: %v", err)
+func parseRawURL(rawurl string) (string, string, string, error) {
+	u, err := url.ParseRequestURI(rawurl)
+	if err != nil || u.Host == "" {
+		// try adding //
+		u, repErr := url.ParseRequestURI("tcp://" + rawurl)
+		if repErr != nil {
+			return "", "", "", xerrors.Errorf("could not parse raw url: %s, error: %w", rawurl, err)
+		}
+
+		return u.Scheme, u.Host, u.Path, nil
 	}
 
-	scheme := strings.ToLower(u.Scheme)
+	return u.Scheme, u.Host, u.Path, nil
+}
+
+// ParsePoolServiceEndpoint parses endpoint string
+func ParsePoolServiceEndpoint(endpoint string) (string, string, error) {
+	scheme, host, localpath, err := parseRawURL(endpoint)
+	if err != nil {
+		return "", "", err
+	}
+
+	scheme = strings.ToLower(scheme)
 	switch scheme {
 	case "tcp":
-		return "tcp", u.Host, nil
+		return "tcp", host, nil
 	case "unix":
-		path := path.Join("/", u.Path)
-		return "unix", path, nil
+		localpath = path.Join("/", strings.TrimPrefix(localpath, "/"))
+		return "unix", localpath, nil
 	case "":
-		if len(u.Host) > 0 {
-			return "tcp", u.Host, nil
+		if len(host) > 0 {
+			return "tcp", host, nil
 		}
-		return "", "", xerrors.Errorf("unknown host: %q", u.Host)
+		return "", "", xerrors.Errorf("unknown host: %q", host)
 	default:
 		return "", "", xerrors.Errorf("unsupported protocol: %q", scheme)
 	}
