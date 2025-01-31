@@ -530,23 +530,38 @@ func (config *Config) FromIRODSUrl(inputURL string) error {
 }
 
 func parseRawURL(rawurl string) (string, string, string, error) {
+	if len(strings.TrimSpace(rawurl)) == 0 {
+		return "", "", "", xerrors.Errorf("empty raw url")
+	}
+
 	u, err := url.ParseRequestURI(rawurl)
-	if err != nil || u.Host == "" {
+	if err != nil || (u.Host == "" && u.Path == "") {
 		// try adding //
 		u, repErr := url.ParseRequestURI("tcp://" + rawurl)
 		if repErr != nil {
 			return "", "", "", xerrors.Errorf("could not parse raw url: %s, error: %w", rawurl, err)
 		}
 
+		return "tcp", u.Host, "", nil
+	}
+
+	if u != nil {
+		scheme := strings.ToLower(u.Scheme)
+		if scheme == "unix" {
+			return "unix", "", u.Path, nil
+		} else if scheme == "tcp" {
+			return "tcp", u.Host, "", nil
+		}
+
 		return u.Scheme, u.Host, u.Path, nil
 	}
 
-	return u.Scheme, u.Host, u.Path, nil
+	return "", "", "", xerrors.Errorf("could not parse raw url: %s", rawurl)
 }
 
 // ParsePoolServiceEndpoint parses endpoint string
 func ParsePoolServiceEndpoint(endpoint string) (string, string, error) {
-	scheme, host, localpath, err := parseRawURL(endpoint)
+	scheme, host, p, err := parseRawURL(endpoint)
 	if err != nil {
 		return "", "", err
 	}
@@ -556,8 +571,8 @@ func ParsePoolServiceEndpoint(endpoint string) (string, string, error) {
 	case "tcp":
 		return "tcp", host, nil
 	case "unix":
-		localpath = path.Join("/", strings.TrimPrefix(localpath, "/"))
-		return "unix", localpath, nil
+		p = path.Join("/", strings.TrimPrefix(p, "/"))
+		return "unix", p, nil
 	case "":
 		if len(host) > 0 {
 			return "tcp", host, nil
