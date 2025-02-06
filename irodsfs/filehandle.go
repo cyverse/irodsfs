@@ -266,7 +266,7 @@ func (handle *FileHandle) Read(ctx context.Context, dest []byte, offset int64) (
 		return nil, syscall.EBADFD
 	}
 
-	if offset > handle.iRODSFileHandle.GetEntry().Size {
+	if offset >= handle.iRODSFileHandle.GetEntry().Size {
 		return fuse.ReadResultData(dest[:0]), fusefs.OK
 	}
 
