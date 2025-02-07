@@ -228,7 +228,7 @@ func (fs *IRODSFS) Start() error {
 	return nil
 }
 
-func (fs *IRODSFS) Stop() {
+func (fs *IRODSFS) Stop(silentUnmount bool) {
 	if fs.terminated {
 		return
 	}
@@ -239,7 +239,7 @@ func (fs *IRODSFS) Stop() {
 		"function": "Stop",
 	})
 
-	logger.Info("Stopping FUSE")
+	logger.Infof("Stopping FUSE (silentUnmount=%t)", silentUnmount)
 
 	defer irodsfs_common_utils.StackTraceFromPanic(logger)
 
@@ -248,7 +248,11 @@ func (fs *IRODSFS) Stop() {
 	//fs.fuseServer.Unmount()
 	err := utils.UnmountFuse(fs.config.MountPath)
 	if err != nil {
-		logger.Error(err)
+		if silentUnmount {
+			logger.Info(err)
+		} else {
+			logger.Error(err)
+		}
 	}
 	fs.fuseServer = nil
 }
