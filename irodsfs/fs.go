@@ -145,7 +145,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	logger.Info("Initializing File Handle Map")
 	fileHandleMap := NewFileHandleMap()
 
-	userGroups, err := fsClient.ListUserGroups(account.ClientUser)
+	userGroups, err := fsClient.ListUserGroups(account.ClientZone, account.ClientUser)
 	if err != nil {
 		ugErr := xerrors.Errorf("failed to list groups for a user %q: %w", account.ClientUser, err)
 		logger.Errorf("%+v", ugErr)
