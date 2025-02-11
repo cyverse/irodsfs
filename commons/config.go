@@ -70,12 +70,14 @@ type Config struct {
 	Profile            bool `json:"profile,omitempty" yaml:"profile,omitempty"`
 	ProfileServicePort int  `json:"profile_service_port,omitempty" yaml:"profile_service_port,omitempty"`
 
-	Foreground   bool   `json:"foreground,omitempty" yaml:"foreground,omitempty"`
-	LogLevel     string `json:"log_level,omitempty" yaml:"log_level,omitempty"`
-	Debug        bool   `json:"debug,omitempty" yaml:"debug,omitempty"`
-	AllowOther   bool   `json:"allow_other,omitempty" yaml:"allow_other,omitempty"`
-	Readonly     bool   `json:"readonly,omitempty" yaml:"readonly,omitempty"`
-	ChildProcess bool   `json:"childprocess,omitempty" yaml:"childprocess,omitempty"`
+	Foreground      bool   `json:"foreground,omitempty" yaml:"foreground,omitempty"`
+	LogLevel        string `json:"log_level,omitempty" yaml:"log_level,omitempty"`
+	Debug           bool   `json:"debug,omitempty" yaml:"debug,omitempty"`
+	AllowOther      bool   `json:"allow_other,omitempty" yaml:"allow_other,omitempty"`
+	Readonly        bool   `json:"readonly,omitempty" yaml:"readonly,omitempty"`
+	ChildProcess    bool   `json:"childprocess,omitempty" yaml:"childprocess,omitempty"`
+	WatchdogProcess bool   `json:"watchdogprocess,omitempty" yaml:"watchdogprocess,omitempty"`
+	WatchPID        int    `json:"watchpid,omitempty" yaml:"watchpid,omitempty"`
 
 	InstanceID  string   `json:"instanceid,omitempty" yaml:"instanceid,omitempty"`
 	FuseOptions []string `json:"fuse_options,omitempty" yaml:"fuse_options,omitempty"`
@@ -106,12 +108,14 @@ func NewDefaultConfig() *Config {
 		Profile:            false,
 		ProfileServicePort: ProfileServicePortDefault,
 
-		Foreground:   false,
-		LogLevel:     "",
-		Debug:        false,
-		AllowOther:   false,
-		Readonly:     false,
-		ChildProcess: false,
+		Foreground:      false,
+		LogLevel:        "",
+		Debug:           false,
+		AllowOther:      false,
+		Readonly:        false,
+		ChildProcess:    false,
+		WatchdogProcess: false,
+		WatchPID:        0,
 
 		InstanceID:  GetDefaultInstanceID(),
 		FuseOptions: []string{},

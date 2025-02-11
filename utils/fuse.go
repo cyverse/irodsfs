@@ -73,6 +73,13 @@ func EnsureFuse() error {
 	case CheckFUSEStatusFound:
 		// okay
 		logger.Info("Found FUSE Device.")
+
+		_, err := fusermountBinary()
+		if err != nil {
+			return xerrors.Errorf("fusermount is not found: %w", err)
+		}
+
+		logger.Info("Found fusermount.")
 	case CheckFUSEStatusUnknown:
 		// try to go
 		logger.Info("It is not sure whether FUSE is running. Continue...")
@@ -85,7 +92,7 @@ func EnsureFuse() error {
 	return nil
 }
 
-// Unmount calls fusermount -uz on the mount.
+// UnmountFuse calls fusermount -uz on the mount.
 func UnmountFuse(mountPoint string) (err error) {
 	bin, err := fusermountBinary()
 	if err != nil {

@@ -44,6 +44,10 @@ func processCommand(command *cobra.Command, args []string) error {
 		// child process
 		childMain()
 		return nil
+	} else if cmd_commons.IsWatchdogProcess(command) {
+		// watchdog process
+		watchdogMain()
+		return nil
 	}
 
 	// parent process
@@ -160,6 +164,45 @@ func childMain() {
 	}
 }
 
+// watchdogMain runs watchdog process
+func watchdogMain() {
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "watchdogMain",
+	})
+
+	logger.Info("Start watchdog process")
+
+	// read from stdin
+	config, logWriter, err := cmd_commons.WatchdogProcessReadConfigViaSTDIN()
+	if logWriter != nil {
+		defer logWriter.Close()
+	}
+
+	if err != nil {
+		commErr := xerrors.Errorf("failed to communicate to parent process: %w", err)
+		logger.Errorf("%+v", commErr)
+		cmd_commons.ReportChildProcessError()
+		os.Exit(1)
+	}
+
+	config.WatchdogProcess = true
+
+	logger.Info("Run watchdog")
+
+	cmd_commons.ReportChildProcessStartSuccessfully()
+	if len(config.GetLogFilePath()) == 0 {
+		cmd_commons.SetNilLogWriter()
+	}
+
+	cmd_commons.WatchParentProcess(config.WatchPID, config.MountPath)
+
+	if logWriter != nil {
+		logWriter.Close()
+		logWriter = nil
+	}
+}
+
 // run runs iRODS FUSE Lite
 func run(config *commons.Config, isChildProcess bool) error {
 	logger := log.WithFields(log.Fields{
@@ -248,6 +291,18 @@ func run(config *commons.Config, isChildProcess bool) error {
 		fs.Stop(false) // this unmounts fuse
 		logger.Info("stopped the filesystem, unmounting FUSE")
 	}()
+
+	// watch
+	watchdogStdin, watchdogStdout, err := cmd_commons.RunWatchdogProcess(os.Args[0])
+	if err != nil {
+		return xerrors.Errorf("failed to run watchdog process: %w", err)
+	}
+
+	config.WatchPID = os.Getpid()
+	err = cmd_commons.WatchtargetProcessSendConfigViaSTDIN(config, watchdogStdin, watchdogStdout)
+	if err != nil {
+		return xerrors.Errorf("failed to send configuration to iRODS FUSE Lite watchdog process: %w", err)
+	}
 
 	// wait
 	fs.Wait()

@@ -58,6 +58,9 @@ func SetCommonFlags(command *cobra.Command) {
 
 	command.Flags().Bool("child_process", false, "")
 	command.Flags().MarkHidden("child_process")
+
+	command.Flags().Bool("watchdog_process", false, "")
+	command.Flags().MarkHidden("watchdog_process")
 }
 
 func IsChildProcess(command *cobra.Command) bool {
@@ -68,6 +71,16 @@ func IsChildProcess(command *cobra.Command) bool {
 	}
 
 	return childProcess
+}
+
+func IsWatchdogProcess(command *cobra.Command) bool {
+	watchdogProcess := false
+	watchdogProcessFlag := command.Flags().Lookup("watchdog_process")
+	if watchdogProcessFlag != nil && watchdogProcessFlag.Changed {
+		watchdogProcess, _ = strconv.ParseBool(watchdogProcessFlag.Value.String())
+	}
+
+	return watchdogProcess
 }
 
 func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config, io.WriteCloser, bool, error) {
@@ -117,6 +130,12 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	childProcessFlag := command.Flags().Lookup("child_process")
 	if childProcessFlag != nil && childProcessFlag.Changed {
 		childProcess, _ = strconv.ParseBool(childProcessFlag.Value.String())
+	}
+
+	watchdogProcess := false
+	watchdogProcessFlag := command.Flags().Lookup("watchdog_process")
+	if watchdogProcessFlag != nil && watchdogProcessFlag.Changed {
+		watchdogProcess, _ = strconv.ParseBool(watchdogProcessFlag.Value.String())
 	}
 
 	if len(logLevel) > 0 {
@@ -249,6 +268,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 	}
 
 	config.ChildProcess = childProcess
+	config.WatchdogProcess = watchdogProcess
 
 	if config.Debug {
 		log.SetLevel(log.DebugLevel)
@@ -555,6 +575,17 @@ func getLogWriterForParentProcess(logPath string) (io.WriteCloser, string) {
 
 func getLogWriterForChildProcess(logPath string) (io.WriteCloser, string) {
 	logFilePath := fmt.Sprintf("%s.child", logPath)
+	return &lumberjack.Logger{
+		Filename:   logFilePath,
+		MaxSize:    50, // 50MB
+		MaxBackups: 5,
+		MaxAge:     30, // 30 days
+		Compress:   false,
+	}, logFilePath
+}
+
+func getLogWriterForWatchdogProcess(logPath string) (io.WriteCloser, string) {
+	logFilePath := fmt.Sprintf("%s.watchdog", logPath)
 	return &lumberjack.Logger{
 		Filename:   logFilePath,
 		MaxSize:    50, // 50MB
