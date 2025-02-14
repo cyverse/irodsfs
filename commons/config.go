@@ -91,8 +91,8 @@ func NewDefaultConfig() *Config {
 		ReadAheadMax:      ReadAheadMaxDefault,
 		NoPermissionCheck: false,
 		NoSetXattr:        false,
-		UID:               0,
-		GID:               0,
+		UID:               -1,
+		GID:               -1,
 		SystemUser:        "",
 		MountPath:         "", // leave it empty
 
