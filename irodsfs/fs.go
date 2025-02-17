@@ -65,6 +65,7 @@ type IRODSFS struct {
 	inodeManager  *irodsfs_common_inode.InodeManager
 	vpathManager  *irodsfs_common_vpath.VPathManager
 	fsClient      irodsfs_common_irods.IRODSFSClient
+	usePoolServer bool
 	fileHandleMap *FileHandleMap
 	userGroupsMap map[string]*irodsclient_types.IRODSUser
 
@@ -93,6 +94,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	var fsClient irodsfs_common_irods.IRODSFSClient
 	var err error
 
+	usePoolServer := false
 	if len(config.PoolEndpoint) > 0 {
 		// use pool driver
 		logger.Info("Initializing irodsfs-pool fs client")
@@ -110,6 +112,8 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 			logger.Errorf("%+v", sessionErr)
 			return nil, sessionErr
 		}
+
+		usePoolServer = true
 	} else {
 		// use go-irodsclient driver
 		logger.Info("Initializing an iRODS native file system client")
@@ -164,6 +168,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		inodeManager:  inodeManager,
 		vpathManager:  vpathManager,
 		fsClient:      fsClient,
+		usePoolServer: usePoolServer,
 		fileHandleMap: fileHandleMap,
 		userGroupsMap: userGroupsMap,
 

@@ -140,15 +140,23 @@ func (handle *FileHandle) initReaderWriter() error {
 		// reader
 		syncReader := irodsfscommon_io.NewSyncReader(fsClient, handle.iRODSFileHandle)
 
-		// use prefetching
-		// requires multiple readers
-		readers := []irodsfscommon_io.Reader{syncReader}
+		if handle.fs.usePoolServer {
+			// do not use prefetching
+			reader = syncReader
+		} else {
+			// use prefetching
+			// requires multiple readers
+			readers := []irodsfscommon_io.Reader{syncReader}
 
-		asyncReader, err := irodsfscommon_io.NewAsyncCacheThroughReader(readers, iRODSIOBlockSize, nil)
-		if err != nil {
-			return err
+			asyncReader, err := irodsfscommon_io.NewAsyncCacheThroughReader(readers, iRODSIOBlockSize, nil)
+			if err != nil {
+				// if this fails, just use syncReader
+				//return err
+				reader = syncReader
+			} else {
+				reader = asyncReader
+			}
 		}
-		reader = asyncReader
 	} else if handle.openMode.IsWriteOnly() {
 		// writer
 		syncWriter := irodsfscommon_io.NewSyncWriter(fsClient, handle.iRODSFileHandle)

@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/cyverse/go-irodsclient v0.16.1
 	github.com/cyverse/irodsfs-common v0.0.0-20250213185351-d94ad588845d
-	github.com/cyverse/irodsfs-pool v0.10.0
+	github.com/cyverse/irodsfs-pool v0.11.1
 	github.com/hanwen/go-fuse/v2 v2.6.2
 	github.com/pkg/profile v1.7.0
 	github.com/rs/xid v1.3.0
