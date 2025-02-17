@@ -51,6 +51,7 @@ type Config struct {
 
 	PathMappings      []irodsfs_common_vpath.VPathMapping `json:"path_mappings,omitempty" yaml:"path_mappings,omitempty"`
 	ReadAheadMax      int                                 `json:"read_ahead_max,omitempty" yaml:"read_ahead_max,omitempty"`
+	ReadWriteMax      int                                 `json:"read_write_max,omitempty" yaml:"read_write_max,omitempty"`
 	NoPermissionCheck bool                                `json:"no_permission_check,omitempty" yaml:"no_permission_check,omitempty"`
 	NoSetXattr        bool                                `json:"no_set_xattr,omitempty" yaml:"no_set_xattr,omitempty"`
 	UID               int                                 `json:"uid,omitempty" yaml:"uid,omitempty"`
@@ -89,6 +90,7 @@ func NewDefaultConfig() *Config {
 		Config:            *irodsclient_config.GetDefaultConfig(),
 		PathMappings:      []irodsfs_common_vpath.VPathMapping{},
 		ReadAheadMax:      ReadAheadMaxDefault,
+		ReadWriteMax:      ReadWriteMaxDefault,
 		NoPermissionCheck: false,
 		NoSetXattr:        false,
 		UID:               -1,
@@ -468,7 +470,11 @@ func (config *Config) Validate() error {
 	}
 
 	if config.ReadAheadMax < 0 {
-		return xerrors.Errorf("readahead max must be equal or greater than 0")
+		return xerrors.Errorf("read-ahead max must be equal or greater than 0")
+	}
+
+	if config.ReadWriteMax < 0 {
+		return xerrors.Errorf("read write max must be equal or greater than 0")
 	}
 
 	if config.MetadataConnection.MaxNumber < 1 {

@@ -41,6 +41,7 @@ func SetCommonFlags(command *cobra.Command) {
 	command.Flags().StringP("resource", "R", "", "Set default iRODS resource")
 
 	command.Flags().Int("read_ahead_max", 0, "Set read-ahead size")
+	command.Flags().Int("read_write_max", 0, "Set read-write size")
 	command.Flags().Bool("no_permission_check", false, "Disable permission check for performance")
 	command.Flags().Bool("no_set_xattr", false, "Disable set xattr")
 	command.Flags().Bool("no_transaction", false, "Disable transaction for performance")
@@ -404,6 +405,20 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 
 		if readAheadMax > 0 {
 			config.ReadAheadMax = int(readAheadMax)
+		}
+	}
+
+	readWriteMaxFlag := command.Flags().Lookup("read_write_max")
+	if readWriteMaxFlag != nil && readWriteMaxFlag.Changed {
+		readWriteMax, err := strconv.ParseInt(readWriteMaxFlag.Value.String(), 10, 32)
+		if err != nil {
+			parseErr := xerrors.Errorf("failed to convert input %q to int64: %w", readWriteMaxFlag.Value.String(), err)
+			logger.Errorf("%+v", parseErr)
+			return nil, logWriter, false, parseErr // stop here
+		}
+
+		if readWriteMax > 0 {
+			config.ReadWriteMax = int(readWriteMax)
 		}
 	}
 

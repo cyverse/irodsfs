@@ -8,7 +8,8 @@ const (
 
 	IRODSEnvironmentFileEnvKey string = "IRODS_ENVIRONMENT_FILE"
 
-	ReadAheadMaxDefault        int           = 1024 * 128 // 128KB
+	ReadAheadMaxDefault        int           = 1024 * 128      // 128KB
+	ReadWriteMaxDefault        int           = 1 * 1024 * 1024 // 1MB
 	FilesystemTimeout          time.Duration = 10 * time.Minute
 	ConnectionMaxDefault       int           = 10
 	TCPBufferSizeDefault       int           = 4 * 1024 * 1024 // 4MB

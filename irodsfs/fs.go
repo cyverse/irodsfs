@@ -45,6 +45,7 @@ func GetFuseOptions(config *commons.Config) *fusefs.Options {
 	options.GID = uint32(config.GID)
 	logger.Infof("GID %d is set", config.GID)
 	options.MaxReadAhead = config.ReadAheadMax
+	options.MaxWrite = config.ReadWriteMax
 	options.FsName = commons.FuseFSName
 	options.Name = commons.FuseFSName
 	options.SingleThreaded = false
