@@ -83,8 +83,6 @@ def reorderArgs(argv):
     return reorderedArgs, mountTimeout
 
 def check_mount(mountPoint, mountTimeout):
-    fuse_mounted = False
-
     retry = 0
     while retry < mountTimeout:
         try:
@@ -101,25 +99,24 @@ def check_mount(mountPoint, mountTimeout):
                             mountType = fields[2].strip()
 
                             if os.path.samefile(mountPath, mountPoint) and mountType.lower() == "fuse.irodsfs":
-                                fuse_mounted = True
-                                break
-
-            if fuse_mounted:
-                break
+                                return True
 
             retry += 1
-        except FileNotFoundError:
+        except FileNotFoundError as e:
+            print("file not found: %s" % e, file=sys.stderr)
             retry += 1
         except OSError:
+            print("os error: %s" % e, file=sys.stderr)
             retry += 1
 
-    if not fuse_mounted:
-        print("fuse mount not found for %s, after %d seconds" % (mountPoint, mountTimeout), file=sys.stderr)
-        return False
+    print("fuse mount not found for %s, after %d seconds" % (mountPoint, mountTimeout), file=sys.stderr)
+    print("mount dump >", file=sys.stderr)
+    with open('/proc/mounts', 'r') as f:
+        for line in f.readlines():
+            print(line, file=sys.stderr)
+    print("mount dump end", file=sys.stderr)
 
-    # done
-    return True
-
+    return False
 
 def run_command(command_argv):
     pathenv = os.getenv('PATH')
