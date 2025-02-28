@@ -6,8 +6,8 @@ toolchain go1.23.6
 
 require (
 	github.com/cyverse/go-irodsclient v0.16.7
-	github.com/cyverse/irodsfs-common v0.0.0-20250228195047-f25ba69386ce
-	github.com/cyverse/irodsfs-pool v0.11.6
+	github.com/cyverse/irodsfs-common v0.0.0-20250228221017-592ff6c2e5a2
+	github.com/cyverse/irodsfs-pool v0.11.7
 	github.com/hanwen/go-fuse/v2 v2.6.2
 	github.com/pkg/profile v1.7.0
 	github.com/rs/xid v1.3.0
