@@ -105,7 +105,7 @@ def check_mount(mountPoint, mountTimeout):
         except FileNotFoundError as e:
             print("file not found: %s" % e, file=sys.stderr)
             retry += 1
-        except OSError:
+        except OSError as e:
             print("os error: %s" % e, file=sys.stderr)
             retry += 1
 
