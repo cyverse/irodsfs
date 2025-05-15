@@ -98,7 +98,7 @@ def check_mount(mountPoint, mountTimeout):
                             mountPath = fields[1].strip()
                             mountType = fields[2].strip()
 
-                            if os.path.samefile(mountPath, mountPoint) and mountType.lower() == "fuse.irodsfs":
+                            if mountPath == mountPoint and mountType.lower() == "fuse.irodsfs":
                                 return True
 
             retry += 1
@@ -144,6 +144,9 @@ def main(argv):
         print("not enough number of arguments given", file=sys.stderr)
         sys.exit(1)
 
+    mountPoint = reorderedArgv[-1]
+    mountPoint = os.path.abspath(os.path.expanduser(mountPoint))
+
     command = "%s %s" % (irodsBin, " ".join(reorderedArgv[1:]))
     print("executing > %s" % command)
     exitcode = run_command(command.split())
@@ -154,7 +157,6 @@ def main(argv):
         print("failed to mount (irodsfs exited with SIG %d)" % exitcode, file=sys.stderr)
         sys.exit(1)
 
-    mountPoint = reorderedArgv[-1]
     if not check_mount(mountPoint, mountTimeout):
         print("failed to mount", file=sys.stderr)
         sys.exit(1)
