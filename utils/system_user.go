@@ -1,94 +1,87 @@
 package utils
 
 import (
-	"fmt"
 	"os/user"
 	"strconv"
 
 	"golang.org/x/xerrors"
 )
 
-// GetCurrentSystemUser returns username, uid, gid of current user
-func GetCurrentSystemUser() (string, int, int, error) {
-	user, err := user.Current()
-	if err != nil {
-		return "root", 0, 0, xerrors.Errorf("failed to get current system user info: %w", err)
+func parseUGIDString(id string) (int, error) {
+	if len(id) == 0 {
+		return -1, nil
 	}
 
-	uid, err := strconv.ParseInt(user.Uid, 10, 32)
+	parsedID, err := strconv.ParseInt(id, 10, 32)
 	if err != nil {
-		return "root", 0, 0, xerrors.Errorf("failed to parse uid %q: %w", user.Uid, err)
+		return -1, xerrors.Errorf("failed to parse id %q: %w", id, err)
 	}
 
-	gid, err := strconv.ParseInt(user.Gid, 10, 32)
-	if err != nil {
-		return "root", 0, 0, xerrors.Errorf("failed to parse gid %q: %w", user.Gid, err)
-	}
-
-	return user.Username, int(uid), int(gid), nil
+	return int(parsedID), nil
 }
 
 // CorrectSystemUser returns username, uid, gid of given user
 func CorrectSystemUser(username string, uid int, gid int) (string, int, int, error) {
+	correctUsername := "root"
+	correctUid := 0
+	correctGid := 0
+
 	if len(username) > 0 {
 		u, err := user.Lookup(username)
 		if err != nil {
-			return "root", 0, 0, xerrors.Errorf("failed to look up a user %q: %w", username, err)
+			return correctUsername, correctUid, correctGid, xerrors.Errorf("failed to look up a user %q: %w", username, err)
 		}
 
-		newuid, err := strconv.ParseInt(u.Uid, 10, 32)
+		correctUsername = u.Username
+
+		newuid, err := parseUGIDString(u.Uid)
 		if err != nil {
-			return "root", 0, 0, xerrors.Errorf("failed to parse uid %q: %w", u.Uid, err)
+			return correctUsername, correctUid, correctGid, err
 		}
 
-		newgid, err := strconv.ParseInt(u.Gid, 10, 32)
+		correctUid = newuid
+
+		newgid, err := parseUGIDString(u.Gid)
 		if err != nil {
-			return "root", 0, 0, xerrors.Errorf("failed to parse gid %q: %w", u.Gid, err)
+			return correctUsername, correctUid, correctGid, xerrors.Errorf("failed to parse gid %q: %w", u.Gid, err)
 		}
 
-		return username, int(newuid), int(newgid), nil
+		correctGid = newgid
 	}
 
-	// if uid is given, gid may be empty
+	// if uid is given
 	if uid >= 0 {
-		u, err := user.LookupId(fmt.Sprintf("%d", uid))
-		if err != nil {
-			// user not existing --> possible case
-			if gid < 0 {
-				gid = uid
-			}
+		correctUid = uid
+		correctGid = gid
+	}
 
-			return "", uid, gid, nil
+	if gid >= 0 {
+		correctGid = gid
+	}
+
+	if len(username) == 0 && uid < 0 && gid < 0 {
+		// if nothing is given, return current user
+		u, err := user.Current()
+		if err != nil {
+			return correctUsername, correctUid, correctGid, xerrors.Errorf("failed to get current system user info: %w", err)
 		}
 
-		newuid, err := strconv.ParseInt(u.Uid, 10, 32)
+		correctUsername = u.Username
+
+		newuid, err := parseUGIDString(u.Uid)
 		if err != nil {
-			return "root", 0, 0, xerrors.Errorf("failed to parse uid %q: %w", u.Uid, err)
+			return correctUsername, correctUid, correctGid, err
 		}
 
-		newgid, err := strconv.ParseInt(u.Gid, 10, 32)
+		correctUid = newuid
+
+		newgid, err := parseUGIDString(u.Gid)
 		if err != nil {
-			return "root", 0, 0, xerrors.Errorf("failed to parse gid %q: %w", u.Gid, err)
+			return correctUsername, correctUid, correctGid, xerrors.Errorf("failed to parse gid %q: %w", u.Gid, err)
 		}
 
-		return u.Username, int(newuid), int(newgid), nil
+		correctGid = newgid
 	}
 
-	// if nothing is given
-	u, err := user.Current()
-	if err != nil {
-		return "root", 0, 0, xerrors.Errorf("failed to get current system user info: %w", err)
-	}
-
-	newuid, err := strconv.ParseInt(u.Uid, 10, 32)
-	if err != nil {
-		return "root", 0, 0, xerrors.Errorf("failed to parse uid %q: %w", u.Uid, err)
-	}
-
-	newgid, err := strconv.ParseInt(u.Gid, 10, 32)
-	if err != nil {
-		return "root", 0, 0, xerrors.Errorf("failed to parse gid %q: %w", u.Gid, err)
-	}
-
-	return u.Username, int(newuid), int(newgid), nil
+	return correctUsername, correctUid, correctGid, nil
 }
