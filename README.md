@@ -71,6 +71,36 @@ make build
 
 After successful build, you will be able to find the binary in bin directory.
 
+## Command-line Options
+
+```
+Usage:
+  irodsfs [flags] [mount_point]
+
+Flags:
+  -c, --config string          Config file or directory (default: ~/.irods)
+  -u, --username string        iRODS username
+      --client_username string iRODS client username (for proxy auth)
+  -p, --password string        iRODS password
+      --url string             iRODS URL (e.g., irods://user:pass@host:port/zone/path)
+  -f, --foreground             Run in foreground (default: run as daemon)
+  -d, --debug                  Enable debug mode
+      --readonly               Mount read-only
+      --uid int                UID of file/directory owner (default: current user)
+      --gid int                GID of file/directory owner (default: current group)
+      --sys_user string        System user of file/directory owner
+      --read_ahead_max int     Read-ahead buffer size in bytes
+      --read_write_max int     Max read/write size in bytes
+      --no_transaction         Disable iRODS transaction (may improve performance)
+  -o, --fuse_option strings    Additional FUSE mount options
+      --pool_endpoint string   iRODS FUSE Pool Service endpoint
+      --data_root string       Data root directory path
+      --log_path string        Log file path
+      --instance_id string     Instance ID
+  -v, --version                Print version
+  -h, --help                   Print help
+```
+
 ## How to use?
 ### Mount an iRODS Collection using URL
 An iRODS user `iychoi` mounts a collection `/iplant/home/iychoi` in iRODS Server `data.cyverse.org` on a local directory `/mount/irods`.
@@ -85,10 +115,10 @@ An iRODS user `iychoi` mounts a collection `/iplant/home/iychoi` in iRODS Server
 
 Run `irodsfs`.
 ```shell script
-./bin/irodsfs irods://iychoi:my_password@data.cyverse.org:1247/iplant/home/iychoi /mount/irods
+./bin/irodsfs --url irods://iychoi:my_password@data.cyverse.org:1247/iplant/home/iychoi /mount/irods
 ```
 
-After mounting, `irodsfs` will be executed in the background.
+After mounting, `irodsfs` will be executed in the background. Use `-f` to run in foreground instead.
 
 Test access the mount.
 ```shell script
@@ -113,7 +143,7 @@ irods_host: data.cyverse.org
 irods_port: 1247
 irods_user_name: iychoi
 irods_zone_name: iplant
-irods_user_password: `my_password`
+irods_user_password: my_password
 
 path_mappings:
   - irods_path: /iplant/home/iychoi
@@ -143,8 +173,8 @@ An iRODS user `iychoi` mounts a collection `/iplant/home/iychoi` in iRODS Server
 - iRODS Zone: `iplant`
 - iRODS Collection to mount: `/iplant/home/iychoi`
 - Local directory to mount: `/mount/irods`
-- Authentication Scheme: `pam`
-- CA Cert File: `/etc/ssl/certs/ca-certificates.crt`
+- Authentication Scheme: `pam_password`
+- CA Cert File: `/home/iychoi/.irods/ca_cert.pem`
 - Encryption Key Size: `32`
 - Encryption Algorithm: `AES-256-CBC`
 - Encryption Salt Size: `8`
@@ -156,7 +186,7 @@ irods_host: data.cyverse.org
 irods_port: 1247
 irods_user_name: iychoi
 irods_zone_name: iplant
-irods_user_password: `my_password`
+irods_user_password: my_password
 
 irods_authentication_scheme: "pam_password"
 irods_ssl_ca_certificate_file: "/home/iychoi/.irods/ca_cert.pem"
@@ -199,7 +229,7 @@ irods_host: data.cyverse.org
 irods_port: 1247
 irods_user_name: iychoi
 irods_zone_name: iplant
-irods_user_password: `my_password`
+irods_user_password: my_password
 
 path_mappings:
   - irods_path: /iplant/home/iychoi/mount1
@@ -224,7 +254,7 @@ ls /mount/irods
 
 ### Mount User's iRODS Home Collection using iCommands config (~/.irods)
 
-An iRODS user `iychoi` has iCommands config in `~/.irods`. 
+An iRODS user `iychoi` has iCommands config in `~/.irods`.
 
 Run `irodsfs` without any `--config` or `-c` option.
 ```shell script
@@ -238,9 +268,22 @@ Test access the mount.
 ls /mount/irods
 ```
 
+### Using iRODS FUSE Pool Service
+
+iRODS FUSE can connect to an `irodsfs-pool` service to share iRODS connections across multiple mount instances, reducing the number of connections to the iRODS server.
+
+```shell script
+./bin/irodsfs -c config.yaml --pool_endpoint localhost:8021 /mount/irods
+```
+
+Or set it in the config file:
+```yaml
+pool_endpoint: "localhost:8021"
+```
+
 ### Change Log Level
 
-An iRODS can change the log level in two ways: 1) using command-line argument `--log_level` or 2) using `log_level` parameter in a configuration file.
+The log level can be set using `log_level` in the configuration file.
 
 There are 6 log levels configurable (case-insensitive):
 - "PANIC"
@@ -250,30 +293,28 @@ There are 6 log levels configurable (case-insensitive):
 - "DEBUG"
 - "TRACE"
 
-For example, to display only fatal or more severe error logs, run `irodsfs` with `--log_level FATAL` option.
-```shell script
-./bin/irodsfs -c ~/.irods --log_level FATAL /mount/irods
-```
-
-Command-line argument `--log_level` overrides the log level set in a configuration file if any.
-
-To set the log level using a configuration file, add a `log_level` field.
+To set the log level, add a `log_level` field to the config file.
 
 ```yaml
 irods_host: data.cyverse.org
 irods_port: 1247
 irods_user_name: iychoi
 irods_zone_name: iplant
-irods_user_password: `my_password`
+irods_user_password: my_password
 log_level: FATAL
 
 path_mappings:
-  - irods_path: /iplant/home/iychoi/mount1
-    mapping_path: /mount1
+  - irods_path: /iplant/home/iychoi
+    mapping_path: /
     resource_type: dir
-  - irods_path: /iplant/home/iychoi/mount2
-    mapping_path: /mount2
-    resource_type: dir
+```
+
+### Read-only Mount
+
+To mount a collection as read-only, use the `--readonly` flag or set `readonly: true` in the config file.
+
+```shell script
+./bin/irodsfs -c config.yaml --readonly /mount/irods
 ```
 
 ### Unmount
