@@ -4,142 +4,105 @@ import (
 	"sync"
 	"syscall"
 
-	log "github.com/sirupsen/logrus"
-	"golang.org/x/xerrors"
+	"github.com/cockroachdb/errors"
 )
 
-// FileHandleLocalLockManager is a manager that manages FileHandleLocalLocks
+// FileHandleLocalLockManager manages in-memory byte-range locks per file handle
 type FileHandleLocalLockManager struct {
-	lock            sync.RWMutex
-	fileHandleLocks map[string]*FileHandleLocalLock // key is ID
+	mu    sync.Mutex
+	locks map[string]*FileHandleLocalLock // key is ID
 }
 
 // NewFileHandleLocalLockManager creates a new FileHandleLocalLockManager
 func NewFileHandleLocalLockManager() *FileHandleLocalLockManager {
 	return &FileHandleLocalLockManager{
-		lock:            sync.RWMutex{},
-		fileHandleLocks: map[string]*FileHandleLocalLock{},
+		locks: map[string]*FileHandleLocalLock{},
 	}
 }
 
-func (manager *FileHandleLocalLockManager) overlapRange(s1 uint64, e1 uint64, s2 uint64, e2 uint64) bool {
-	if s2 < s1 {
-		// s2-e2-s1-e1
-		if e2 < s1 {
-			return false
-		}
-	} else {
-		// s1-e1-s2-e2
-		if e1 < s2 {
-			return false
-		}
+func overlapsRange(s1, e1, s2, e2 uint64) bool {
+	// [s1,e1] and [s2,e2] overlap unless one ends before the other starts
+	if e2 < s1 || e1 < s2 {
+		return false
 	}
 	return true
 }
 
-func (manager *FileHandleLocalLockManager) combineRange(s1 uint64, e1 uint64, s2 uint64, e2 uint64) (uint64, uint64) {
-	cs := s1
-	if s2 < s1 {
-		cs = s2
-	}
-
-	ce := e1
-	if e2 > e1 {
-		ce = e2
-	}
-	return cs, ce
+func combineRange(s1, e1, s2, e2 uint64) (uint64, uint64) {
+	return min(s1, s2), max(e1, e2)
 }
 
-// Get returns lock
-func (manager *FileHandleLocalLockManager) Get(start uint64, end uint64) *FileHandleLocalLock {
-	manager.lock.RLock()
-	defer manager.lock.RUnlock()
+// Get returns an existing lock overlapping [start, end], or nil
+func (manager *FileHandleLocalLockManager) Get(start, end uint64) *FileHandleLocalLock {
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
 
-	for _, fileHandlelock := range manager.fileHandleLocks {
-		if manager.overlapRange(fileHandlelock.Start, fileHandlelock.End, start, end) {
-			return fileHandlelock
+	for _, l := range manager.locks {
+		if overlapsRange(l.Start, l.End, start, end) {
+			return l
 		}
 	}
 	return nil
 }
 
-// Lock locks, return error if it errors
+// Lock adds a lock. Returns an error if a conflicting lock exists.
 func (manager *FileHandleLocalLockManager) Lock(lock *FileHandleLocalLock) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "irodsfs",
-		"struct":   "FileHandleLocalLockManager",
-		"function": "Lock",
-	})
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
 
-	manager.lock.RLock()
-	defer manager.lock.RUnlock()
+	// First pass: check for conflicts and collect same-PID overlaps to merge
+	var toMerge []string
+	for _, existing := range manager.locks {
+		if !overlapsRange(existing.Start, existing.End, lock.Start, lock.End) {
+			continue
+		}
 
-	for _, fileHandlelock := range manager.fileHandleLocks {
-		if manager.overlapRange(fileHandlelock.Start, fileHandlelock.End, lock.Start, lock.End) {
-			// overlapping
-			if fileHandlelock.Pid != lock.Pid {
-				logger.Debugf("found other process's lock")
-
-				if fileHandlelock.LockType == syscall.F_WRLCK {
-					// we found wlock - always conflict
-					return xerrors.Errorf("found conflict wlock")
-				}
-
-				if lock.LockType == syscall.F_WRLCK {
-					// our lock is wlock - always conflict
-					return xerrors.Errorf("there is a lock")
-				}
-
-				// read lock - add
-				logger.Debugf("found other process's read lock - ok")
-				manager.fileHandleLocks[lock.ID] = lock
-			} else {
-				// same pid
-				// update?
-				logger.Debugf("found my process's lock - update")
-				s, e := manager.combineRange(fileHandlelock.Start, fileHandlelock.End, lock.Start, lock.End)
-				lock.Start = s
-				lock.End = e
-				delete(manager.fileHandleLocks, fileHandlelock.ID)
-				manager.fileHandleLocks[lock.ID] = lock
-				break
+		if existing.Pid != lock.Pid {
+			// different PID: conflict if either side is a write lock
+			if existing.LockType == syscall.F_WRLCK || lock.LockType == syscall.F_WRLCK {
+				return errors.New("lock conflict")
 			}
+			// both read locks: compatible, continue
+		} else {
+			// same PID: will merge range
+			toMerge = append(toMerge, existing.ID)
 		}
 	}
 
-	manager.fileHandleLocks[lock.ID] = lock
+	// Merge same-PID overlapping locks into the new lock's range
+	for _, id := range toMerge {
+		existing := manager.locks[id]
+		lock.Start, lock.End = combineRange(existing.Start, existing.End, lock.Start, lock.End)
+		delete(manager.locks, id)
+	}
+
+	manager.locks[lock.ID] = lock
 	return nil
 }
 
-// Unlock unlocks
+// Unlock removes all locks overlapping [lock.Start, lock.End].
 func (manager *FileHandleLocalLockManager) Unlock(lock *FileHandleLocalLock) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "irodsfs",
-		"struct":   "FileHandleLocalLockManager",
-		"function": "Unlock",
-	})
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
 
-	manager.lock.RLock()
-	defer manager.lock.RUnlock()
-
-	found := false
-
-	for _, fileHandlelock := range manager.fileHandleLocks {
-		if manager.overlapRange(fileHandlelock.Start, fileHandlelock.End, lock.Start, lock.End) {
-			// found - remove
-			logger.Debugf("delete lock - start %d, end %d", fileHandlelock.Start, fileHandlelock.End)
-			delete(manager.fileHandleLocks, fileHandlelock.ID)
-			found = true
+	var toDelete []string
+	for _, existing := range manager.locks {
+		if overlapsRange(existing.Start, existing.End, lock.Start, lock.End) {
+			toDelete = append(toDelete, existing.ID)
 		}
 	}
 
-	if found {
-		return nil
+	if len(toDelete) == 0 {
+		return errors.New("failed to find a lock")
 	}
-	return xerrors.Errorf("failed to find a lock")
+
+	for _, id := range toDelete {
+		delete(manager.locks, id)
+	}
+	return nil
 }
 
-// FileHandleLocalLock is a struct for locally managed file lock
+// FileHandleLocalLock represents a byte-range lock
 type FileHandleLocalLock struct {
 	ID       string
 	LockType uint32 // syscall.F_RDLCK or syscall.F_WRLCK

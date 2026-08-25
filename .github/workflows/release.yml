@@ -1,4 +1,4 @@
-name: Release iRODS FUSE Lite
+name: Release iRODS FUSE
 on:
   release:
     types: [created]

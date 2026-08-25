@@ -1,4 +1,4 @@
-# iRODS FUSE Lite
+# iRODS FUSE
 FUSE implementation of iRODS Client written in Golang
 
 ## What is it?
@@ -7,14 +7,14 @@ Users are able to `mount` an `iRODS Collection` (multiple `Collections` or `Data
 ## Download pre-built binaries
 Pre-built binaries can be found in `Release` in the repository. Checkout tarballs attached as assets in a release.
 
-iRODS FUSE Lite only works on Linux systems. MacOS (osx) is not supported as FUSE library is not open-source anymore. The binaries run on any Linux distros (e.g., Ubuntu 18.x, Ubuntu 20.x, CentOS 7, or CentOS 8) without requiring any dependencies. Use correct release binaries for your OS and architecture.
+iRODS FUSE only works on Linux systems. MacOS (osx) is not supported as FUSE library is not open-source anymore. The binaries run on any Linux distros (e.g., Ubuntu 18.x, Ubuntu 20.x, CentOS 7, or CentOS 8) without requiring any dependencies. Use correct release binaries for your OS and architecture.
 
-Links for iRODS FUSE Lite: [https://github.com/cyverse/irodsfs/releases](https://github.com/cyverse/irodsfs/releases)
+Links for iRODS FUSE: [https://github.com/cyverse/irodsfs/releases](https://github.com/cyverse/irodsfs/releases)
 
 ## Build from source
 
 ### Prerequisite - libFUSE
-iRODS FUSE Lite requires `libFUSE` library to provide file system mount in linux. `libFUSE` can be installed using linux package managers, such as `yum` or `apt`.
+iRODS FUSE requires `libFUSE` library to provide file system mount in linux. `libFUSE` can be installed using linux package managers, such as `yum` or `apt`.
 
 In Ubuntu,
 ```shell script
@@ -35,7 +35,7 @@ docker run -ti --privileged <docker_image_name> /bin/bash
 ```  
 
 ### Prerequisite - Go
-iRODS FUSE Lite is written in `Go`. So `Go` is required to build iRODS FUSE Lite. Note that once iRODS FUSE Lite is built, it does not require `Go` for running.
+iRODS FUSE is written in `Go`. So `Go` is required to build iRODS FUSE. Note that once iRODS FUSE is built, it does not require `Go` for running.
 To install `Go`, please refer [official installation guide](https://golang.org/doc/install).
 
 ### Prerequisite - Build essentials
@@ -278,7 +278,7 @@ path_mappings:
 
 ### Unmount
 
-It is recommended to use `fusermount` command to unmount iRODS FUSE Lite as it does not require admin permission.
+It is recommended to use `fusermount` command to unmount iRODS FUSE as it does not require admin permission.
 
 ```shell script
 fusermount -u /mount/irods
@@ -291,7 +291,7 @@ Otherwise, you can also try `lazy-unmount`, which will mark to unmount after the
 fusermount -u -z /mount/irods
 ```
 
-It is also possible to use `umount` command to unmount iRODS FUSE Lite. But in this case, you will need admin permission (or `sudo`).
+It is also possible to use `umount` command to unmount iRODS FUSE. But in this case, you will need admin permission (or `sudo`).
 
 ```shell script
 sudo umount /mount/irods

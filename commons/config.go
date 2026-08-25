@@ -3,22 +3,20 @@ package commons
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
-	"strings"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_config "github.com/cyverse/go-irodsclient/config"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
 	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
-	"golang.org/x/xerrors"
-
-	"github.com/cyverse/irodsfs/utils"
 	"github.com/rs/xid"
-	yaml "gopkg.in/yaml.v2"
+	"github.com/stretchr/testify/assert/yaml"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // GetDefaultInstanceID returns default instance id
@@ -30,14 +28,14 @@ func GetDefaultInstanceID() string {
 func GetDefaultDataRootDirPath() string {
 	dirPath, err := os.Getwd()
 	if err != nil {
-		return "/var/lib/irodsfs"
+		return DataRootPathFallback
 	}
 	return dirPath
 }
 
 // GetDefaultIRODSConfigPath returns default config path
 func GetDefaultIRODSConfigPath() string {
-	irodsConfigPath, err := ExpandHomeDir("~/.irods")
+	irodsConfigPath, err := irodsclient_util.ExpandLocalHomeDir("~/.irods")
 	if err != nil {
 		return ""
 	}
@@ -47,80 +45,65 @@ func GetDefaultIRODSConfigPath() string {
 
 // Config holds the parameters list which can be configured
 type Config struct {
-	irodsclient_config.Config
+	irodsclient_config.Config // irods config
 
-	PathMappings      []irodsfs_common_vpath.VPathMapping `json:"path_mappings,omitempty" yaml:"path_mappings,omitempty"`
-	ReadAheadMax      int                                 `json:"read_ahead_max,omitempty" yaml:"read_ahead_max,omitempty"`
-	ReadWriteMax      int                                 `json:"read_write_max,omitempty" yaml:"read_write_max,omitempty"`
-	NoPermissionCheck bool                                `json:"no_permission_check,omitempty" yaml:"no_permission_check,omitempty"`
-	NoSetXattr        bool                                `json:"no_set_xattr,omitempty" yaml:"no_set_xattr,omitempty"`
-	UID               int                                 `json:"uid,omitempty" yaml:"uid,omitempty"`
-	GID               int                                 `json:"gid,omitempty" yaml:"gid,omitempty"`
-	SystemUser        string                              `json:"system_user,omitempty" yaml:"system_user,omitempty"`
-	MountPath         string                              `json:"mount_path,omitempty" yaml:"mount_path,omitempty"`
+	MountPath    string `json:"mount_path,omitempty" yaml:"mount_path,omitempty"`
+	DataRootPath string `json:"data_root_path,omitempty" yaml:"data_root_path,omitempty"`
+
+	PathMappings []irodsfs_common_vpath.VPathMapping `json:"path_mappings,omitempty" yaml:"path_mappings,omitempty"`
+	ReadAheadMax int                                 `json:"read_ahead_max,omitempty" yaml:"read_ahead_max,omitempty"`
+	ReadWriteMax int                                 `json:"read_write_max,omitempty" yaml:"read_write_max,omitempty"`
+	Readonly     bool                                `json:"readonly,omitempty" yaml:"readonly,omitempty"`
+	FuseOptions  []string                            `json:"fuse_options,omitempty" yaml:"fuse_options,omitempty"`
+
+	UID        int    `json:"uid,omitempty" yaml:"uid,omitempty"`
+	GID        int    `json:"gid,omitempty" yaml:"gid,omitempty"`
+	SystemUser string `json:"system_user,omitempty" yaml:"system_user,omitempty"`
 
 	MetadataConnection irodsclient_fs.ConnectionConfig `json:"metadata_connection,omitempty" yaml:"metadata_connection,omitempty"`
 	IOConnection       irodsclient_fs.ConnectionConfig `json:"io_connection,omitempty" yaml:"io_connection,omitempty"`
 	Cache              irodsclient_fs.CacheConfig      `json:"cache,omitempty" yaml:"cache,omitempty"`
 
-	DataRootPath string `json:"data_root_path,omitempty" yaml:"data_root_path,omitempty"`
-	LogPath      string `json:"log_path,omitempty" yaml:"log_path,omitempty"`
-
 	PoolEndpoint string `json:"pool_endpoint,omitempty" yaml:"pool_endpoint,omitempty"`
 
-	Profile            bool `json:"profile,omitempty" yaml:"profile,omitempty"`
-	ProfileServicePort int  `json:"profile_service_port,omitempty" yaml:"profile_service_port,omitempty"`
+	Foreground bool `json:"foreground,omitempty" yaml:"foreground,omitempty"`
+	Debug      bool `json:"debug,omitempty" yaml:"debug,omitempty"`
 
-	Foreground      bool   `json:"foreground,omitempty" yaml:"foreground,omitempty"`
-	LogLevel        string `json:"log_level,omitempty" yaml:"log_level,omitempty"`
-	Debug           bool   `json:"debug,omitempty" yaml:"debug,omitempty"`
-	AllowOther      bool   `json:"allow_other,omitempty" yaml:"allow_other,omitempty"`
-	Readonly        bool   `json:"readonly,omitempty" yaml:"readonly,omitempty"`
-	ChildProcess    bool   `json:"childprocess,omitempty" yaml:"childprocess,omitempty"`
-	WatchdogProcess bool   `json:"watchdogprocess,omitempty" yaml:"watchdogprocess,omitempty"`
-	WatchPID        int    `json:"watchpid,omitempty" yaml:"watchpid,omitempty"`
-
-	InstanceID  string   `json:"instanceid,omitempty" yaml:"instanceid,omitempty"`
-	FuseOptions []string `json:"fuse_options,omitempty" yaml:"fuse_options,omitempty"`
+	InstanceID  string `json:"instanceid,omitempty" yaml:"instanceid,omitempty"`
+	LogPath     string `json:"log_path,omitempty" yaml:"log_path,omitempty"`
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 }
 
 // NewDefaultConfig returns a default config
 func NewDefaultConfig() *Config {
 	return &Config{
-		Config:            *irodsclient_config.GetDefaultConfig(),
-		PathMappings:      []irodsfs_common_vpath.VPathMapping{},
-		ReadAheadMax:      ReadAheadMaxDefault,
-		ReadWriteMax:      ReadWriteMaxDefault,
-		NoPermissionCheck: false,
-		NoSetXattr:        false,
-		UID:               -1,
-		GID:               -1,
-		SystemUser:        "",
-		MountPath:         "", // leave it empty
+		Config: *irodsclient_config.GetDefaultConfig(),
+
+		MountPath:    "", // leave it empty
+		DataRootPath: GetDefaultDataRootDirPath(),
+
+		PathMappings: []irodsfs_common_vpath.VPathMapping{},
+		ReadAheadMax: ReadAheadMaxDefault,
+		ReadWriteMax: ReadWriteMaxDefault,
+		Readonly:     false,
+		FuseOptions:  []string{},
+
+		UID:        -1,
+		GID:        -1,
+		SystemUser: "",
 
 		MetadataConnection: irodsclient_fs.NewDefaultMetadataConnectionConfig(),
 		IOConnection:       irodsclient_fs.NewDefaultIOConnectionConfig(),
 		Cache:              irodsclient_fs.NewDefaultCacheConfig(),
 
-		DataRootPath: GetDefaultDataRootDirPath(),
-		LogPath:      "", // use default
-
 		PoolEndpoint: "",
 
-		Profile:            false,
-		ProfileServicePort: ProfileServicePortDefault,
-
-		Foreground:      false,
-		LogLevel:        "",
-		Debug:           false,
-		AllowOther:      false,
-		Readonly:        false,
-		ChildProcess:    false,
-		WatchdogProcess: false,
-		WatchPID:        0,
+		Foreground: false,
+		Debug:      false,
 
 		InstanceID:  GetDefaultInstanceID(),
-		FuseOptions: []string{},
+		LogPath:     "", // use default
+		Description: "",
 	}
 }
 
@@ -132,19 +115,27 @@ func NewConfigFromFile(config *Config, filePath string) (*Config, error) {
 			return nil, err
 		}
 
-		return nil, xerrors.Errorf("failed to stat file %q: %w", filePath, err)
+		return nil, errors.Wrapf(err, "failed to stat file %q", filePath)
 	}
 
 	if st.IsDir() {
 		return NewConfigFromICommandsEnvDir(config, filePath)
 	}
 
-	ext := filepath.Ext(filePath)
-	if ext == ".yaml" || ext == ".yml" {
-		return NewConfigFromYAMLFile(config, filePath)
+	dataBytes, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to read file %q", filePath)
 	}
 
-	return NewConfigFromJSONFile(config, filePath)
+	format := DetectFormat(dataBytes)
+	switch format {
+	case FormatJSON:
+		return NewConfigFromJSONFile(config, filePath)
+	case FormatYAML:
+		return NewConfigFromYAMLFile(config, filePath)
+	default:
+		return nil, errors.Newf("unknown file format")
+	}
 }
 
 // NewConfigFromYAMLFile creates Config from YAML
@@ -156,12 +147,12 @@ func NewConfigFromYAMLFile(config *Config, yamlPath string) (*Config, error) {
 
 	yamlBytes, err := os.ReadFile(yamlPath)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to read YAML file %q: %w", yamlPath, err)
+		return nil, errors.Wrapf(err, "failed to read YAML file %q", yamlPath)
 	}
 
 	err = yaml.Unmarshal(yamlBytes, &cfg)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to unmarshal YAML file %q to config: %w", yamlPath, err)
+		return nil, errors.Wrapf(err, "failed to unmarshal YAML file %q to config", yamlPath)
 	}
 
 	// load icommands environment
@@ -195,12 +186,12 @@ func NewConfigFromJSONFile(config *Config, jsonPath string) (*Config, error) {
 
 	jsonBytes, err := os.ReadFile(jsonPath)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to read YAML file %q: %w", jsonPath, err)
+		return nil, errors.Wrapf(err, "failed to read JSON file %q", jsonPath)
 	}
 
 	err = json.Unmarshal(jsonBytes, &cfg)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to unmarshal JSON file %q to config: %w", jsonPath, err)
+		return nil, errors.Wrapf(err, "failed to unmarshal JSON file %q to config", jsonPath)
 	}
 
 	// load icommands environment
@@ -254,6 +245,18 @@ func NewConfigFromICommandsEnvDir(config *Config, dirPath string) (*Config, erro
 	return &cfg, nil
 }
 
+func NewConfigFromStdin(config *Config, bytes []byte) (*Config, error) {
+	format := DetectFormat(bytes)
+	switch format {
+	case FormatJSON:
+		return NewConfigFromJSON(config, bytes)
+	case FormatYAML:
+		return NewConfigFromYAML(config, bytes)
+	default:
+		return nil, errors.Newf("unknown data format")
+	}
+}
+
 // NewConfigFromYAML creates Config from YAML
 func NewConfigFromYAML(config *Config, yamlBytes []byte) (*Config, error) {
 	cfg := Config{}
@@ -263,12 +266,47 @@ func NewConfigFromYAML(config *Config, yamlBytes []byte) (*Config, error) {
 
 	err := yaml.Unmarshal(yamlBytes, &cfg)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to unmarshal YAML to config: %w", err)
+		return nil, errors.Wrapf(err, "failed to unmarshal YAML to config")
 	}
 
 	// load icommands environment
 	if len(cfg.AuthenticationFile) > 0 {
-		if irodsclient_util.ExistFile(cfg.AuthenticationFile) {
+		if irodsclient_util.ExistLocalFile(cfg.AuthenticationFile) {
+			obfuscator := irodsclient_config.NewPasswordObfuscator()
+			passwordBytes, err := obfuscator.DecodeFile(cfg.AuthenticationFile)
+			if err != nil {
+				// continue
+			} else {
+				authScheme := irodsclient_types.GetAuthScheme(cfg.AuthenticationScheme)
+				if authScheme.IsPAM() {
+					cfg.Password = ""
+					cfg.PAMToken = string(passwordBytes)
+				} else {
+					cfg.Password = string(passwordBytes)
+					cfg.PAMToken = ""
+				}
+			}
+		}
+	}
+
+	return &cfg, nil
+}
+
+// NewConfigFromJSON creates Config from JSON
+func NewConfigFromJSON(config *Config, jsonBytes []byte) (*Config, error) {
+	cfg := Config{}
+	if config != nil {
+		cfg = *config
+	}
+
+	err := json.Unmarshal(jsonBytes, &cfg)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to unmarshal YAML to config")
+	}
+
+	// load icommands environment
+	if len(cfg.AuthenticationFile) > 0 {
+		if irodsclient_util.ExistLocalFile(cfg.AuthenticationFile) {
 			obfuscator := irodsclient_config.NewPasswordObfuscator()
 			passwordBytes, err := obfuscator.DecodeFile(cfg.AuthenticationFile)
 			if err != nil {
@@ -291,7 +329,7 @@ func NewConfigFromYAML(config *Config, yamlBytes []byte) (*Config, error) {
 
 // FixSystemUserConfiguration fixes system user configuration
 func (config *Config) FixSystemUserConfiguration() error {
-	systemUser, uid, gid, err := utils.CorrectSystemUser(config.SystemUser, config.UID, config.GID)
+	systemUser, uid, gid, err := CorrectSystemUser(config.SystemUser, config.UID, config.GID)
 	if err != nil {
 		return err
 	}
@@ -341,6 +379,13 @@ func (config *Config) FixPathMappings() {
 			}
 		}
 	}
+
+	// fix readonly
+	if config.Readonly {
+		for idx := range config.PathMappings {
+			config.PathMappings[idx].ReadOnly = true
+		}
+	}
 }
 
 // GetLogFilePath returns log file path
@@ -350,24 +395,28 @@ func (config *Config) GetLogFilePath() string {
 	}
 
 	// default
-	logFilename := fmt.Sprintf("%s.log", config.InstanceID)
+	logFilename := fmt.Sprintf("irodsfs-%s.log", config.InstanceID)
 	return path.Join(config.DataRootPath, logFilename)
 }
 
-func (config *Config) GetInstanceDataRootDirPath() string {
-	return path.Join(config.DataRootPath, config.InstanceID)
+func (config *Config) GetDataRootPath() string {
+	return config.DataRootPath
 }
 
 // MakeLogDir makes a log dir required
 func (config *Config) MakeLogDir() error {
 	logFilePath := config.GetLogFilePath()
 	if logFilePath == "-" {
-		// skip
 		return nil
 	}
 
-	logDirPath := filepath.Dir(logFilePath)
-	err := config.makeDir(logDirPath)
+	return config.makeDir(filepath.Dir(logFilePath))
+}
+
+// MakeWorkDirs makes dirs required
+func (config *Config) MakeWorkDirs() error {
+	dataRootPath := config.GetDataRootPath()
+	err := config.makeDir(dataRootPath)
 	if err != nil {
 		return err
 	}
@@ -378,7 +427,7 @@ func (config *Config) MakeLogDir() error {
 // makeDir makes a dir for use
 func (config *Config) makeDir(path string) error {
 	if len(path) == 0 {
-		return xerrors.Errorf("failed to create a dir with empty path")
+		return errors.New("failed to create a dir with empty path")
 	}
 
 	dirInfo, err := os.Stat(path)
@@ -387,22 +436,22 @@ func (config *Config) makeDir(path string) error {
 			// make
 			mkdirErr := os.MkdirAll(path, 0775)
 			if mkdirErr != nil {
-				return xerrors.Errorf("making a dir %q error: %w", path, mkdirErr)
+				return errors.Wrapf(mkdirErr, "making a dir %q error", path)
 			}
 
 			return nil
 		}
 
-		return xerrors.Errorf("stating a dir %q error: %w", path, err)
+		return errors.Wrapf(err, "stating a dir %q error", path)
 	}
 
 	if !dirInfo.IsDir() {
-		return xerrors.Errorf("a file %q exist, not a directory", path)
+		return errors.Newf("a file %q exist, not a directory", path)
 	}
 
 	dirPerm := dirInfo.Mode().Perm()
 	if dirPerm&0200 != 0200 {
-		return xerrors.Errorf("a dir %q exist, but does not have the write permission", path)
+		return errors.Newf("a dir %q exist, but does not have the write permission", path)
 	}
 
 	return nil
@@ -410,79 +459,60 @@ func (config *Config) makeDir(path string) error {
 
 // Validate validates configuration
 func (config *Config) Validate() error {
-	if len(config.Host) == 0 {
-		return xerrors.Errorf("hostname must be given")
-	}
-
-	if config.Port <= 0 {
-		return xerrors.Errorf("port must be given")
-	}
-
-	if config.Profile && config.ProfileServicePort <= 0 {
-		return xerrors.Errorf("profile service port must be given")
-	}
-
-	if len(config.Username) == 0 && len(config.ClientUsername) == 0 {
-		return xerrors.Errorf("username or client username must be given")
-	}
-
-	if len(config.ZoneName) == 0 && len(config.ClientZoneName) == 0 {
-		return xerrors.Errorf("zone name or client zone name must be given")
-	}
-
-	if len(config.PathMappings) == 0 {
-		return xerrors.Errorf("path mappings must be given")
-	}
-
-	err := irodsfs_common_vpath.ValidateVPathMappings(config.PathMappings)
+	err := config.Config.ToIRODSAccount().Validate()
 	if err != nil {
-		return xerrors.Errorf("invalid path mappings: %w", err)
-	}
-
-	if config.UID < 0 {
-		return xerrors.Errorf("invalid UID: %w", err)
-	}
-
-	if config.GID < 0 {
-		return xerrors.Errorf("invalid GID: %w", err)
+		return err
 	}
 
 	if len(config.MountPath) == 0 {
-		return xerrors.Errorf("mount path must be given")
+		return errors.New("mount path must be given")
 	}
 
 	mountDirInfo, err := os.Stat(config.MountPath)
 	if err != nil {
-		return xerrors.Errorf("mountpoint %q error: %w", config.MountPath, err)
+		return errors.Wrapf(err, "mountpoint %q error", config.MountPath)
 	}
 
 	if !mountDirInfo.IsDir() {
-		return xerrors.Errorf("mountpoint %q must be a directory", config.MountPath)
+		return errors.Newf("mountpoint %q must be a directory", config.MountPath)
 	}
 
 	mountDirPerm := mountDirInfo.Mode().Perm()
 	if mountDirPerm&0200 != 0200 {
-		return xerrors.Errorf("mountpoint %q must have write permission", config.MountPath)
+		return errors.Newf("mountpoint %q must have write permission", config.MountPath)
 	}
 
 	if len(config.DataRootPath) == 0 {
-		return xerrors.Errorf("data root dir must be given")
+		return errors.New("data root dir must be given")
+	}
+
+	err = irodsfs_common_vpath.ValidateVPathMappings(config.PathMappings)
+	if err != nil {
+		return errors.Wrapf(err, "invalid path mappings")
 	}
 
 	if config.ReadAheadMax < 0 {
-		return xerrors.Errorf("read-ahead max must be equal or greater than 0")
+		return errors.New("read-ahead max must be equal or greater than 0")
 	}
 
 	if config.ReadWriteMax < 0 {
-		return xerrors.Errorf("read write max must be equal or greater than 0")
+		return errors.New("read write max must be equal or greater than 0")
+	}
+
+	if config.UID < 0 {
+		return errors.Newf("invalid UID %d", config.UID)
+	}
+
+	if config.GID < 0 {
+		return errors.Newf("invalid GID %d", config.GID)
 	}
 
 	if config.MetadataConnection.MaxNumber < 1 {
-		return xerrors.Errorf("metadata connection max must be equal or greater than 1")
+		return errors.New("metadata connection max must be equal or greater than 1")
 	}
 
 	if config.IOConnection.MaxNumber < 1 {
-		return xerrors.Errorf("io connection max must be equal or greater than 1")
+		return errors.New("io connection max must be equal or greater than 1")
 	}
 
 	if len(config.PoolEndpoint) > 0 {
@@ -498,35 +528,35 @@ func (config *Config) Validate() error {
 // FromIRODSUrl reads info from inputURL and updates config
 func (config *Config) FromIRODSUrl(inputURL string) error {
 	// the inputURL contains irods://HOST:PORT/ZONE/inputPath...
-	access, err := ParseIRODSUrl(inputURL)
+	u, err := ParseIRODSUrl(inputURL)
 	if err != nil {
 		return err
 	}
 
-	if len(access.Host) > 0 {
-		config.Host = access.Host
+	if len(u.Host) > 0 {
+		config.Host = u.Host
 	}
 
-	if access.Port > 0 {
-		config.Port = access.Port
+	if u.Port > 0 {
+		config.Port = u.Port
 	}
 
-	if len(access.User) > 0 {
-		config.Username = access.User
+	if len(u.User) > 0 {
+		config.Username = u.User
 	}
 
-	if len(access.Password) > 0 {
-		config.Password = access.Password
+	if len(u.Password) > 0 {
+		config.Password = u.Password
 	}
 
-	if len(access.Zone) > 0 {
-		config.ZoneName = access.Zone
+	if len(u.Zone) > 0 {
+		config.ZoneName = u.Zone
 	}
 
-	if len(access.Path) > 0 {
+	if len(u.Path) > 0 {
 		config.PathMappings = []irodsfs_common_vpath.VPathMapping{
 			{
-				IRODSPath:           access.Path,
+				IRODSPath:           u.Path,
 				MappingPath:         "/",
 				ResourceType:        irodsfs_common_vpath.VPathMappingDirectory,
 				ReadOnly:            false,
@@ -539,56 +569,75 @@ func (config *Config) FromIRODSUrl(inputURL string) error {
 	return nil
 }
 
-func parseRawURL(rawurl string) (string, string, string, error) {
-	if len(strings.TrimSpace(rawurl)) == 0 {
-		return "", "", "", xerrors.Errorf("empty raw url")
-	}
-
-	u, err := url.ParseRequestURI(rawurl)
-	if err != nil || (u.Host == "" && u.Path == "") {
-		// try adding //
-		u, repErr := url.ParseRequestURI("tcp://" + rawurl)
-		if repErr != nil {
-			return "", "", "", xerrors.Errorf("could not parse raw url: %s, error: %w", rawurl, err)
-		}
-
-		return "tcp", u.Host, "", nil
-	}
-
-	if u != nil {
-		scheme := strings.ToLower(u.Scheme)
-		if scheme == "unix" {
-			return "unix", "", u.Path, nil
-		} else if scheme == "tcp" {
-			return "tcp", u.Host, "", nil
-		}
-
-		return u.Scheme, u.Host, u.Path, nil
-	}
-
-	return "", "", "", xerrors.Errorf("could not parse raw url: %s", rawurl)
+// MultiWriteCloser writes to multiple writers and closes the ones that implement io.Closer.
+type MultiWriteCloser struct {
+	writers []io.Writer
 }
 
-// ParsePoolServiceEndpoint parses endpoint string
-func ParsePoolServiceEndpoint(endpoint string) (string, string, error) {
-	scheme, host, p, err := parseRawURL(endpoint)
-	if err != nil {
-		return "", "", err
+func NewMultiWriteCloser(writers ...io.Writer) *MultiWriteCloser {
+	return &MultiWriteCloser{writers: writers}
+}
+
+func (mw *MultiWriteCloser) Write(p []byte) (n int, err error) {
+	for _, w := range mw.writers {
+		n, err = w.Write(p)
+		if err != nil {
+			return n, err
+		}
+	}
+	return len(p), nil
+}
+
+func (mw *MultiWriteCloser) Close() error {
+	var firstErr error
+	for _, w := range mw.writers {
+		if closer, ok := w.(io.Closer); ok {
+			if err := closer.Close(); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
+func (config *Config) GetLogWriter(foregroundProcess bool) (io.WriteCloser, error) {
+	logFilePath := config.GetLogFilePath()
+	if logFilePath == "-" || len(logFilePath) == 0 {
+		return os.Stderr, nil
 	}
 
-	scheme = strings.ToLower(scheme)
-	switch scheme {
-	case "tcp":
-		return "tcp", host, nil
-	case "unix":
-		p = path.Join("/", strings.TrimPrefix(p, "/"))
-		return "unix", p, nil
-	case "":
-		if len(host) > 0 {
-			return "tcp", host, nil
-		}
-		return "", "", xerrors.Errorf("unknown host: %q", host)
-	default:
-		return "", "", xerrors.Errorf("unsupported protocol: %q", scheme)
+	err := config.MakeLogDir()
+	if err != nil {
+		return nil, err
+	}
+
+	if foregroundProcess {
+		fileWriter := getLogWriterForForegroundProcess(logFilePath)
+		return NewMultiWriteCloser(os.Stderr, fileWriter), nil
+	}
+
+	daemonWriter := getLogWriterForDaemonProcess(logFilePath)
+	return daemonWriter, nil
+}
+
+func getLogWriterForForegroundProcess(logPath string) io.WriteCloser {
+	logFilePath := fmt.Sprintf("%s.fg", logPath)
+	return &lumberjack.Logger{
+		Filename:   logFilePath,
+		MaxSize:    50, // 50MB
+		MaxBackups: 5,
+		MaxAge:     30, // 30 days
+		Compress:   false,
+	}
+}
+
+func getLogWriterForDaemonProcess(logPath string) io.WriteCloser {
+	logFilePath := fmt.Sprintf("%s", logPath)
+	return &lumberjack.Logger{
+		Filename:   logFilePath,
+		MaxSize:    50, // 50MB
+		MaxBackups: 1000,
+		MaxAge:     365, // 365 days
+		Compress:   false,
 	}
 }
