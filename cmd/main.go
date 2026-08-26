@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"sync"
+	"syscall"
 
 	"github.com/cockroachdb/errors"
 	godaemonizer "github.com/cyverse/go-daemonizer"
@@ -104,22 +104,11 @@ func processCommand(command *cobra.Command, args []string) error {
 			os.Exit(1)
 		}
 
-		err, shutdownFn := run(&config)
+		err = runManaged(&config, ready)
 		if err != nil {
 			runErr := errors.Errorf("failed to run iRODS FUSE: %w", err)
 			logger.Error(runErr)
-
-			ready(runErr)
-			os.Exit(1)
-		} else {
-			ready(nil)
-		}
-
-		// wait
-		waitForCtrlC()
-
-		if shutdownFn != nil {
-			shutdownFn()
+			return runErr
 		}
 	} else {
 		// run foreground
@@ -136,17 +125,11 @@ func processCommand(command *cobra.Command, args []string) error {
 			log.SetOutput(logWriter)
 		}
 
-		err, shutdownFn := run(config)
+		err = runManaged(config, nil)
 		if err != nil {
 			runErr := errors.Wrapf(err, "failed to run iRODS FUSE")
 			logger.Error(runErr)
-		}
-
-		// wait
-		waitForCtrlC()
-
-		if shutdownFn != nil {
-			shutdownFn()
+			return runErr
 		}
 	}
 
@@ -167,16 +150,46 @@ func main() {
 
 	logger := log.WithFields(log.Fields{})
 
+	// go-daemonizer relaunches os.Args[0]. Use an absolute path so daemon
+	// startup does not depend on the configured working directory.
+	executable, err := os.Executable()
+	if err != nil {
+		logger.WithError(err).Fatal("failed to resolve executable path")
+	}
+	os.Args[0] = executable
+
 	// must be called before cobra parses os.Args so --__daemon__ is stripped
 	daemon = godaemonizer.New()
 
 	// attach common flags
 	cmd_commons.SetCommonFlags(rootCmd)
 
-	err := Execute()
+	err = Execute()
 	if err != nil {
 		logger.Fatal(err)
 		os.Exit(1)
+	}
+}
+
+func runManaged(config *commons.Config, ready func(error)) error {
+	runErr, shutdownFn := run(config)
+	if runErr != nil {
+		reportReady(ready, runErr)
+		return runErr
+	}
+
+	reportReady(ready, nil)
+	waitForShutdown()
+
+	if shutdownFn != nil {
+		shutdownFn()
+	}
+	return nil
+}
+
+func reportReady(ready func(error), err error) {
+	if ready != nil {
+		ready(err)
 	}
 }
 
@@ -191,22 +204,18 @@ func run(config *commons.Config) (error, func()) {
 	versionInfo := commons.GetVersion()
 	logger.Infof("iRODS FUSE version - %q, commit - %q", versionInfo.ClientVersion, versionInfo.GitCommit)
 
-	// make work dirs required
-	err := config.MakeWorkDirs()
-	if err != nil {
+	if err := config.MakeWorkDirs(); err != nil {
 		mkdirErr := errors.Wrapf(err, "make work dir error")
 		logger.Error(mkdirErr)
 		return err, nil
 	}
 
-	err = config.Validate()
-	if err != nil {
+	if err := config.Validate(); err != nil {
 		configErr := errors.Wrapf(err, "invalid configuration")
 		logger.Error(configErr)
 		return err, nil
 	}
 
-	// run the filesystem
 	fs, err := irodsfs.NewFileSystem(config)
 	if err != nil {
 		fsErr := errors.Wrapf(err, "failed to create the filesystem")
@@ -216,8 +225,7 @@ func run(config *commons.Config) (error, func()) {
 
 	// iRODS connection must be established correctly by here
 	// any network errors from here will be recoverable
-	err = fs.Mount()
-	if err != nil {
+	if err := fs.Mount(); err != nil {
 		fsErr := errors.Wrapf(err, "failed to start the filesystem")
 		logger.Error(fsErr)
 		fs.Release()
@@ -227,25 +235,15 @@ func run(config *commons.Config) (error, func()) {
 	shutdown := func() {
 		fs.Unmount()
 		fs.Release()
-
-		os.Exit(0)
 	}
 
 	return nil, shutdown
 }
 
-func waitForCtrlC() {
-	var endWaiter sync.WaitGroup
-
-	endWaiter.Add(1)
+func waitForShutdown() {
 	signalChannel := make(chan os.Signal, 1)
 
-	signal.Notify(signalChannel, os.Interrupt)
-
-	go func() {
-		<-signalChannel
-		endWaiter.Done()
-	}()
-
-	endWaiter.Wait()
+	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(signalChannel)
+	<-signalChannel
 }
