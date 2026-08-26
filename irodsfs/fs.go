@@ -193,12 +193,23 @@ func (fs *IRODSFS) Unmount() {
 
 	err := fs.fuseServer.Unmount()
 	if err != nil {
-		// may return error
-		fs.logger.Info(err)
-		fs.logger.Info("Scheduled stopping FUSE")
-	} else {
-		fs.logger.Info("Stopped FUSE")
+		fs.logger.WithError(err).Warn("failed to unmount FUSE gracefully; attempting lazy unmount")
+
+		// A graceful unmount can fail with EBUSY while another process has
+		// its working directory or an open file inside the mount. Detach the
+		// mount before this process exits so it does not leave a stale FUSE
+		// mount behind.
+		fallbackErr := commons.UnmountFuse(fs.config.MountPath)
+		if fallbackErr != nil {
+			fs.logger.WithError(fallbackErr).Error("failed to detach FUSE mount")
+			return
+		}
+
+		fs.logger.Info("Detached FUSE mount lazily")
+		return
 	}
+
+	fs.logger.Info("Stopped FUSE")
 }
 
 // GetRoot returns root directory node
