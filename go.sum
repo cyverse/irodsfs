@@ -35,8 +35,8 @@ github.com/cyverse/go-irodsclient v0.21.1-0.20260821223304-02295efb0360 h1:WKf3A
 github.com/cyverse/go-irodsclient v0.21.1-0.20260821223304-02295efb0360/go.mod h1:HaK+ZsfAi0gvCnqroPxSfJnxK41PeGDD2FKNG1pZiN0=
 github.com/cyverse/irodsfs-common v0.0.0-20260826035728-48a77d11e05b h1:9TIVNejErEbxYH5S406/32k0NbEKQ5bCNtAYwtP1MRE=
 github.com/cyverse/irodsfs-common v0.0.0-20260826035728-48a77d11e05b/go.mod h1:CwZ+s57eZgVkoLPi+tSJLy5myrT9kdpA/j+cnI7qdeM=
-github.com/cyverse/irodsfs-pool v0.11.8-0.20260826205545-6daf972df074 h1:U5WVIQU2ZD+DAmNDSRMjdoIDbsuANEPt3dc0FkyIu5A=
-github.com/cyverse/irodsfs-pool v0.11.8-0.20260826205545-6daf972df074/go.mod h1:iZh5G5/W4JesmvN0jTKKfBd3f13HcuJE+2tEwJ0Z5uU=
+github.com/cyverse/irodsfs-pool v0.11.8-0.20260826215636-aaafaff8e23d h1:/D+bu1BCpMAfk4uBAFH/qAef6qFBoZMb/pWojQNh8Gk=
+github.com/cyverse/irodsfs-pool v0.11.8-0.20260826215636-aaafaff8e23d/go.mod h1:iZh5G5/W4JesmvN0jTKKfBd3f13HcuJE+2tEwJ0Z5uU=
 github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964 h1:y5HC9v93H5EPKqaS1UYVg1uYah5Xf51mBfIoWehClUQ=
 github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964/go.mod h1:Xd9hchkHSWYkEqJwUGisez3G1QY8Ryz0sdWrLPMGjLk=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
