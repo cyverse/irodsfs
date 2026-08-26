@@ -207,7 +207,6 @@ func (fs *IRODSFS) IRODSRmdir(ctx context.Context, path string) syscall.Errno {
 		fs.logger.Error(err)
 		return syscall.EREMOTEIO
 	}
-
 	return fusefs.OK
 }
 
@@ -240,7 +239,6 @@ func (fs *IRODSFS) IRODSUnlink(ctx context.Context, path string) syscall.Errno {
 		fs.logger.Error(err)
 		return syscall.EREMOTEIO
 	}
-
 	return fusefs.OK
 }
 

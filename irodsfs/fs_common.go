@@ -24,8 +24,10 @@ func (fs *IRODSFS) setAttrOutForDummy(vpath string, dir bool, out *fuse.Attr) er
 
 	if dir {
 		out.Mode = uint32(fuse.S_IFDIR | 0o500)
+		out.Nlink = 2
 	} else {
 		out.Mode = uint32(fuse.S_IFREG | 0o500)
+		out.Nlink = 1
 	}
 
 	return nil
@@ -40,6 +42,7 @@ func (fs *IRODSFS) setAttrOutForVirtualDirEntry(entry *irodsfs_common_vpath.VPat
 	out.SetTimes(&entry.ModifyTime, &entry.ModifyTime, &entry.ModifyTime)
 	out.Size = uint64(entry.Size)
 	out.Mode = uint32(fuse.S_IFDIR | 0o500)
+	out.Nlink = 2
 
 	return nil
 }
@@ -59,8 +62,10 @@ func (fs *IRODSFS) setAttrOutForIRODSEntry(entry *irodsclient_fs.Entry, mode fs.
 
 	if entry.IsDir() {
 		out.Mode = uint32(fuse.S_IFDIR | mode)
+		out.Nlink = 2
 	} else {
 		out.Mode = uint32(fuse.S_IFREG | mode)
+		out.Nlink = 1
 	}
 
 	return nil
