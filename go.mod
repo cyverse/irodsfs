@@ -6,8 +6,8 @@ require (
 	github.com/cockroachdb/errors v1.14.0
 	github.com/cyverse/go-daemonizer v0.2.0
 	github.com/cyverse/go-irodsclient v0.21.1-0.20260827204233-ea34c1283db0
-	github.com/cyverse/irodsfs-common v0.0.0-20260827204325-fe3e32ffeecf
-	github.com/cyverse/irodsfs-pool v0.11.8-0.20260827204429-a7b6fbf4cf96
+	github.com/cyverse/irodsfs-common v0.0.0-20260827221003-2a189ea0e828
+	github.com/cyverse/irodsfs-pool v0.11.8-0.20260827221052-c777a2a87da0
 	github.com/hanwen/go-fuse/v2 v2.11.0
 	github.com/rs/xid v1.3.0
 	github.com/sirupsen/logrus v1.9.3
