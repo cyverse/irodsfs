@@ -13,7 +13,7 @@ import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
-	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
+	"github.com/cyverse/irodsfs-common/irods/vpath"
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert/yaml"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -50,11 +50,11 @@ type Config struct {
 	MountPath    string `json:"mount_path,omitempty" yaml:"mount_path,omitempty"`
 	DataRootPath string `json:"data_root_path,omitempty" yaml:"data_root_path,omitempty"`
 
-	PathMappings []irodsfs_common_vpath.VPathMapping `json:"path_mappings,omitempty" yaml:"path_mappings,omitempty"`
-	ReadAheadMax int                                 `json:"read_ahead_max,omitempty" yaml:"read_ahead_max,omitempty"`
-	ReadWriteMax int                                 `json:"read_write_max,omitempty" yaml:"read_write_max,omitempty"`
-	Readonly     bool                                `json:"readonly,omitempty" yaml:"readonly,omitempty"`
-	FuseOptions  []string                            `json:"fuse_options,omitempty" yaml:"fuse_options,omitempty"`
+	PathMappings []vpath.VPathMapping `json:"path_mappings,omitempty" yaml:"path_mappings,omitempty"`
+	ReadAheadMax int                  `json:"read_ahead_max,omitempty" yaml:"read_ahead_max,omitempty"`
+	ReadWriteMax int                  `json:"read_write_max,omitempty" yaml:"read_write_max,omitempty"`
+	Readonly     bool                 `json:"readonly,omitempty" yaml:"readonly,omitempty"`
+	FuseOptions  []string             `json:"fuse_options,omitempty" yaml:"fuse_options,omitempty"`
 
 	UID        int    `json:"uid,omitempty" yaml:"uid,omitempty"`
 	GID        int    `json:"gid,omitempty" yaml:"gid,omitempty"`
@@ -82,7 +82,7 @@ func NewDefaultConfig() *Config {
 		MountPath:    "", // leave it empty
 		DataRootPath: GetDefaultDataRootDirPath(),
 
-		PathMappings: []irodsfs_common_vpath.VPathMapping{},
+		PathMappings: []vpath.VPathMapping{},
 		ReadAheadMax: ReadAheadMaxDefault,
 		ReadWriteMax: ReadWriteMaxDefault,
 		Readonly:     false,
@@ -344,22 +344,22 @@ func (config *Config) FixSystemUserConfiguration() error {
 func (config *Config) FixPathMappings() {
 	if len(config.PathMappings) == 0 {
 		if len(config.CurrentWorkingDir) > 0 {
-			config.PathMappings = []irodsfs_common_vpath.VPathMapping{
+			config.PathMappings = []vpath.VPathMapping{
 				{
 					IRODSPath:           config.CurrentWorkingDir,
 					MappingPath:         "/",
-					ResourceType:        irodsfs_common_vpath.VPathMappingDirectory,
+					ResourceType:        vpath.VPathMappingDirectory,
 					ReadOnly:            false,
 					CreateDir:           false,
 					IgnoreNotExistError: false,
 				},
 			}
 		} else if len(config.Home) > 0 {
-			config.PathMappings = []irodsfs_common_vpath.VPathMapping{
+			config.PathMappings = []vpath.VPathMapping{
 				{
 					IRODSPath:           config.Home,
 					MappingPath:         "/",
-					ResourceType:        irodsfs_common_vpath.VPathMappingDirectory,
+					ResourceType:        vpath.VPathMappingDirectory,
 					ReadOnly:            false,
 					CreateDir:           false,
 					IgnoreNotExistError: false,
@@ -367,11 +367,11 @@ func (config *Config) FixPathMappings() {
 			}
 		} else {
 			iRODSHomePath := fmt.Sprintf("/%s/home/%s", config.ClientZoneName, config.ClientUsername)
-			config.PathMappings = []irodsfs_common_vpath.VPathMapping{
+			config.PathMappings = []vpath.VPathMapping{
 				{
 					IRODSPath:           iRODSHomePath,
 					MappingPath:         "/",
-					ResourceType:        irodsfs_common_vpath.VPathMappingDirectory,
+					ResourceType:        vpath.VPathMappingDirectory,
 					ReadOnly:            false,
 					CreateDir:           false,
 					IgnoreNotExistError: false,
@@ -486,7 +486,7 @@ func (config *Config) Validate() error {
 		return errors.New("data root dir must be given")
 	}
 
-	err = irodsfs_common_vpath.ValidateVPathMappings(config.PathMappings)
+	err = vpath.ValidateVPathMappings(config.PathMappings)
 	if err != nil {
 		return errors.Wrapf(err, "invalid path mappings")
 	}
@@ -554,11 +554,11 @@ func (config *Config) FromIRODSUrl(inputURL string) error {
 	}
 
 	if len(u.Path) > 0 {
-		config.PathMappings = []irodsfs_common_vpath.VPathMapping{
+		config.PathMappings = []vpath.VPathMapping{
 			{
 				IRODSPath:           u.Path,
 				MappingPath:         "/",
-				ResourceType:        irodsfs_common_vpath.VPathMappingDirectory,
+				ResourceType:        vpath.VPathMappingDirectory,
 				ReadOnly:            false,
 				CreateDir:           false,
 				IgnoreNotExistError: false,

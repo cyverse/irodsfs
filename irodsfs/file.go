@@ -6,8 +6,8 @@ import (
 	"syscall"
 
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
+	"github.com/cyverse/irodsfs-common/irods/vpath"
 	irodsfs_common_util "github.com/cyverse/irodsfs-common/util"
-	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 	fusefs "github.com/hanwen/go-fuse/v2/fs"
 	fuse "github.com/hanwen/go-fuse/v2/fuse"
 )
@@ -38,7 +38,7 @@ func (file *File) getStableAttr() fusefs.StableAttr {
 	}
 }
 
-func (file *File) ensureIRODSPath(vpathEntry *irodsfs_common_vpath.VPathEntry) error {
+func (file *File) ensureIRODSPath(vpathEntry *vpath.VPathEntry) error {
 	return ensureVPathEntryIsIRODSEntry(file.fs.fsClient, vpathEntry)
 }
 

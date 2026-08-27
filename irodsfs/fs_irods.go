@@ -158,7 +158,7 @@ func (fs *IRODSFS) IRODSReaddir(ctx context.Context, path string) ([]fuse.DirEnt
 			entryType = uint32(fuse.S_IFDIR)
 		}
 
-		inode, err := fs.inodeManager.GetInodeIDForIRODSEntryID(uint64(entry.ID))
+		inode, err := fs.getInodeIDForIRODSEntry(entry)
 		if err != nil {
 			fs.logger.Error(err)
 		} else {

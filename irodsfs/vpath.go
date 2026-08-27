@@ -3,11 +3,11 @@ package irodsfs
 import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsfs_common_irods "github.com/cyverse/irodsfs-common/irods"
-	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
+	"github.com/cyverse/irodsfs-common/irods/vpath"
 	"golang.org/x/xerrors"
 )
 
-func ensureVPathEntryIsIRODSDir(fsClient irodsfs_common_irods.IRODSFSClient, vpathEntry *irodsfs_common_vpath.VPathEntry) error {
+func ensureVPathEntryIsIRODSDir(fsClient irodsfs_common_irods.IRODSFSClient, vpathEntry *vpath.VPathEntry) error {
 	err := ensureVPathEntryIsIRODSEntry(fsClient, vpathEntry)
 	if err != nil {
 		return err
@@ -20,7 +20,7 @@ func ensureVPathEntryIsIRODSDir(fsClient irodsfs_common_irods.IRODSFSClient, vpa
 	return nil
 }
 
-func ensureVPathEntryIsIRODSEntry(fsClient irodsfs_common_irods.IRODSFSClient, vpathEntry *irodsfs_common_vpath.VPathEntry) error {
+func ensureVPathEntryIsIRODSEntry(fsClient irodsfs_common_irods.IRODSFSClient, vpathEntry *vpath.VPathEntry) error {
 	if !vpathEntry.IsIRODSEntry() {
 		return xerrors.Errorf("VPath Entry %q is not iRODS entry", vpathEntry.Path)
 	}
@@ -36,7 +36,7 @@ func ensureVPathEntryIsIRODSEntry(fsClient irodsfs_common_irods.IRODSFSClient, v
 	return nil
 }
 
-func isVPathEntryUnmodifiable(vpathEntry *irodsfs_common_vpath.VPathEntry, targetPath string) bool {
+func isVPathEntryUnmodifiable(vpathEntry *vpath.VPathEntry, targetPath string) bool {
 	if vpathEntry.Path == targetPath {
 		return true
 	}

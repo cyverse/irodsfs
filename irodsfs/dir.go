@@ -9,8 +9,8 @@ import (
 	"github.com/cockroachdb/errors"
 
 	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
+	"github.com/cyverse/irodsfs-common/irods/vpath"
 	irodsfs_common_util "github.com/cyverse/irodsfs-common/util"
-	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 	fusefs "github.com/hanwen/go-fuse/v2/fs"
 	fuse "github.com/hanwen/go-fuse/v2/fuse"
 )
@@ -42,11 +42,11 @@ func (dir *Dir) getStableAttr() fusefs.StableAttr {
 	}
 }
 
-func (dir *Dir) ensureDirIRODSPath(vpathEntry *irodsfs_common_vpath.VPathEntry) error {
+func (dir *Dir) ensureDirIRODSPath(vpathEntry *vpath.VPathEntry) error {
 	return ensureVPathEntryIsIRODSDir(dir.fs.fsClient, vpathEntry)
 }
 
-func (dir *Dir) ensureIRODSPath(vpathEntry *irodsfs_common_vpath.VPathEntry) error {
+func (dir *Dir) ensureIRODSPath(vpathEntry *vpath.VPathEntry) error {
 	return ensureVPathEntryIsIRODSEntry(dir.fs.fsClient, vpathEntry)
 }
 
@@ -182,7 +182,7 @@ func (dir *Dir) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*f
 		return nil, errno
 	}
 
-	inodeID, err := dir.fs.inodeManager.GetInodeIDForIRODSEntryID(uint64(entryID))
+	inodeID, err := dir.fs.getInodeIDForIRODSEntryID(uint64(entryID))
 	if err != nil {
 		dir.fs.logger.Error(err)
 		return nil, syscall.EREMOTEIO
@@ -284,7 +284,7 @@ func (dir *Dir) Readdir(ctx context.Context) (fusefs.DirStream, syscall.Errno) {
 						entryType = uint32(fuse.S_IFDIR)
 					}
 
-					inodeID, err := dir.fs.inodeManager.GetInodeIDForIRODSEntryID(uint64(entry.IRODSEntry.ID))
+					inodeID, err := dir.fs.getInodeIDForIRODSEntry(entry.IRODSEntry)
 					if err != nil {
 						dir.fs.logger.Error(err)
 					} else {
@@ -459,7 +459,7 @@ func (dir *Dir) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.E
 		return nil, errno
 	}
 
-	inodeID, err := dir.fs.inodeManager.GetInodeIDForIRODSEntryID(uint64(entryID))
+	inodeID, err := dir.fs.getInodeIDForIRODSEntryID(uint64(entryID))
 	if err != nil {
 		dir.fs.logger.Error(err)
 		return nil, syscall.EREMOTEIO
@@ -673,7 +673,7 @@ func (dir *Dir) Create(ctx context.Context, name string, flags uint32, mode uint
 		return nil, nil, 0, errno
 	}
 
-	inodeID, err := dir.fs.inodeManager.GetInodeIDForIRODSEntryID(uint64(entryID))
+	inodeID, err := dir.fs.getInodeIDForIRODSEntryID(uint64(entryID))
 	if err != nil {
 		dir.fs.logger.Error(err)
 		return nil, nil, 0, syscall.EREMOTEIO

@@ -7,10 +7,9 @@ import (
 
 	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
-	irodsfs_common_inode "github.com/cyverse/irodsfs-common/inode"
 	irodsfs_common_irods "github.com/cyverse/irodsfs-common/irods"
+	"github.com/cyverse/irodsfs-common/irods/vpath"
 	irodsfs_common_util "github.com/cyverse/irodsfs-common/util"
-	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
 	irodsfs_pool_client "github.com/cyverse/irodsfs-pool/client"
 
 	fusefs "github.com/hanwen/go-fuse/v2/fs"
@@ -25,8 +24,7 @@ type IRODSFS struct {
 	config *commons.Config
 
 	fuseServer    *fuse.Server
-	inodeManager  *irodsfs_common_inode.InodeManager
-	vpathManager  *irodsfs_common_vpath.VPathManager
+	vpathManager  *vpath.VPathManager
 	fsClient      irodsfs_common_irods.IRODSFSClient
 	usePoolServer bool
 	fileHandleMap *FileHandleMap
@@ -100,10 +98,8 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		}
 	}
 
-	inodeManager := irodsfs_common_inode.NewInodeManager()
-
 	logger.Info("Initializing virtual path mappings")
-	vpathManager, err := irodsfs_common_vpath.NewVPathManager(fsClient, inodeManager, config.PathMappings)
+	vpathManager, err := vpath.NewVPathManager(fsClient, config.PathMappings)
 	if err != nil {
 		vpathErr := errors.Wrapf(err, "failed to create Virtual Path Manager")
 		logger.Error(vpathErr)
@@ -116,7 +112,6 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	fs := &IRODSFS{
 		config: config,
 
-		inodeManager:  inodeManager,
 		vpathManager:  vpathManager,
 		fsClient:      fsClient,
 		usePoolServer: usePoolServer,
@@ -227,7 +222,7 @@ func (fs *IRODSFS) GetRoot() (*Dir, error) {
 	}
 
 	if vpathEntry.IsVirtualDirEntry() {
-		inodeID, inodeErr := fs.inodeManager.GetInodeIDForVirtualEntry("/")
+		inodeID, inodeErr := fs.vpathManager.CreateOrGetInodeIDForVirtualEntry("/")
 		if inodeErr != nil {
 			fs.logger.WithError(inodeErr).Error("failed to get inode ID for root")
 			return nil, syscall.EREMOTEIO
@@ -242,7 +237,7 @@ func (fs *IRODSFS) GetRoot() (*Dir, error) {
 		return nil, syscall.EREMOTEIO
 	}
 
-	inodeID, inodeErr := fs.inodeManager.GetInodeIDForIRODSEntryID(uint64(vpathEntry.IRODSEntry.ID))
+	inodeID, inodeErr := fs.getInodeIDForIRODSEntry(vpathEntry.IRODSEntry)
 	if inodeErr != nil {
 		fs.logger.WithError(inodeErr).Errorf("failed to get inode ID for %s", vpathEntry.IRODSPath)
 		return nil, syscall.EREMOTEIO
