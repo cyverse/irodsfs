@@ -24,11 +24,15 @@ import (
 type IRODSFS struct {
 	config *commons.Config
 
-	fuseServer    *fuse.Server
-	vpathManager  *vpath.VPathManager
-	fsClient      irodsfs_common_irods.IRODSFSClient
-	usePoolServer bool
-	fileHandleMap *FileHandleMap
+	fuseServer   *fuse.Server
+	vpathManager *vpath.VPathManager
+
+	fsPoolClient        *irodsfs_pool_client.PoolServiceClient
+	irodsfsClient       *irodsclient_fs.FileSystem
+	fsClient            irodsfs_common_irods.IRODSFSClient
+	fsClientReleaseFunc func()
+	usePoolServer       bool
+	fileHandleMap       *FileHandleMap
 
 	uid uint32
 	gid uint32
@@ -52,6 +56,10 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	var fsClient irodsfs_common_irods.IRODSFSClient
 	var err error
 
+	if len(config.Description) == 0 {
+		config.Description = fmt.Sprintf("mountpoint: %q, sysuser: %q, uid: %d, gid: %d", config.MountPath, config.SystemUser, config.UID, config.GID)
+	}
+
 	if len(config.Description) > 0 {
 		logger.Infof("%s: %s", commons.FuseFSName, config.Description)
 	}
@@ -60,16 +68,12 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	if len(config.PoolEndpoint) > 0 {
 		// use pool driver
 		logger.Info("Initializing irodsfs-pool client")
-		poolClient := irodsfs_pool_client.NewPoolServiceClient(config.PoolEndpoint, time.Duration(config.MetadataConnection.LongOperationTimeout), logger)
+		poolClient := irodsfs_pool_client.NewPoolServiceClient(config.PoolEndpoint, time.Duration(config.MetadataConnection.LongOperationTimeout), true, logger)
 		err = poolClient.Connect()
 		if err != nil {
 			clientErr := errors.Wrapf(err, "failed to connect to irodsfs-pool server %q", config.PoolEndpoint)
 			logger.Error(clientErr)
 			return nil, clientErr
-		}
-
-		if len(config.Description) == 0 {
-			config.Description = fmt.Sprintf("mountpoint: %q, sysuser: %q, uid: %q, gid: %q", config.MountPath, config.SystemUser, config.UID, config.GID)
 		}
 
 		fsClient, err = poolClient.NewSession(account, commons.FuseFSName, config.Description)
@@ -147,6 +151,16 @@ func (fs *IRODSFS) Release() {
 	if fs.fsClient != nil {
 		fs.fsClient.Release()
 		fs.fsClient = nil
+	}
+
+	if fs.fsPoolClient != nil {
+		fs.fsPoolClient.Disconnect()
+		fs.fsPoolClient = nil
+	}
+
+	if fs.irodsfsClient != nil {
+		fs.irodsfsClient.Release()
+		fs.irodsfsClient = nil
 	}
 }
 
