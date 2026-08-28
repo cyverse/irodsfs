@@ -1,6 +1,7 @@
 package irodsfs
 
 import (
+	"fmt"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -65,6 +66,10 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 			clientErr := errors.Wrapf(err, "failed to connect to irodsfs-pool server %q", config.PoolEndpoint)
 			logger.Error(clientErr)
 			return nil, clientErr
+		}
+
+		if len(config.Description) == 0 {
+			config.Description = fmt.Sprintf("mountpoint: %q, sysuser: %q, uid: %q, gid: %q", config.MountPath, config.SystemUser, config.UID, config.GID)
 		}
 
 		fsClient, err = poolClient.NewSession(account, commons.FuseFSName, config.Description)
