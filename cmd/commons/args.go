@@ -129,6 +129,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 				// overwrite config
 				config = clientConfig
 				stdinClosed = true
+				readConfig = true
 			}
 		}
 	}
