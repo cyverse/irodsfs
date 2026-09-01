@@ -106,7 +106,7 @@ func processCommand(command *cobra.Command, args []string) error {
 
 		err = runManaged(&config, ready)
 		if err != nil {
-			runErr := errors.Errorf("failed to run iRODS FUSE: %w", err)
+			runErr := errors.Wrap(err, "failed to run iRODS FUSE")
 			logger.Error(runErr)
 			return runErr
 		}
@@ -127,7 +127,7 @@ func processCommand(command *cobra.Command, args []string) error {
 
 		err = runManaged(config, nil)
 		if err != nil {
-			runErr := errors.Wrapf(err, "failed to run iRODS FUSE")
+			runErr := errors.Wrap(err, "failed to run iRODS FUSE")
 			logger.Error(runErr)
 			return runErr
 		}
@@ -205,20 +205,20 @@ func run(config *commons.Config) (error, func()) {
 	logger.Infof("iRODS FUSE version - %q, commit - %q", versionInfo.ClientVersion, versionInfo.GitCommit)
 
 	if err := config.MakeWorkDirs(); err != nil {
-		mkdirErr := errors.Wrapf(err, "make work dir error")
+		mkdirErr := errors.Wrap(err, "make work dir error")
 		logger.Error(mkdirErr)
 		return err, nil
 	}
 
 	if err := config.Validate(); err != nil {
-		configErr := errors.Wrapf(err, "invalid configuration")
+		configErr := errors.Wrap(err, "invalid configuration")
 		logger.Error(configErr)
 		return err, nil
 	}
 
 	fs, err := irodsfs.NewFileSystem(config)
 	if err != nil {
-		fsErr := errors.Wrapf(err, "failed to create the filesystem")
+		fsErr := errors.Wrap(err, "failed to create the filesystem")
 		logger.Error(fsErr)
 		return fsErr, nil
 	}
@@ -226,7 +226,7 @@ func run(config *commons.Config) (error, func()) {
 	// iRODS connection must be established correctly by here
 	// any network errors from here will be recoverable
 	if err := fs.Mount(); err != nil {
-		fsErr := errors.Wrapf(err, "failed to start the filesystem")
+		fsErr := errors.Wrap(err, "failed to start the filesystem")
 		logger.Error(fsErr)
 		fs.Release()
 		return fsErr, nil

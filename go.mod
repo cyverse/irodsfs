@@ -6,15 +6,14 @@ require (
 	github.com/cockroachdb/errors v1.14.0
 	github.com/cyverse/go-daemonizer v0.2.0
 	github.com/cyverse/go-irodsclient v0.21.2
-	github.com/cyverse/irodsfs-common v0.0.0-20260831145655-f3b109f135ca
-	github.com/cyverse/irodsfs-pool v0.11.8-0.20260831154923-65cd41c7716e
+	github.com/cyverse/irodsfs-common v0.0.0-20260901221037-1e1575640683
+	github.com/cyverse/irodsfs-pool v0.11.8-0.20260901221425-8aca302509bf
 	github.com/hanwen/go-fuse/v2 v2.11.0
 	github.com/rs/xid v1.3.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.10.1
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/term v0.40.0
-	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v3 v3.0.1
 )

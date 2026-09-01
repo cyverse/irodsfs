@@ -134,7 +134,7 @@ func NewConfigFromFile(config *Config, filePath string) (*Config, error) {
 	case FormatYAML:
 		return NewConfigFromYAMLFile(config, filePath)
 	default:
-		return nil, errors.Newf("unknown file format")
+		return nil, errors.New("unknown file format")
 	}
 }
 
@@ -266,7 +266,7 @@ func NewConfigFromYAML(config *Config, yamlBytes []byte) (*Config, error) {
 
 	err := yaml.Unmarshal(yamlBytes, &cfg)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to unmarshal YAML to config")
+		return nil, errors.Wrap(err, "failed to unmarshal YAML to config")
 	}
 
 	// load icommands environment
@@ -301,7 +301,7 @@ func NewConfigFromJSON(config *Config, jsonBytes []byte) (*Config, error) {
 
 	err := json.Unmarshal(jsonBytes, &cfg)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to unmarshal YAML to config")
+		return nil, errors.Wrap(err, "failed to unmarshal YAML to config")
 	}
 
 	// load icommands environment
@@ -488,7 +488,7 @@ func (config *Config) Validate() error {
 
 	err = vpath.ValidateVPathMappings(config.PathMappings)
 	if err != nil {
-		return errors.Wrapf(err, "invalid path mappings")
+		return errors.Wrap(err, "invalid path mappings")
 	}
 
 	if config.ReadAheadMax < 0 {

@@ -1,10 +1,10 @@
 package irodsfs
 
 import (
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsfs_common_irods "github.com/cyverse/irodsfs-common/irods"
 	"github.com/cyverse/irodsfs-common/irods/vpath"
-	"golang.org/x/xerrors"
 )
 
 func ensureVPathEntryIsIRODSDir(fsClient irodsfs_common_irods.IRODSFSClient, vpathEntry *vpath.VPathEntry) error {
@@ -14,7 +14,7 @@ func ensureVPathEntryIsIRODSDir(fsClient irodsfs_common_irods.IRODSFSClient, vpa
 	}
 
 	if vpathEntry.IRODSEntry.Type != irodsclient_fs.DirectoryEntry {
-		return xerrors.Errorf("failed to mount a data object as a root")
+		return errors.New("failed to mount a data object as a root")
 	}
 
 	return nil
@@ -22,7 +22,7 @@ func ensureVPathEntryIsIRODSDir(fsClient irodsfs_common_irods.IRODSFSClient, vpa
 
 func ensureVPathEntryIsIRODSEntry(fsClient irodsfs_common_irods.IRODSFSClient, vpathEntry *vpath.VPathEntry) error {
 	if !vpathEntry.IsIRODSEntry() {
-		return xerrors.Errorf("VPath Entry %q is not iRODS entry", vpathEntry.Path)
+		return errors.Newf("VPath Entry %q is not iRODS entry", vpathEntry.Path)
 	}
 
 	if vpathEntry.RequireIRODSEntryUpdate() {

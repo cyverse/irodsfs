@@ -40,7 +40,7 @@ func CorrectSystemUser(username string, uid int, gid int) (string, int, int, err
 	if len(username) == 0 && uid < 0 && gid < 0 {
 		u, err := user.Current()
 		if err != nil {
-			return "", -1, -1, errors.Wrapf(err, "failed to get current system user")
+			return "", -1, -1, errors.Wrap(err, "failed to get current system user")
 		}
 
 		newUID, newGID, err := lookupUserIDs(u)

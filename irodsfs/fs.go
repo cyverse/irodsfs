@@ -78,7 +78,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 
 		fsClient, err = poolClient.NewSession(account, commons.FuseFSName, config.Description)
 		if err != nil {
-			sessionErr := errors.Wrapf(err, "failed to create a irodsfs-pool fs client")
+			sessionErr := errors.Wrap(err, "failed to create a irodsfs-pool fs client")
 			logger.Error(sessionErr)
 			return nil, sessionErr
 		}
@@ -94,14 +94,14 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 
 		irodsfsClient, err := irodsclient_fs.NewFileSystem(account, fsConfig)
 		if err != nil {
-			clientErr := errors.Wrapf(err, "failed to create a go-irodsclient fs client")
+			clientErr := errors.Wrap(err, "failed to create a go-irodsclient fs client")
 			logger.Error(clientErr)
 			return nil, clientErr
 		}
 
 		fsClient, err = irodsfs_common_irods.NewIRODSFSClientDirect(irodsfsClient)
 		if err != nil {
-			clientErr := errors.Wrapf(err, "failed to wrap go-irodsclient as irods fs client")
+			clientErr := errors.Wrap(err, "failed to wrap go-irodsclient as irods fs client")
 			logger.Error(clientErr)
 			return nil, clientErr
 		}
@@ -110,7 +110,7 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	logger.Info("Initializing virtual path mappings")
 	vpathManager, err := vpath.NewVPathManager(fsClient, config.PathMappings)
 	if err != nil {
-		vpathErr := errors.Wrapf(err, "failed to create Virtual Path Manager")
+		vpathErr := errors.Wrap(err, "failed to create Virtual Path Manager")
 		logger.Error(vpathErr)
 		return nil, vpathErr
 	}

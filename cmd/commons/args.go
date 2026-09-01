@@ -115,7 +115,7 @@ func ProcessCommonFlags(command *cobra.Command, args []string) (*commons.Config,
 				stdinReader := bufio.NewReader(os.Stdin)
 				dataBytes, err := io.ReadAll(stdinReader)
 				if err != nil {
-					readErr := errors.Wrapf(err, "failed to read config from stdin")
+					readErr := errors.Wrap(err, "failed to read config from stdin")
 					logger.Error(readErr)
 					return nil, false, readErr // stop here
 				}

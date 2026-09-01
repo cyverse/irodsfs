@@ -33,10 +33,10 @@ github.com/cyverse/go-daemonizer v0.2.0 h1:8Ez6qHZgCRYoQ1FylG0LvtmR/Sx7ovNtI1gtL
 github.com/cyverse/go-daemonizer v0.2.0/go.mod h1:vtw6PguGBLYFejqi2bV6iWqPROlONxFVDQ2sQphyczk=
 github.com/cyverse/go-irodsclient v0.21.2 h1:FfAjGyXE71ysLbsi0AAP2GJlTpfZQohl1ojbQczS+ak=
 github.com/cyverse/go-irodsclient v0.21.2/go.mod h1:HaK+ZsfAi0gvCnqroPxSfJnxK41PeGDD2FKNG1pZiN0=
-github.com/cyverse/irodsfs-common v0.0.0-20260831145655-f3b109f135ca h1:dPRAhEcHZ+uMRUr/x8a8IzBK3rdf+og1+gTGxzQUEXg=
-github.com/cyverse/irodsfs-common v0.0.0-20260831145655-f3b109f135ca/go.mod h1:IOz2+jn3k8uUBzjKWgsGK+8yRjcV0eEbltL/6qA+j+o=
-github.com/cyverse/irodsfs-pool v0.11.8-0.20260831154923-65cd41c7716e h1:6WngnFUZ2OUJuGkEKeZjLjNTvIT++22eqMq2S268+ig=
-github.com/cyverse/irodsfs-pool v0.11.8-0.20260831154923-65cd41c7716e/go.mod h1:HBiq9N6aaLx8CGabBhhofyWSWr/MLXAPQ935RYPDHws=
+github.com/cyverse/irodsfs-common v0.0.0-20260901221037-1e1575640683 h1:TnmDpE68fFXRYRGGBMjVHmGoQggSPC7K1t/4vFPuE54=
+github.com/cyverse/irodsfs-common v0.0.0-20260901221037-1e1575640683/go.mod h1:IOz2+jn3k8uUBzjKWgsGK+8yRjcV0eEbltL/6qA+j+o=
+github.com/cyverse/irodsfs-pool v0.11.8-0.20260901221425-8aca302509bf h1:Sp4oESiRBoAh3USrSVz4WFX20NrZLVeRnWgUXV9iijY=
+github.com/cyverse/irodsfs-pool v0.11.8-0.20260901221425-8aca302509bf/go.mod h1:F/lbmRns1/QISQvJVq4/Zw4Bi4VcBGRvCvhqhYmaPyY=
 github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964 h1:y5HC9v93H5EPKqaS1UYVg1uYah5Xf51mBfIoWehClUQ=
 github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964/go.mod h1:Xd9hchkHSWYkEqJwUGisez3G1QY8Ryz0sdWrLPMGjLk=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
@@ -271,8 +271,6 @@ golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7/go.mod h1:I/5z698sn9Ka8T
 golang.org/x/xerrors v0.0.0-20191011141410-1b5146add898/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
-golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 h1:H2TDz8ibqkAF6YGhCdN3jS9O0/s90v0rJh3X/OLHEUk=
-golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2/go.mod h1:K8+ghG5WaK9qNqU5K3HdILfMLy1f3aNYFI/wnl100a8=
 gonum.org/v1/gonum v0.17.0 h1:VbpOemQlsSMrYmn7T2OUvQ4dqxQXU+ouZFQsZOx50z4=
 gonum.org/v1/gonum v0.17.0/go.mod h1:El3tOrEuMpv2UdMrbNlKEh9vd86bmQ6vqIcDwxEOc1E=
 google.golang.org/appengine v1.1.0/go.mod h1:EbEs0AVv82hx2wNQdGPgUI5lhzA/G0D9YwlJXL52JkM=
