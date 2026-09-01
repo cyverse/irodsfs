@@ -2,10 +2,9 @@ package commons
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"runtime"
 
 	"github.com/cockroachdb/errors"
@@ -13,79 +12,65 @@ import (
 
 var ErrFuseInstallationError = errors.New("fuse is not installed")
 
-// CheckFuse checks FUSE installation state
+// CheckFuse checks whether FUSE and, when requested, fusermount are available.
 func CheckFuse(checkFusermount bool) error {
-	if runtime.GOOS == "linux" {
-		fuseDevInfo, err := os.Stat("/dev/fuse")
-		if err != nil {
-			return errors.Join(err, errors.Mark(
-				errors.New("failed to find /dev/fuse"),
-				ErrFuseInstallationError,
-			))
-		}
-
-		if (fuseDevInfo.Mode() & os.ModeCharDevice) != os.ModeCharDevice {
-			return errors.Mark(
-				errors.New("/dev/fuse is not a character device"),
-				ErrFuseInstallationError,
-			)
-		}
-
-		if checkFusermount {
-			if _, err = getFusermountBinary(); err != nil {
-				return errors.Join(err, errors.Mark(
-					errors.New("fusermount not found"),
-					ErrFuseInstallationError,
-				))
-			}
-		}
-
-		return nil
-	} else if runtime.GOOS == "darwin" {
+	if runtime.GOOS != "linux" {
 		return errors.Mark(
-			errors.New("FUSE is not available on MacOS"),
-			ErrFuseInstallationError,
-		)
-	} else if runtime.GOOS == "windows" {
-		return errors.Mark(
-			errors.New("FUSE is not available on Windows"),
+			errors.Errorf("FUSE is not available on %s", runtime.GOOS),
 			ErrFuseInstallationError,
 		)
 	}
 
-	return errors.Mark(
-		errors.New(fmt.Sprintf("FUSE is not available for unknown OS %q", runtime.GOOS)),
-		ErrFuseInstallationError,
-	)
+	fuseDevInfo, err := os.Stat("/dev/fuse")
+	if err != nil {
+		return errors.Join(err, errors.Mark(errors.New("failed to find /dev/fuse"), ErrFuseInstallationError))
+	}
+	if fuseDevInfo.Mode()&os.ModeCharDevice != os.ModeCharDevice {
+		return errors.Mark(errors.New("/dev/fuse is not a character device"), ErrFuseInstallationError)
+	}
+
+	if checkFusermount {
+		if _, err = getFusermountBinary(); err != nil {
+			return errors.Join(err, errors.Mark(errors.New("fusermount not found"), ErrFuseInstallationError))
+		}
+	}
+
+	return nil
 }
 
-// UnmountFuse calls fusermount -uz on the mount.
+// UnmountFuse lazily unmounts mountPoint using fusermount3 or fusermount.
 func UnmountFuse(mountPoint string) error {
 	bin, err := getFusermountBinary()
 	if err != nil {
 		return err
 	}
 
-	var errBuf bytes.Buffer
+	var stderr bytes.Buffer
 	cmd := exec.Command(bin, "-uz", mountPoint)
-	cmd.Stderr = &errBuf
-	err = cmd.Run()
-	if errBuf.Len() > 0 && err != nil {
-		return errors.Wrap(err, errBuf.String())
+	cmd.Stderr = &stderr
+	if err = cmd.Run(); err != nil {
+		if stderr.Len() > 0 {
+			return errors.Wrap(err, stderr.String())
+		}
+		return err
 	}
-	return err
+	return nil
 }
 
 func getFusermountBinary() (string, error) {
-	if p, err := lookPathFallback("fusermount3", "/bin"); err == nil {
-		return p, nil
+	if binary, err := lookPathFallback("fusermount3", "/bin"); err == nil {
+		return binary, nil
 	}
 	return lookPathFallback("fusermount", "/bin")
 }
 
 func lookPathFallback(file string, fallbackDir string) (string, error) {
-	if binPath, err := exec.LookPath(file); err == nil {
-		return binPath, nil
+	if binary, err := exec.LookPath(file); err == nil {
+		return binary, nil
 	}
-	return exec.LookPath(path.Join(fallbackDir, file))
+	binary, err := exec.LookPath(filepath.Join(fallbackDir, file))
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to find %s", file)
+	}
+	return binary, nil
 }
