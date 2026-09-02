@@ -7,7 +7,7 @@ require (
 	github.com/cyverse/go-daemonizer v0.2.0
 	github.com/cyverse/go-irodsclient v0.21.2
 	github.com/cyverse/irodsfs-common v0.0.0-20260901221037-1e1575640683
-	github.com/cyverse/irodsfs-pool v0.11.8-0.20260901221425-8aca302509bf
+	github.com/cyverse/irodsfs-pool v0.11.8-0.20260902153702-9bfd1e39f4d2
 	github.com/hanwen/go-fuse/v2 v2.11.0
 	github.com/rs/xid v1.3.0
 	github.com/sirupsen/logrus v1.9.3
