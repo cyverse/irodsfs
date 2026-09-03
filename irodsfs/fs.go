@@ -312,5 +312,11 @@ func (fs *IRODSFS) GetFuseOptions() *fusefs.Options {
 	if fs.config.Readonly {
 		options.MountOptions.Options = append(options.MountOptions.Options, "ro")
 	}
+
+	if len(fs.config.FuseOptions) > 0 {
+		options.MountOptions.Options = append(options.MountOptions.Options, fs.config.FuseOptions...)
+		fs.logger.Infof("Fuse options %v are set", fs.config.FuseOptions)
+	}
+
 	return options
 }
