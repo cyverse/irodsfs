@@ -190,6 +190,16 @@ func (fs *IRODSFS) Mount() error {
 	return nil
 }
 
+// Wait blocks until the FUSE request-serving loop exits. This happens when
+// the filesystem is unmounted, including when it is unmounted externally.
+func (fs *IRODSFS) Wait() {
+	if fs.fuseServer == nil {
+		return
+	}
+
+	fs.fuseServer.Wait()
+}
+
 func (fs *IRODSFS) Unmount() {
 	if fs.terminated.Load() {
 		return

@@ -37,6 +37,19 @@ var rootCmd = &cobra.Command{
 
 var daemon *godaemonizer.Daemon
 
+type shutdownReason int
+
+const (
+	shutdownBySignal shutdownReason = iota
+	shutdownByExternalUnmount
+)
+
+type managedFilesystem struct {
+	wait     func()
+	shutdown func()
+	release  func()
+}
+
 func Execute() error {
 	return rootCmd.Execute()
 }
@@ -172,19 +185,23 @@ func main() {
 }
 
 func runManaged(config *commons.Config, ready func(error)) error {
-	runErr, shutdownFn := run(config)
+	runErr, filesystem := run(config)
 	if runErr != nil {
 		reportReady(ready, runErr)
 		return runErr
 	}
 
 	reportReady(ready, nil)
-	waitForShutdown()
-
-	if shutdownFn != nil {
-		shutdownFn()
-	}
+	reason := waitForShutdown(filesystem.wait)
+	finishManagedFilesystem(filesystem, reason)
 	return nil
+}
+
+func finishManagedFilesystem(filesystem *managedFilesystem, reason shutdownReason) {
+	if reason == shutdownBySignal {
+		filesystem.shutdown()
+	}
+	filesystem.release()
 }
 
 func reportReady(ready func(error), err error) {
@@ -194,7 +211,7 @@ func reportReady(ready func(error), err error) {
 }
 
 // run runs iRODS FUSE
-func run(config *commons.Config) (error, func()) {
+func run(config *commons.Config) (error, *managedFilesystem) {
 	logger := log.WithFields(log.Fields{})
 
 	if config.Debug {
@@ -232,18 +249,32 @@ func run(config *commons.Config) (error, func()) {
 		return fsErr, nil
 	}
 
-	shutdown := func() {
-		fs.Unmount()
-		fs.Release()
+	return nil, &managedFilesystem{
+		wait:     fs.Wait,
+		shutdown: fs.Unmount,
+		release:  fs.Release,
 	}
-
-	return nil, shutdown
 }
 
-func waitForShutdown() {
-	signalChannel := make(chan os.Signal, 1)
+func waitForShutdown(waitForFuse func()) shutdownReason {
+	fuseExited := make(chan struct{})
+	go func() {
+		waitForFuse()
+		close(fuseExited)
+	}()
 
+	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(signalChannel)
-	<-signalChannel
+
+	return waitForShutdownEvent(fuseExited, signalChannel)
+}
+
+func waitForShutdownEvent(fuseExited <-chan struct{}, signalChannel <-chan os.Signal) shutdownReason {
+	select {
+	case <-fuseExited:
+		return shutdownByExternalUnmount
+	case <-signalChannel:
+		return shutdownBySignal
+	}
 }
