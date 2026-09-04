@@ -71,6 +71,20 @@ make build
 
 After successful build, you will be able to find the binary in bin directory.
 
+## Install the latest Linux release
+
+Install the latest release for the current Linux architecture with:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/cyverse/irodsfs/main/install.sh | bash
+```
+
+The installer downloads the matching GitHub Release archive and installs both
+`/usr/bin/irodsfs` and `/sbin/mount.irodsfs`. The latter lets `mount -t
+irodsfs ...` find the iRODSFS mount helper. This installation does not create
+or use a systemd service. Before installing, it verifies that `/dev/fuse` and
+either `fusermount3` or `fusermount` are available.
+
 ## Command-line Options
 
 ```
