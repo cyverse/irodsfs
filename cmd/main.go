@@ -9,6 +9,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	godaemonizer "github.com/cyverse/go-daemonizer"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsfs_common_util "github.com/cyverse/irodsfs-common/util"
 	cmd_commons "github.com/cyverse/irodsfs/cmd/commons"
 	"github.com/cyverse/irodsfs/commons"
@@ -43,6 +44,42 @@ const (
 	shutdownBySignal shutdownReason = iota
 	shutdownByExternalUnmount
 )
+
+// Exit codes form the process contract for callers such as irodsfsd.
+// Keep these values stable once released.
+const (
+	exitCodeSuccess              = 0
+	exitCodeGeneralFailure       = 1
+	exitCodeConfigurationInvalid = 10
+	exitCodeAuthenticationFailed = 11
+)
+
+type exitCodeError struct {
+	err  error
+	code int
+}
+
+func (err *exitCodeError) Error() string { return err.err.Error() }
+
+func (err *exitCodeError) Unwrap() error { return err.err }
+
+func exitCodeForError(err error) int {
+	var coded *exitCodeError
+	if errors.As(err, &coded) {
+		return coded.code
+	}
+	return exitCodeGeneralFailure
+}
+
+// initialFilesystemError assigns a process exit code only to authentication
+// failures encountered while creating the filesystem. Runtime failures are
+// intentionally outside this startup-only classification.
+func initialFilesystemError(err error) error {
+	if irodsclient_types.IsAuthError(err) {
+		return &exitCodeError{err: err, code: exitCodeAuthenticationFailed}
+	}
+	return err
+}
 
 type managedFilesystem struct {
 	wait     func()
@@ -179,8 +216,8 @@ func main() {
 
 	err = Execute()
 	if err != nil {
-		logger.Fatal(err)
-		os.Exit(1)
+		logger.Error(err)
+		os.Exit(exitCodeForError(err))
 	}
 }
 
@@ -224,20 +261,20 @@ func run(config *commons.Config) (error, *managedFilesystem) {
 	if err := config.MakeWorkDirs(); err != nil {
 		mkdirErr := errors.Wrap(err, "make work dir error")
 		logger.Error(mkdirErr)
-		return err, nil
+		return &exitCodeError{err: mkdirErr, code: exitCodeConfigurationInvalid}, nil
 	}
 
 	if err := config.Validate(); err != nil {
 		configErr := errors.Wrap(err, "invalid configuration")
 		logger.Error(configErr)
-		return err, nil
+		return &exitCodeError{err: configErr, code: exitCodeConfigurationInvalid}, nil
 	}
 
 	fs, err := irodsfs.NewFileSystem(config)
 	if err != nil {
 		fsErr := errors.Wrap(err, "failed to create the filesystem")
 		logger.Error(fsErr)
-		return fsErr, nil
+		return initialFilesystemError(fsErr), nil
 	}
 
 	// iRODS connection must be established correctly by here

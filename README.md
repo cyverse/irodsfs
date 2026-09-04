@@ -101,6 +101,22 @@ Flags:
   -h, --help                   Print help
 ```
 
+## Exit status
+
+`irodsfs` uses the following exit statuses during startup. They are a stable
+process interface for supervisors such as `irodsfsd`.
+
+| Status | Meaning |
+| --- | --- |
+| `0` | Normal exit. |
+| `1` | Unclassified startup failure. |
+| `10` | Configuration failure before filesystem creation, including work-directory creation or configuration validation. |
+| `11` | Initial iRODS authentication failure while creating the filesystem. |
+
+Statuses `10` and `11` apply only before the filesystem has been created;
+runtime FUSE failures continue to use the ordinary failure status unless a
+future documented status is added.
+
 ## How to use?
 ### Mount an iRODS Collection using URL
 An iRODS user `iychoi` mounts a collection `/iplant/home/iychoi` in iRODS Server `data.cyverse.org` on a local directory `/mount/irods`.
