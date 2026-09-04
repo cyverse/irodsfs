@@ -6,11 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
-	"golang.org/x/xerrors"
+	"github.com/cockroachdb/errors"
 )
 
-// IRODSAccessURL is used to extract iRODS access information from iRODS Access URL (irods://host:port/zone/path)
+// IRODSAccessURL holds iRODS connection details parsed from an irods:// URL
 type IRODSAccessURL struct {
 	User     string
 	Password string
@@ -20,85 +19,48 @@ type IRODSAccessURL struct {
 	Path     string
 }
 
-// ParseIRODSUrl parses iRODS Access URL string and returns IRODSAccessURL struct
+// ParseIRODSUrl parses an irods:// URL and returns an IRODSAccessURL
 func ParseIRODSUrl(inputURL string) (*IRODSAccessURL, error) {
-	logger := log.WithFields(log.Fields{
-		"package":  "commons",
-		"function": "ParseIRODSUrl",
-	})
-
-	if !strings.HasPrefix(inputURL, "irods://") {
-		urlErr := xerrors.Errorf("failed to parse source URL %q", inputURL)
-		logger.Errorf("%+v", urlErr)
-		return nil, urlErr
+	if !strings.HasPrefix(strings.ToLower(inputURL), "irods://") {
+		return nil, errors.Newf("URL must use the irods:// scheme %q", inputURL)
 	}
 
 	u, err := url.Parse(inputURL)
 	if err != nil {
-		urlErr := xerrors.Errorf("failed to parse source URL %q: %w", inputURL, err)
-		logger.Errorf("%+v", urlErr)
-		return nil, urlErr
+		return nil, errors.Wrapf(err, "failed to parse URL %q", inputURL)
 	}
 
-	user := ""
-	password := ""
-
+	user, password := "", ""
 	if u.User != nil {
-		uname := u.User.Username()
-		if len(uname) > 0 {
-			user = uname
-		}
-
-		if pwd, ok := u.User.Password(); ok {
-			password = pwd
-		}
+		user = u.User.Username()
+		password, _ = u.User.Password()
 	}
-
-	host := ""
-	host = u.Hostname()
 
 	port := 1247
-	if len(u.Port()) > 0 {
-		port64, err := strconv.ParseInt(u.Port(), 10, 32)
+	if portStr := u.Port(); portStr != "" {
+		port64, err := strconv.ParseInt(portStr, 10, 32)
 		if err != nil {
-			parseErr := xerrors.Errorf("failed to parse source URL's port number %q: %w", u.Port(), err)
-			logger.Errorf("%+v", parseErr)
-			return nil, parseErr
+			return nil, errors.Wrapf(err, "invalid port in URL %q", inputURL)
 		}
 		port = int(port64)
 	}
 
 	fullpath := path.Clean(u.Path)
-	zone := ""
-	irodsPath := "/"
 	if len(fullpath) == 0 || fullpath[0] != '/' {
-		pathErr := xerrors.Errorf("path %q must contain an absolute path", u.Path)
-		logger.Errorf("%+v", pathErr)
-		return nil, pathErr
+		return nil, errors.Newf("URL path must be absolute %q", inputURL)
 	}
 
-	pos := strings.Index(fullpath[1:], "/")
-	if pos > 0 {
-		zone = strings.Trim(fullpath[1:pos+1], "/")
-		irodsPath = fullpath // starts with zone
-	} else if pos == -1 {
-		// no path
-		zone = strings.Trim(fullpath[1:], "/")
-		irodsPath = fullpath
-	}
-
-	if len(zone) == 0 || len(irodsPath) == 0 {
-		pathErr := xerrors.Errorf("path %q must contain an absolute path", inputURL)
-		logger.Errorf("%+v", pathErr)
-		return nil, pathErr
+	zone := strings.SplitN(fullpath[1:], "/", 2)[0]
+	if zone == "" {
+		return nil, errors.Newf("URL path must include a zone %q", inputURL)
 	}
 
 	return &IRODSAccessURL{
 		User:     user,
 		Password: password,
-		Host:     host,
+		Host:     u.Hostname(),
 		Port:     port,
 		Zone:     zone,
-		Path:     irodsPath,
+		Path:     fullpath,
 	}, nil
 }

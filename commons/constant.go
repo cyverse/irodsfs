@@ -3,16 +3,17 @@ package commons
 import "time"
 
 const (
-	ClientProgramName string = "irodsfs"
-	FuseFSName        string = "irodsfs"
+	DataRootPathFallback string = "/var/lib/irodsfs"
 
-	IRODSEnvironmentFileEnvKey string = "IRODS_ENVIRONMENT_FILE"
+	ReadAheadMaxDefault int = 1024 * 128      // 128KB
+	ReadWriteMaxDefault int = 1 * 1024 * 1024 // 1MB
 
-	ReadAheadMaxDefault        int           = 1024 * 128      // 128KB
-	ReadWriteMaxDefault        int           = 1 * 1024 * 1024 // 1MB
+	// not in-use
 	FilesystemTimeout          time.Duration = 10 * time.Minute
-	ConnectionMaxDefault       int           = 10
 	TCPBufferSizeDefault       int           = 4 * 1024 * 1024 // 4MB
 	TCPBufferSizeStringDefault string        = "4MB"
-	ProfileServicePortDefault  int           = 11021
+	ConnectionMaxDefault       int           = 10
+
+	ClientProgramName string = "irodsfs"
+	FuseFSName        string = "irodsfs"
 )

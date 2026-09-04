@@ -1,28 +1,29 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"net/http"
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"syscall"
 
+	"github.com/cockroachdb/errors"
+	godaemonizer "github.com/cyverse/go-daemonizer"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
+	irodsfs_common_util "github.com/cyverse/irodsfs-common/util"
 	cmd_commons "github.com/cyverse/irodsfs/cmd/commons"
 	"github.com/cyverse/irodsfs/commons"
 	"github.com/cyverse/irodsfs/irodsfs"
-	"github.com/cyverse/irodsfs/utils"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 
-	"github.com/pkg/profile"
 	log "github.com/sirupsen/logrus"
 )
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:           "irodsfs [iRODS URL] mount_point",
-	Short:         "Run iRODS FUSE Lite",
-	Long:          "Run iRODS FUSE Lite that mounts iRODS collections on the directory hierarchy.",
+	Use:           "irodsfs [args..] [mount_point]",
+	Short:         "Run iRODS FUSE",
+	Long:          "Run iRODS FUSE that mounts iRODS collections on the directory hierarchy.",
 	RunE:          processCommand,
 	SilenceUsage:  true,
 	SilenceErrors: true,
@@ -32,6 +33,58 @@ var rootCmd = &cobra.Command{
 		DisableDescriptions: true,
 		HiddenDefaultCmd:    true,
 	},
+	Args: cobra.RangeArgs(0, 1),
+}
+
+var daemon *godaemonizer.Daemon
+
+type shutdownReason int
+
+const (
+	shutdownBySignal shutdownReason = iota
+	shutdownByExternalUnmount
+)
+
+// Exit codes form the process contract for callers such as irodsfsd.
+// Keep these values stable once released.
+const (
+	exitCodeSuccess              = 0
+	exitCodeGeneralFailure       = 1
+	exitCodeConfigurationInvalid = 10
+	exitCodeAuthenticationFailed = 11
+)
+
+type exitCodeError struct {
+	err  error
+	code int
+}
+
+func (err *exitCodeError) Error() string { return err.err.Error() }
+
+func (err *exitCodeError) Unwrap() error { return err.err }
+
+func exitCodeForError(err error) int {
+	var coded *exitCodeError
+	if errors.As(err, &coded) {
+		return coded.code
+	}
+	return exitCodeGeneralFailure
+}
+
+// initialFilesystemError assigns a process exit code only to authentication
+// failures encountered while creating the filesystem. Runtime failures are
+// intentionally outside this startup-only classification.
+func initialFilesystemError(err error) error {
+	if irodsclient_types.IsAuthError(err) {
+		return &exitCodeError{err: err, code: exitCodeAuthenticationFailed}
+	}
+	return err
+}
+
+type managedFilesystem struct {
+	wait     func()
+	shutdown func()
+	release  func()
 }
 
 func Execute() error {
@@ -39,273 +92,226 @@ func Execute() error {
 }
 
 func processCommand(command *cobra.Command, args []string) error {
-	// check if this is subprocess running in the background
-	if cmd_commons.IsChildProcess(command) {
-		// child process
-		childMain()
-		return nil
-	} else if cmd_commons.IsWatchdogProcess(command) {
-		// watchdog process
-		watchdogMain()
-		return nil
-	}
+	logger := log.WithFields(log.Fields{})
 
-	// parent process
-	return parentMain(command, args)
-}
-
-func main() {
-	commons.InitTerminalOutput()
-
-	log.SetFormatter(&log.TextFormatter{
-		TimestampFormat: "2006-01-02 15:04:05.000000",
-		FullTimestamp:   true,
-	})
-
-	log.SetLevel(log.InfoLevel)
-	log.SetOutput(commons.GetTerminalWriter())
-
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "main",
-	})
-
-	// attach common flags
-	cmd_commons.SetCommonFlags(rootCmd)
-
-	err := Execute()
+	// foreground app
+	config, cont, err := cmd_commons.ProcessCommonFlags(command, args)
 	if err != nil {
-		logger.Errorf("%+v", err)
-		commons.PrintErrorf("%+v\n", err)
+		fmt.Fprintf(os.Stderr, "failed to process flags: %v\n", err)
 		os.Exit(1)
-	}
-}
-
-// parentMain handles command-line parameters and run parent process
-func parentMain(command *cobra.Command, args []string) error {
-	config, logWriter, cont, err := cmd_commons.ProcessCommonFlags(command, args)
-	if logWriter != nil {
-		defer logWriter.Close()
-	}
-
-	if err != nil {
-		return err
 	}
 
 	if !cont {
-		return nil
-	}
-
-	// check fuse
-	err = utils.EnsureFuse()
-	if err != nil {
-		return err
+		os.Exit(0)
 	}
 
 	if !config.Foreground {
-		// background
-		childStdin, childStdout, err := cmd_commons.RunChildProcess(os.Args[0])
-		if err != nil {
-			return xerrors.Errorf("failed to run iRODS FUSE Lite child process: %w", err)
+		fmt.Println("run as daemon")
+
+		if !daemon.IsDaemon() {
+			logWriter, err := config.GetLogWriter(true)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "failed to get log writer: %v\n", err)
+				os.Exit(1)
+			}
+
+			if logWriter != nil {
+				defer logWriter.Close()
+			}
+
+			log.SetOutput(logWriter)
+
+			err = daemon.Daemonize(context.Background(), config, nil)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "failed to daemonize: %v\n", err)
+				logger.WithError(err).Fatal("failed to daemonize")
+				os.Exit(1)
+			}
+
+			fmt.Println("daemon started successfully")
+			logger.Info("daemon started successfully")
+			return nil
 		}
 
-		err = cmd_commons.ParentProcessSendConfigViaSTDIN(config, childStdin, childStdout)
+		// daemon process
+		logWriter, err := config.GetLogWriter(false)
 		if err != nil {
-			return xerrors.Errorf("failed to send configuration to iRODS FUSE Lite child process: %w", err)
+			fmt.Fprintf(os.Stderr, "failed to get log writer: %v\n", err)
+			os.Exit(1)
+		}
+
+		if logWriter != nil {
+			defer logWriter.Close()
+		}
+
+		log.SetOutput(logWriter)
+
+		var config commons.Config
+		ready, err := daemon.WaitForParent(&config)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to receive params: %v\n", err)
+			logger.WithError(err).Fatal("failed to receive params")
+			os.Exit(1)
+		}
+
+		err = runManaged(&config, ready)
+		if err != nil {
+			runErr := errors.Wrap(err, "failed to run iRODS FUSE")
+			logger.Error(runErr)
+			return runErr
 		}
 	} else {
 		// run foreground
-		err = run(config, false)
+		fmt.Println("run foreground")
+
+		logWriter, err := config.GetLogWriter(true)
 		if err != nil {
-			return xerrors.Errorf("failed to run iRODS FUSE Lite: %w", err)
+			fmt.Fprintf(os.Stderr, "failed to get log writer: %v\n", err)
+			os.Exit(1)
+		}
+
+		if logWriter != nil {
+			defer logWriter.Close()
+			log.SetOutput(logWriter)
+		}
+
+		err = runManaged(config, nil)
+		if err != nil {
+			runErr := errors.Wrap(err, "failed to run iRODS FUSE")
+			logger.Error(runErr)
+			return runErr
 		}
 	}
 
 	return nil
 }
 
-// childMain runs child process
-func childMain() {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "childMain",
-	})
-
-	logger.Info("Start child process")
-
-	// read from stdin
-	config, logWriter, err := cmd_commons.ChildProcessReadConfigViaSTDIN()
-	if logWriter != nil {
-		defer logWriter.Close()
+func main() {
+	myFormatter := &irodsfs_common_util.StacktraceTextFormatter{
+		TextFormatter: log.TextFormatter{
+			TimestampFormat: "2006-01-02 15:04:05.000000",
+			FullTimestamp:   true,
+		},
 	}
 
+	log.SetFormatter(myFormatter)
+	log.SetLevel(log.InfoLevel)
+	log.SetReportCaller(true)
+
+	logger := log.WithFields(log.Fields{})
+
+	// go-daemonizer relaunches os.Args[0]. Use an absolute path so daemon
+	// startup does not depend on the configured working directory.
+	executable, err := os.Executable()
 	if err != nil {
-		commErr := xerrors.Errorf("failed to communicate to parent process: %w", err)
-		logger.Errorf("%+v", commErr)
-		cmd_commons.ReportChildProcessError()
-		os.Exit(1)
+		logger.WithError(err).Fatal("failed to resolve executable path")
 	}
+	os.Args[0] = executable
 
-	config.ChildProcess = true
+	// must be called before cobra parses os.Args so --__daemon__ is stripped
+	daemon = godaemonizer.New()
 
-	logger.Info("Run child process")
+	// attach common flags
+	cmd_commons.SetCommonFlags(rootCmd)
 
-	// background
-	err = run(config, true)
+	err = Execute()
 	if err != nil {
-		runErr := xerrors.Errorf("failed to run iRODS FUSE Lite: %w", err)
-		logger.Errorf("%+v", runErr)
-		os.Exit(1)
-	}
-
-	if logWriter != nil {
-		logWriter.Close()
-		logWriter = nil
+		logger.Error(err)
+		os.Exit(exitCodeForError(err))
 	}
 }
 
-// watchdogMain runs watchdog process
-func watchdogMain() {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "watchdogMain",
-	})
-
-	logger.Info("Start watchdog process")
-
-	// read from stdin
-	config, logWriter, err := cmd_commons.WatchdogProcessReadConfigViaSTDIN()
-	if logWriter != nil {
-		defer logWriter.Close()
+func runManaged(config *commons.Config, ready func(error)) error {
+	runErr, filesystem := run(config)
+	if runErr != nil {
+		reportReady(ready, runErr)
+		return runErr
 	}
 
-	if err != nil {
-		commErr := xerrors.Errorf("failed to communicate to parent process: %w", err)
-		logger.Errorf("%+v", commErr)
-		cmd_commons.ReportChildProcessError()
-		os.Exit(1)
+	reportReady(ready, nil)
+	reason := waitForShutdown(filesystem.wait)
+	finishManagedFilesystem(filesystem, reason)
+	return nil
+}
+
+func finishManagedFilesystem(filesystem *managedFilesystem, reason shutdownReason) {
+	if reason == shutdownBySignal {
+		filesystem.shutdown()
 	}
+	filesystem.release()
+}
 
-	config.WatchdogProcess = true
-
-	logger.Info("Run watchdog")
-
-	cmd_commons.ReportChildProcessStartSuccessfully()
-	if len(config.GetLogFilePath()) == 0 {
-		cmd_commons.SetNilLogWriter()
-	}
-
-	cmd_commons.WatchParentProcess(config.WatchPID, config.MountPath)
-
-	if logWriter != nil {
-		logWriter.Close()
-		logWriter = nil
+func reportReady(ready func(error), err error) {
+	if ready != nil {
+		ready(err)
 	}
 }
 
-// run runs iRODS FUSE Lite
-func run(config *commons.Config, isChildProcess bool) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "run",
-	})
+// run runs iRODS FUSE
+func run(config *commons.Config) (error, *managedFilesystem) {
+	logger := log.WithFields(log.Fields{})
 
 	if config.Debug {
 		log.SetLevel(log.DebugLevel)
 	}
 
 	versionInfo := commons.GetVersion()
-	logger.Infof("iRODS FUSE Lite version %q, commit %q", versionInfo.ClientVersion, versionInfo.GitCommit)
+	logger.Infof("iRODS FUSE version - %q, commit - %q", versionInfo.ClientVersion, versionInfo.GitCommit)
 
-	err := config.Validate()
-	if err != nil {
-		configErr := xerrors.Errorf("invalid configuration: %w", err)
-		logger.Errorf("%+v", configErr)
-
-		if isChildProcess {
-			cmd_commons.ReportChildProcessError()
-		}
-		return err
+	if err := config.MakeWorkDirs(); err != nil {
+		mkdirErr := errors.Wrap(err, "make work dir error")
+		logger.Error(mkdirErr)
+		return &exitCodeError{err: mkdirErr, code: exitCodeConfigurationInvalid}, nil
 	}
 
-	// profile
-	if config.Profile && config.ProfileServicePort > 0 {
-		go func() {
-			profileServiceAddr := fmt.Sprintf(":%d", config.ProfileServicePort)
-
-			logger.Infof("Starting profile service at %q", profileServiceAddr)
-			http.ListenAndServe(profileServiceAddr, nil)
-		}()
-
-		prof := profile.Start(profile.MemProfile)
-		defer prof.Stop()
+	if err := config.Validate(); err != nil {
+		configErr := errors.Wrap(err, "invalid configuration")
+		logger.Error(configErr)
+		return &exitCodeError{err: configErr, code: exitCodeConfigurationInvalid}, nil
 	}
 
-	// run the filesystem
 	fs, err := irodsfs.NewFileSystem(config)
 	if err != nil {
-		fsErr := xerrors.Errorf("failed to create the filesystem: %w", err)
-		logger.Errorf("%+v", fsErr)
-
-		if isChildProcess {
-			cmd_commons.ReportChildProcessError()
-		}
-		return fsErr
+		fsErr := errors.Wrap(err, "failed to create the filesystem")
+		logger.Error(fsErr)
+		return initialFilesystemError(fsErr), nil
 	}
 
 	// iRODS connection must be established correctly by here
 	// any network errors from here will be recoverable
-	err = fs.Start()
-	if err != nil {
-		fsErr := xerrors.Errorf("failed to start the filesystem: %w", err)
-		logger.Errorf("%+v", fsErr)
-		if isChildProcess {
-			cmd_commons.ReportChildProcessError()
-		}
-
+	if err := fs.Mount(); err != nil {
+		fsErr := errors.Wrap(err, "failed to start the filesystem")
+		logger.Error(fsErr)
 		fs.Release()
-		return fsErr
+		return fsErr, nil
 	}
 
-	if isChildProcess {
-		cmd_commons.ReportChildProcessStartSuccessfully()
-		if len(config.GetLogFilePath()) == 0 {
-			cmd_commons.SetNilLogWriter()
-		}
+	return nil, &managedFilesystem{
+		wait:     fs.Wait,
+		shutdown: fs.Unmount,
+		release:  fs.Release,
 	}
+}
 
-	defer func() {
-		logger.Info("exiting")
-		fs.Stop(true)
-		fs.Release()
-
-		os.Exit(0)
-	}()
-
-	// handle ctrl + C
-	signalChannel := make(chan os.Signal, 1)
-	signal.Notify(signalChannel, os.Interrupt)
+func waitForShutdown(waitForFuse func()) shutdownReason {
+	fuseExited := make(chan struct{})
 	go func() {
-		<-signalChannel
-		logger.Info("received intrrupt")
-		fs.Stop(false) // this unmounts fuse
-		logger.Info("stopped the filesystem, unmounting FUSE")
+		waitForFuse()
+		close(fuseExited)
 	}()
 
-	// watch
-	watchdogStdin, watchdogStdout, err := cmd_commons.RunWatchdogProcess(os.Args[0])
-	if err != nil {
-		return xerrors.Errorf("failed to run watchdog process: %w", err)
+	signalChannel := make(chan os.Signal, 1)
+	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(signalChannel)
+
+	return waitForShutdownEvent(fuseExited, signalChannel)
+}
+
+func waitForShutdownEvent(fuseExited <-chan struct{}, signalChannel <-chan os.Signal) shutdownReason {
+	select {
+	case <-fuseExited:
+		return shutdownByExternalUnmount
+	case <-signalChannel:
+		return shutdownBySignal
 	}
-
-	config.WatchPID = os.Getpid()
-	err = cmd_commons.WatchtargetProcessSendConfigViaSTDIN(config, watchdogStdin, watchdogStdout)
-	if err != nil {
-		return xerrors.Errorf("failed to send configuration to iRODS FUSE Lite watchdog process: %w", err)
-	}
-
-	// wait
-	fs.Wait()
-
-	return nil
 }

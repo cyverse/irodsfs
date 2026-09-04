@@ -1,28 +1,42 @@
-name: Release iRODS FUSE Lite
+name: Release iRODS FUSE
 on:
   release:
     types: [created]
 
+permissions:
+  contents: write
+
 jobs:
-  releases-matrix:
-    name: Release Go Binary
+  release-matrix:
+    name: Release Linux archive (${{ matrix.goarch }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        goos: [linux]
         goarch: ["386", amd64, arm, arm64]
     env:
       PKG: "github.com/cyverse/irodsfs"
     steps:
-    - name: "set build date"
-      run: echo "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
-    - uses: actions/checkout@v3
-    - uses: wangyoucao577/go-release-action@v1.53
+    - name: "Set build date"
+      run: echo "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
       with:
-        github_token: ${{ secrets.RELEASE_GITHUB_TOKEN }}
-        goos: ${{ matrix.goos }}
-        goarch: ${{ matrix.goarch }}
-        project_path: "./cmd/"
-        binary_name: "irodsfs"
-        extra_files: LICENSE README.md
-        ldflags: "-X ${{ env.PKG }}/commons.clientVersion=${{ github.ref_name }} -X ${{ env.PKG }}/commons.gitCommit=${{ github.sha }} -X ${{ env.PKG }}/commons.buildDate=${{ env.BUILD_DATE }}"
+        go-version-file: go.mod
+    - name: Build release archive
+      env:
+        GOARCH: ${{ matrix.goarch }}
+        RELEASE_TAG: ${{ github.ref_name }}
+      run: |
+        asset_name="irodsfs-${RELEASE_TAG}-linux-${GOARCH}"
+        stage_dir="dist/${asset_name}"
+        mkdir -p "${stage_dir}"
+        CGO_ENABLED=0 GOOS=linux GOARCH="${GOARCH}" go build \
+          -ldflags "-X ${PKG}/commons.clientVersion=${RELEASE_TAG} -X ${PKG}/commons.gitCommit=${GITHUB_SHA} -X ${PKG}/commons.buildDate=${BUILD_DATE}" \
+          -o "${stage_dir}/irodsfs" ./cmd/
+        install -m 0755 mount_exec/install.sh "${stage_dir}/install.sh"
+        install -m 0755 mount_exec/mount.irodsfs "${stage_dir}/mount.irodsfs"
+        tar -C "${stage_dir}" -czf "dist/${asset_name}.tar.gz" .
+    - uses: softprops/action-gh-release@v2
+      with:
+        files: dist/*.tar.gz

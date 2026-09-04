@@ -1,195 +1,147 @@
 package irodsfs
 
 import (
+	"fmt"
+	"sync/atomic"
 	"syscall"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
-	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
-	irodsfs_common_inode "github.com/cyverse/irodsfs-common/inode"
 	irodsfs_common_irods "github.com/cyverse/irodsfs-common/irods"
-	irodsfs_common_utils "github.com/cyverse/irodsfs-common/utils"
-	irodsfs_common_vpath "github.com/cyverse/irodsfs-common/vpath"
-	irodspoolclient "github.com/cyverse/irodsfs-pool/client"
-	"golang.org/x/xerrors"
+	"github.com/cyverse/irodsfs-common/irods/vpath"
+	irodsfs_common_util "github.com/cyverse/irodsfs-common/util"
+	irodsfs_pool_client "github.com/cyverse/irodsfs-pool/client"
 
 	fusefs "github.com/hanwen/go-fuse/v2/fs"
 	fuse "github.com/hanwen/go-fuse/v2/fuse"
 
 	"github.com/cyverse/irodsfs/commons"
-	"github.com/cyverse/irodsfs/utils"
 	log "github.com/sirupsen/logrus"
 )
-
-// GetFuseOptions returns fuse options
-func GetFuseOptions(config *commons.Config) *fusefs.Options {
-	logger := log.WithFields(log.Fields{
-		"package":  "irodsfs",
-		"function": "GetFuseOptions",
-	})
-
-	options := &fusefs.Options{}
-
-	// TODO: handle fuse specific options in config.FuseOptions
-	options.AllowOther = config.AllowOther
-	if config.Debug && config.Foreground {
-		options.Debug = true
-		logger.Debugf("Debug and foreground mode enabled")
-	}
-
-	options.AttrTimeout = nil
-	options.EntryTimeout = nil
-	options.NegativeTimeout = nil
-	options.UID = uint32(config.UID)
-	logger.Infof("UID %d is set", config.UID)
-	options.GID = uint32(config.GID)
-	logger.Infof("GID %d is set", config.GID)
-	options.MaxReadAhead = config.ReadAheadMax
-	options.MaxWrite = config.ReadWriteMax
-	options.FsName = commons.FuseFSName
-	options.Name = commons.FuseFSName
-	options.SingleThreaded = false
-	options.IgnoreSecurityLabels = true
-	options.EnableLocks = true
-	options.DisableReadDirPlus = true
-	options.ExplicitDataCacheControl = true // experimental
-	options.DirectMount = true              // experimental
-	return options
-}
 
 // IRODSFS is a file system object
 type IRODSFS struct {
 	config *commons.Config
 
-	fuseServer    *fuse.Server
-	inodeManager  *irodsfs_common_inode.InodeManager
-	vpathManager  *irodsfs_common_vpath.VPathManager
-	fsClient      irodsfs_common_irods.IRODSFSClient
-	usePoolServer bool
-	fileHandleMap *FileHandleMap
-	userGroupsMap map[string]*irodsclient_types.IRODSUser
+	fuseServer   *fuse.Server
+	vpathManager *vpath.VPathManager
+
+	fsPoolClient        *irodsfs_pool_client.PoolServiceClient
+	irodsfsClient       *irodsclient_fs.FileSystem
+	fsClient            irodsfs_common_irods.IRODSFSClient
+	fsClientReleaseFunc func()
+	usePoolServer       bool
+	fileHandleMap       *FileHandleMap
 
 	uid uint32
 	gid uint32
 
-	operationIDCurrent uint64
-
-	terminated bool
+	currentOperationCounter atomic.Uint64
+	logger                  *log.Entry
+	startTime               time.Time
+	terminated              atomic.Bool
 }
 
 // NewFileSystem creates a new file system
 func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
-	logger := log.WithFields(log.Fields{
-		"package":  "irodsfs",
-		"function": "NewFileSystem",
-	})
+	logger := log.WithFields(log.Fields{})
 
-	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+	defer irodsfs_common_util.StackTraceFromPanic(logger)
 
 	account := config.ToIRODSAccount()
-
-	logger.Infof("Connect to IRODS server using %q auth scheme", string(account.AuthenticationScheme))
+	logger.Infof("Connect to IRODS server using %v", account.GetRedacted())
 
 	logger.Info("Initializing an iRODS file system client")
 	var fsClient irodsfs_common_irods.IRODSFSClient
 	var err error
 
+	if len(config.Description) == 0 {
+		config.Description = fmt.Sprintf("mountpoint: %q, sysuser: %q, uid: %d, gid: %d", config.MountPath, config.SystemUser, config.UID, config.GID)
+	}
+
+	if len(config.Description) > 0 {
+		logger.Infof("%s: %s", commons.FuseFSName, config.Description)
+	}
+
 	usePoolServer := false
 	if len(config.PoolEndpoint) > 0 {
 		// use pool driver
-		logger.Info("Initializing irodsfs-pool fs client")
-		poolClient := irodspoolclient.NewPoolServiceClient(config.PoolEndpoint, time.Duration(config.MetadataConnection.OperationTimeout), config.InstanceID)
+		logger.Info("Initializing irodsfs-pool client")
+		poolClient := irodsfs_pool_client.NewPoolServiceClient(config.PoolEndpoint, time.Duration(config.MetadataConnection.LongOperationTimeout), true, logger)
 		err = poolClient.Connect()
 		if err != nil {
-			clientErr := xerrors.Errorf("failed to connect to irodsfs-pool server %q: %w", config.PoolEndpoint, err)
-			logger.Errorf("%+v", clientErr)
+			clientErr := errors.Wrapf(err, "failed to connect to irodsfs-pool server %q", config.PoolEndpoint)
+			logger.Error(clientErr)
 			return nil, clientErr
 		}
 
-		fsClient, err = poolClient.NewSession(account, commons.FuseFSName)
+		fsClient, err = poolClient.NewSession(account, commons.FuseFSName, config.Description)
 		if err != nil {
-			sessionErr := xerrors.Errorf("failed to create a new irodsfs-pool fs client: %w", err)
-			logger.Errorf("%+v", sessionErr)
+			sessionErr := errors.Wrap(err, "failed to create a irodsfs-pool fs client")
+			logger.Error(sessionErr)
 			return nil, sessionErr
 		}
 
 		usePoolServer = true
 	} else {
 		// use go-irodsclient driver
-		logger.Info("Initializing an iRODS native file system client")
+		logger.Info("Initializing go-irodsclient fs client")
 		fsConfig := irodsclient_fs.NewFileSystemConfig(commons.FuseFSName)
 		fsConfig.MetadataConnection = config.MetadataConnection
 		fsConfig.IOConnection = config.IOConnection
 		fsConfig.Cache = config.Cache
 
-		fsClient, err = irodsfs_common_irods.NewIRODSFSClientDirect(account, fsConfig)
+		irodsfsClient, err := irodsclient_fs.NewFileSystem(account, fsConfig)
 		if err != nil {
-			clientErr := xerrors.Errorf("failed to create a new go-irodsclient fs client: %w", err)
-			logger.Errorf("%+v", clientErr)
+			clientErr := errors.Wrap(err, "failed to create a go-irodsclient fs client")
+			logger.Error(clientErr)
+			return nil, clientErr
+		}
+
+		fsClient, err = irodsfs_common_irods.NewIRODSFSClientDirect(irodsfsClient)
+		if err != nil {
+			clientErr := errors.Wrap(err, "failed to wrap go-irodsclient as irods fs client")
+			logger.Error(clientErr)
 			return nil, clientErr
 		}
 	}
 
-	inodeManager := irodsfs_common_inode.NewInodeManager()
-
 	logger.Info("Initializing virtual path mappings")
-	// fix readonly
-	if config.Readonly {
-		for idx := range config.PathMappings {
-			config.PathMappings[idx].ReadOnly = true
-		}
-	}
-
-	vpathManager, err := irodsfs_common_vpath.NewVPathManager(fsClient, inodeManager, config.PathMappings)
+	vpathManager, err := vpath.NewVPathManager(fsClient, config.PathMappings)
 	if err != nil {
-		vpathErr := xerrors.Errorf("failed to create Virtual Path Manager: %w", err)
-		logger.Errorf("%+v", vpathErr)
+		vpathErr := errors.Wrap(err, "failed to create Virtual Path Manager")
+		logger.Error(vpathErr)
 		return nil, vpathErr
 	}
 
 	logger.Info("Initializing File Handle Map")
 	fileHandleMap := NewFileHandleMap()
 
-	userGroups, err := fsClient.ListUserGroups(account.ClientZone, account.ClientUser)
-	if err != nil {
-		ugErr := xerrors.Errorf("failed to list groups for a user %q: %w", account.ClientUser, err)
-		logger.Errorf("%+v", ugErr)
-		return nil, ugErr
-	}
+	fs := &IRODSFS{
+		config: config,
 
-	userGroupsMap := map[string]*irodsclient_types.IRODSUser{}
-	for _, userGroup := range userGroups {
-		userGroupsMap[userGroup.Name] = userGroup
-	}
-
-	return &IRODSFS{
-		config:        config,
-		fuseServer:    nil,
-		inodeManager:  inodeManager,
 		vpathManager:  vpathManager,
 		fsClient:      fsClient,
 		usePoolServer: usePoolServer,
 		fileHandleMap: fileHandleMap,
-		userGroupsMap: userGroupsMap,
 
 		uid: uint32(config.UID),
 		gid: uint32(config.GID),
 
-		operationIDCurrent: 0,
-	}, nil
+		startTime: time.Now(),
+		logger:    logger,
+	}
+
+	return fs, nil
 }
 
-// Release destroys the file system
+// Release releases the file system
 func (fs *IRODSFS) Release() {
-	logger := log.WithFields(log.Fields{
-		"package":  "irodsfs",
-		"struct":   "IRODSFS",
-		"function": "Release",
-	})
+	defer irodsfs_common_util.StackTraceFromPanic(fs.logger)
 
-	logger.Info("Releasing the iRODS FUSE Lite")
-
-	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+	fs.logger.Info("Releasing the iRODS FUSE")
+	defer fs.logger.Info("Released the iRODS FUSE")
 
 	if fs.fileHandleMap != nil {
 		fs.fileHandleMap.Clear()
@@ -200,103 +152,171 @@ func (fs *IRODSFS) Release() {
 		fs.fsClient.Release()
 		fs.fsClient = nil
 	}
+
+	if fs.fsPoolClient != nil {
+		fs.fsPoolClient.Disconnect()
+		fs.fsPoolClient = nil
+	}
+
+	if fs.irodsfsClient != nil {
+		fs.irodsfsClient.Release()
+		fs.irodsfsClient = nil
+	}
 }
 
-// Start starts FUSE
-func (fs *IRODSFS) Start() error {
-	logger := log.WithFields(log.Fields{
-		"package":  "irodsfs",
-		"struct":   "IRODSFS",
-		"function": "Start",
-	})
-
-	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+// Mount mounts FUSE
+func (fs *IRODSFS) Mount() error {
+	defer irodsfs_common_util.StackTraceFromPanic(fs.logger)
 
 	// mount
-	logger.Infof("Starting iRODS FUSE Lite, connecting to FUSE on %q", fs.config.MountPath)
+	fs.logger.Infof("Mounting iRODS FUSE on %q", fs.config.MountPath)
 
-	rootDir, err := fs.Root()
+	rootDir, err := fs.GetRoot()
 	if err != nil {
-		logger.Errorf("%+v", err)
+		fs.logger.Error(err)
 		return err
 	}
 
-	fuseServer, err := fusefs.Mount(fs.config.MountPath, rootDir, GetFuseOptions(fs.config))
+	fuseServer, err := fusefs.Mount(fs.config.MountPath, rootDir, fs.GetFuseOptions())
 	if err != nil {
-		logger.Errorf("%+v", err)
+		fs.logger.Error(err)
 		return err
 	}
 
 	fs.fuseServer = fuseServer
 
-	logger.Infof("Connected to FUSE, mount on %q", fs.config.MountPath)
+	fs.logger.Infof("Connected to FUSE, mount on %q", fs.config.MountPath)
 
 	return nil
 }
 
-func (fs *IRODSFS) Stop(silentUnmount bool) {
-	if fs.terminated {
+// Wait blocks until the FUSE request-serving loop exits. This happens when
+// the filesystem is unmounted, including when it is unmounted externally.
+func (fs *IRODSFS) Wait() {
+	if fs.fuseServer == nil {
 		return
 	}
 
-	logger := log.WithFields(log.Fields{
-		"package":  "irodsfs",
-		"struct":   "IRODSFS",
-		"function": "Stop",
-	})
-
-	logger.Infof("Stopping FUSE (silentUnmount=%t)", silentUnmount)
-
-	defer irodsfs_common_utils.StackTraceFromPanic(logger)
-
-	fs.terminated = true
-
-	//fs.fuseServer.Unmount()
-	err := utils.UnmountFuse(fs.config.MountPath)
-	if err != nil {
-		if silentUnmount {
-			logger.Info(err)
-		} else {
-			logger.Error(err)
-		}
-	}
-	fs.fuseServer = nil
-}
-
-func (fs *IRODSFS) Wait() {
 	fs.fuseServer.Wait()
 }
 
-// Root returns root directory node
-func (fs *IRODSFS) Root() (*Dir, error) {
-	if fs.terminated {
+func (fs *IRODSFS) Unmount() {
+	if fs.terminated.Load() {
+		return
+	}
+
+	defer irodsfs_common_util.StackTraceFromPanic(fs.logger)
+
+	fs.logger.Info("Stopping FUSE")
+
+	fs.terminated.Store(true)
+
+	if fs.fuseServer == nil {
+		return
+	}
+
+	err := fs.fuseServer.Unmount()
+	if err != nil {
+		fs.logger.WithError(err).Warn("failed to unmount FUSE gracefully; attempting lazy unmount")
+
+		// A graceful unmount can fail with EBUSY while another process has
+		// its working directory or an open file inside the mount. Detach the
+		// mount before this process exits so it does not leave a stale FUSE
+		// mount behind.
+		fallbackErr := commons.UnmountFuse(fs.config.MountPath)
+		if fallbackErr != nil {
+			fs.logger.WithError(fallbackErr).Error("failed to detach FUSE mount")
+			return
+		}
+
+		fs.logger.Info("Detached FUSE mount lazily")
+		return
+	}
+
+	fs.logger.Info("Stopped FUSE")
+}
+
+// GetRoot returns root directory node
+func (fs *IRODSFS) GetRoot() (*Dir, error) {
+	if fs.terminated.Load() {
 		return nil, syscall.ECONNABORTED
 	}
 
-	logger := log.WithFields(log.Fields{
-		"package":  "irodsfs",
-		"struct":   "IRODSFS",
-		"function": "Root",
-	})
-
-	defer irodsfs_common_utils.StackTraceFromPanic(logger)
+	defer irodsfs_common_util.StackTraceFromPanic(fs.logger)
 
 	vpathEntry := fs.vpathManager.GetEntry("/")
 	if vpathEntry == nil {
-		logger.Errorf("failed to get Root VPath Entry")
+		fs.logger.Error("failed to get root VPath Entry")
 		return nil, syscall.EREMOTEIO
 	}
 
 	if vpathEntry.IsVirtualDirEntry() {
-		inodeID := fs.inodeManager.GetInodeIDForVPathEntryID(vpathEntry.VirtualDirEntry.ID)
+		inodeID, inodeErr := fs.vpathManager.CreateOrGetInodeIDForVirtualEntry("/")
+		if inodeErr != nil {
+			fs.logger.WithError(inodeErr).Error("failed to get inode ID for root")
+			return nil, syscall.EREMOTEIO
+		}
 		return NewDir(fs, inodeID, "/"), nil
 	}
 
-	return NewIRODSRoot(fs, vpathEntry)
+	// irods
+	err := ensureVPathEntryIsIRODSDir(fs.fsClient, vpathEntry)
+	if err != nil {
+		fs.logger.WithError(err).Error("failed to ensure VPathEntry for root is irods dir")
+		return nil, syscall.EREMOTEIO
+	}
+
+	inodeID, inodeErr := fs.getInodeIDForIRODSEntry(vpathEntry.IRODSEntry)
+	if inodeErr != nil {
+		fs.logger.WithError(inodeErr).Errorf("failed to get inode ID for %s", vpathEntry.IRODSPath)
+		return nil, syscall.EREMOTEIO
+	}
+
+	return NewDir(fs, inodeID, "/"), nil
 }
 
 // GetNextOperationID returns next operation ID
 func (fs *IRODSFS) GetNextOperationID() uint64 {
-	fs.operationIDCurrent++
-	return fs.operationIDCurrent
+	return fs.currentOperationCounter.Add(1)
+}
+
+// GetFuseOptions returns fuse options
+func (fs *IRODSFS) GetFuseOptions() *fusefs.Options {
+	options := &fusefs.Options{}
+
+	if fs.config.Debug && fs.config.Foreground {
+		options.Debug = true
+		fs.logger.Debugf("Debug and foreground mode enabled")
+	}
+
+	options.AttrTimeout = nil
+	options.EntryTimeout = nil
+	options.NegativeTimeout = nil
+
+	options.UID = uint32(fs.config.UID)
+	fs.logger.Infof("UID %d is set", fs.config.UID)
+	options.GID = uint32(fs.config.GID)
+	fs.logger.Infof("GID %d is set", fs.config.GID)
+
+	options.MaxReadAhead = fs.config.ReadAheadMax
+	options.MaxWrite = fs.config.ReadWriteMax
+	options.FsName = commons.FuseFSName
+	options.Name = commons.FuseFSName
+	options.SingleThreaded = false
+	options.IgnoreSecurityLabels = true
+	options.EnableLocks = true
+	options.DisableReadDirPlus = true
+	options.ExplicitDataCacheControl = true // experimental
+	//options.DirectMount = true              // experimental
+
+	if fs.config.Readonly {
+		options.MountOptions.Options = append(options.MountOptions.Options, "ro")
+	}
+
+	if len(fs.config.FuseOptions) > 0 {
+		options.MountOptions.Options = append(options.MountOptions.Options, fs.config.FuseOptions...)
+		fs.logger.Infof("Fuse options %v are set", fs.config.FuseOptions)
+	}
+
+	return options
 }

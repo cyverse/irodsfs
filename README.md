@@ -1,4 +1,4 @@
-# iRODS FUSE Lite
+# iRODS FUSE
 FUSE implementation of iRODS Client written in Golang
 
 ## What is it?
@@ -7,14 +7,14 @@ Users are able to `mount` an `iRODS Collection` (multiple `Collections` or `Data
 ## Download pre-built binaries
 Pre-built binaries can be found in `Release` in the repository. Checkout tarballs attached as assets in a release.
 
-iRODS FUSE Lite only works on Linux systems. MacOS (osx) is not supported as FUSE library is not open-source anymore. The binaries run on any Linux distros (e.g., Ubuntu 18.x, Ubuntu 20.x, CentOS 7, or CentOS 8) without requiring any dependencies. Use correct release binaries for your OS and architecture.
+iRODS FUSE only works on Linux systems. MacOS (osx) is not supported as FUSE library is not open-source anymore. The binaries run on any Linux distros (e.g., Ubuntu 18.x, Ubuntu 20.x, CentOS 7, or CentOS 8) without requiring any dependencies. Use correct release binaries for your OS and architecture.
 
-Links for iRODS FUSE Lite: [https://github.com/cyverse/irodsfs/releases](https://github.com/cyverse/irodsfs/releases)
+Links for iRODS FUSE: [https://github.com/cyverse/irodsfs/releases](https://github.com/cyverse/irodsfs/releases)
 
 ## Build from source
 
 ### Prerequisite - libFUSE
-iRODS FUSE Lite requires `libFUSE` library to provide file system mount in linux. `libFUSE` can be installed using linux package managers, such as `yum` or `apt`.
+iRODS FUSE requires `libFUSE` library to provide file system mount in linux. `libFUSE` can be installed using linux package managers, such as `yum` or `apt`.
 
 In Ubuntu,
 ```shell script
@@ -35,7 +35,7 @@ docker run -ti --privileged <docker_image_name> /bin/bash
 ```  
 
 ### Prerequisite - Go
-iRODS FUSE Lite is written in `Go`. So `Go` is required to build iRODS FUSE Lite. Note that once iRODS FUSE Lite is built, it does not require `Go` for running.
+iRODS FUSE is written in `Go`. So `Go` is required to build iRODS FUSE. Note that once iRODS FUSE is built, it does not require `Go` for running.
 To install `Go`, please refer [official installation guide](https://golang.org/doc/install).
 
 ### Prerequisite - Build essentials
@@ -71,6 +71,66 @@ make build
 
 After successful build, you will be able to find the binary in bin directory.
 
+## Install the latest Linux release
+
+Install the latest release for the current Linux architecture with:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/cyverse/irodsfs/main/install.sh | bash
+```
+
+The installer downloads the matching GitHub Release archive and installs both
+`/usr/bin/irodsfs` and `/sbin/mount.irodsfs`. The latter lets `mount -t
+irodsfs ...` find the iRODSFS mount helper. This installation does not create
+or use a systemd service. Before installing, it verifies that `/dev/fuse` and
+either `fusermount3` or `fusermount` are available.
+
+## Command-line Options
+
+```
+Usage:
+  irodsfs [flags] [mount_point]
+
+Flags:
+  -c, --config string          Config file or directory (default: ~/.irods)
+  -u, --username string        iRODS username
+      --client_username string iRODS client username (for proxy auth)
+  -p, --password string        iRODS password
+      --url string             iRODS URL (e.g., irods://user:pass@host:port/zone/path)
+  -f, --foreground             Run in foreground (default: run as daemon)
+  -d, --debug                  Enable debug mode
+      --readonly               Mount read-only
+      --uid int                UID of file/directory owner (default: current user)
+      --gid int                GID of file/directory owner (default: current group)
+      --sys_user string        System user of file/directory owner
+      --read_ahead_max int     Read-ahead buffer size in bytes
+      --read_write_max int     Max read/write size in bytes
+      --no_transaction         Disable iRODS transaction (may improve performance)
+  -o, --fuse_option strings    Additional FUSE mount options
+      --pool_endpoint string   iRODS FUSE Pool Service endpoint
+      --data_root string       Data root directory path
+      --log_path string        Log file path
+      --instance_id string     Instance ID
+  -v, --version                Print version
+  -h, --help                   Print help
+```
+
+## Exit status
+
+`irodsfs` uses the following exit statuses during startup. They are a stable
+process interface for supervisors such as `irodsfsd`.
+
+| Status | Meaning |
+| --- | --- |
+| `0` | Normal exit. |
+| `1` | Unclassified startup failure. |
+| `10` | Configuration failure before filesystem creation, including work-directory creation or configuration validation. |
+| `11` | Initial iRODS authentication failure while creating the filesystem. |
+
+Statuses `10` and `11` apply only before the filesystem has been created;
+runtime FUSE failures continue to use the ordinary failure status unless a
+future documented status is added.
+
 ## How to use?
 ### Mount an iRODS Collection using URL
 An iRODS user `iychoi` mounts a collection `/iplant/home/iychoi` in iRODS Server `data.cyverse.org` on a local directory `/mount/irods`.
@@ -85,10 +145,10 @@ An iRODS user `iychoi` mounts a collection `/iplant/home/iychoi` in iRODS Server
 
 Run `irodsfs`.
 ```shell script
-./bin/irodsfs irods://iychoi:my_password@data.cyverse.org:1247/iplant/home/iychoi /mount/irods
+./bin/irodsfs --url irods://iychoi:my_password@data.cyverse.org:1247/iplant/home/iychoi /mount/irods
 ```
 
-After mounting, `irodsfs` will be executed in the background.
+After mounting, `irodsfs` will be executed in the background. Use `-f` to run in foreground instead.
 
 Test access the mount.
 ```shell script
@@ -113,7 +173,7 @@ irods_host: data.cyverse.org
 irods_port: 1247
 irods_user_name: iychoi
 irods_zone_name: iplant
-irods_user_password: `my_password`
+irods_user_password: my_password
 
 path_mappings:
   - irods_path: /iplant/home/iychoi
@@ -143,8 +203,8 @@ An iRODS user `iychoi` mounts a collection `/iplant/home/iychoi` in iRODS Server
 - iRODS Zone: `iplant`
 - iRODS Collection to mount: `/iplant/home/iychoi`
 - Local directory to mount: `/mount/irods`
-- Authentication Scheme: `pam`
-- CA Cert File: `/etc/ssl/certs/ca-certificates.crt`
+- Authentication Scheme: `pam_password`
+- CA Cert File: `/home/iychoi/.irods/ca_cert.pem`
 - Encryption Key Size: `32`
 - Encryption Algorithm: `AES-256-CBC`
 - Encryption Salt Size: `8`
@@ -156,7 +216,7 @@ irods_host: data.cyverse.org
 irods_port: 1247
 irods_user_name: iychoi
 irods_zone_name: iplant
-irods_user_password: `my_password`
+irods_user_password: my_password
 
 irods_authentication_scheme: "pam_password"
 irods_ssl_ca_certificate_file: "/home/iychoi/.irods/ca_cert.pem"
@@ -199,7 +259,7 @@ irods_host: data.cyverse.org
 irods_port: 1247
 irods_user_name: iychoi
 irods_zone_name: iplant
-irods_user_password: `my_password`
+irods_user_password: my_password
 
 path_mappings:
   - irods_path: /iplant/home/iychoi/mount1
@@ -224,7 +284,7 @@ ls /mount/irods
 
 ### Mount User's iRODS Home Collection using iCommands config (~/.irods)
 
-An iRODS user `iychoi` has iCommands config in `~/.irods`. 
+An iRODS user `iychoi` has iCommands config in `~/.irods`.
 
 Run `irodsfs` without any `--config` or `-c` option.
 ```shell script
@@ -238,9 +298,22 @@ Test access the mount.
 ls /mount/irods
 ```
 
+### Using iRODS FUSE Pool Service
+
+iRODS FUSE can connect to an `irodsfs-pool` service to share iRODS connections across multiple mount instances, reducing the number of connections to the iRODS server.
+
+```shell script
+./bin/irodsfs -c config.yaml --pool_endpoint localhost:8021 /mount/irods
+```
+
+Or set it in the config file:
+```yaml
+pool_endpoint: "localhost:8021"
+```
+
 ### Change Log Level
 
-An iRODS can change the log level in two ways: 1) using command-line argument `--log_level` or 2) using `log_level` parameter in a configuration file.
+The log level can be set using `log_level` in the configuration file.
 
 There are 6 log levels configurable (case-insensitive):
 - "PANIC"
@@ -250,35 +323,33 @@ There are 6 log levels configurable (case-insensitive):
 - "DEBUG"
 - "TRACE"
 
-For example, to display only fatal or more severe error logs, run `irodsfs` with `--log_level FATAL` option.
-```shell script
-./bin/irodsfs -c ~/.irods --log_level FATAL /mount/irods
-```
-
-Command-line argument `--log_level` overrides the log level set in a configuration file if any.
-
-To set the log level using a configuration file, add a `log_level` field.
+To set the log level, add a `log_level` field to the config file.
 
 ```yaml
 irods_host: data.cyverse.org
 irods_port: 1247
 irods_user_name: iychoi
 irods_zone_name: iplant
-irods_user_password: `my_password`
+irods_user_password: my_password
 log_level: FATAL
 
 path_mappings:
-  - irods_path: /iplant/home/iychoi/mount1
-    mapping_path: /mount1
+  - irods_path: /iplant/home/iychoi
+    mapping_path: /
     resource_type: dir
-  - irods_path: /iplant/home/iychoi/mount2
-    mapping_path: /mount2
-    resource_type: dir
+```
+
+### Read-only Mount
+
+To mount a collection as read-only, use the `--readonly` flag or set `readonly: true` in the config file.
+
+```shell script
+./bin/irodsfs -c config.yaml --readonly /mount/irods
 ```
 
 ### Unmount
 
-It is recommended to use `fusermount` command to unmount iRODS FUSE Lite as it does not require admin permission.
+It is recommended to use `fusermount` command to unmount iRODS FUSE as it does not require admin permission.
 
 ```shell script
 fusermount -u /mount/irods
@@ -291,7 +362,7 @@ Otherwise, you can also try `lazy-unmount`, which will mark to unmount after the
 fusermount -u -z /mount/irods
 ```
 
-It is also possible to use `umount` command to unmount iRODS FUSE Lite. But in this case, you will need admin permission (or `sudo`).
+It is also possible to use `umount` command to unmount iRODS FUSE. But in this case, you will need admin permission (or `sudo`).
 
 ```shell script
 sudo umount /mount/irods

@@ -1,164 +1,152 @@
 #! /usr/bin/env python3
 
+# mount -t irodsfs URL /opt/mount
+# [0] /sbin/mount.irodsfs
+# [1] URL
+# [2] /opt/mount
+
 import os
 import sys
+import shutil
 import subprocess
 import time
 
-from os import listdir
-from urllib.parse import urlparse
+# Options supported as iRODSFS command-line flags.  mount(8) uses -o for both
+# filesystem-specific and generic FUSE options, so an arbitrary key=value must
+# not be assumed to be an iRODSFS flag.
+IRODSFS_VALUE_OPTIONS = {
+    "config",
+    "instance_id",
+    "log_path",
+    "username",
+    "client_username",
+    "password",
+    "read_ahead_max",
+    "read_write_max",
+    "uid",
+    "gid",
+    "sys_user",
+    "data_root",
+    "pool_endpoint",
+    "url",
+}
 
-# mount -t irodsfs URL /opt/mount
-#[0] /sbin/mount.irodsfs
-#[1] URL
-#[2] /opt/mount
 
-def which(program):
-    pathenv = os.getenv('PATH')
-    if not pathenv:
-        pathenv = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-
-    for p in pathenv.split(os.path.pathsep):
-        binpath = os.path.join(p, program)
-        if os.path.exists(binpath) and os.access(binpath, os.X_OK):
-            return binpath
-    return None
-
-def reorderArgs(argv):
-    command = ""
+def reorder_args(argv):
     options = []
-    positionalArgs = []
-    skipCount = 0
-    mountTimeout = 60
-    for idx, arg in enumerate(argv):
-        if idx == 0:
-            command = arg
-            continue
+    positional_args = []
+    mount_timeout = 60
 
-        if skipCount > 0:
-            skipCount -= 1
-            continue
-
+    i = 1  # skip argv[0] (command name)
+    while i < len(argv):
+        arg = argv[i]
         if arg == "-o":
-            # option
-            fuseOptions = argv[idx+1].split(",")
-            for fo in fuseOptions:
-                fokv = fo.split("=")
-                if len(fokv) == 1:
-                    # -o xxx
-                    if fokv[0] == "ro" or fokv[0] == "readonly":
+            if i + 1 >= len(argv):
+                print("missing argument for -o", file=sys.stderr)
+                sys.exit(1)
+            i += 1
+            for opt in argv[i].split(","):
+                key, sep, val = opt.partition("=")
+                if not sep:
+                    # boolean flag
+                    if key in ("ro", "readonly"):
                         options.append("--readonly")
-                    elif fokv[0] == "allow_other":
-                        options.append("--allow_other")
-                    elif fokv[0] == "f":
+                    elif key == "allow_other":
+                        # allow_other is an iRODSFS FUSE option, not an
+                        # iRODSFS command-line flag.
+                        options.extend(["-o", "allow_other"])
+                    elif key == "f":
                         options.append("--foreground")
                     else:
-                        options.append("-o")
-                        options.append(fokv[0])
-                elif len(fokv) == 2:
-                    # -o kk=vv
-                    if fokv[0] == "mounttimeout":
-                        mountTimeout = int(fokv[1])
-                        if mountTimeout <= 0:
-                            mountTimeout = 10
+                        options.extend(["-o", key])
+                else:
+                    if key == "mounttimeout":
+                        try:
+                            mount_timeout = max(int(val), 10)
+                        except ValueError as error:
+                            raise ValueError("mounttimeout must be an integer") from error
+                    elif key in IRODSFS_VALUE_OPTIONS:
+                        options.extend([f"--{key}", val])
                     else:
-                        options.append("--%s" % fokv[0])
-                        options.append(fokv[1])
-
-            skipCount = 1
+                        # Keep generic FUSE options in their original form.
+                        options.extend(["-o", opt])
         else:
-            positionalArgs.append(arg)
+            positional_args.append(arg)
+        i += 1
 
-    reorderedArgs = []
-    reorderedArgs.append(command)
-    reorderedArgs.extend(options)
+    # mount(8) passes the filesystem type as the first positional arg; skip "irodsfs"
+    if len(positional_args) > 1 and positional_args[0] == "irodsfs":
+        positional_args = positional_args[1:]
 
-    if len(positionalArgs) > 1:
-        if positionalArgs[0] == "irodsfs":
-            # device type
-            positionalArgs = positionalArgs[1:]
+    if len(positional_args) < 2:
+        raise ValueError("iRODS URL source and mount point are required")
+    if len(positional_args) > 2:
+        raise ValueError("expected one iRODS URL source and one mount point")
 
-    reorderedArgs.extend(positionalArgs)
+    # iRODSFS now accepts only the mount point as a positional argument. The
+    # mount(8) source is the iRODS URL and must be passed through --url.
+    source, mount_point = positional_args
+    options.extend(["--url", source])
+    return options, [mount_point], mount_timeout
 
-    return reorderedArgs, mountTimeout
 
-def check_mount(mountPoint, mountTimeout):
-    retry = 0
-    while retry < mountTimeout:
+def check_mount(mount_point, mount_timeout):
+    for _ in range(mount_timeout):
+        time.sleep(1)
         try:
-            time.sleep(1)
-
-            with open('/proc/mounts', 'r') as f:
-                for line in f.readlines():
+            with open("/proc/mounts") as f:
+                for line in f:
                     fields = line.split()
-                    if len(fields) >= 3:
-                        program = fields[0].strip()
-
-                        if program.lower() == "irodsfs":
-                            mountPath = fields[1].strip()
-                            mountType = fields[2].strip()
-
-                            if mountPath == mountPoint and mountType.lower() == "fuse.irodsfs":
-                                return True
-
-            retry += 1
-        except FileNotFoundError as e:
-            print("file not found: %s" % e, file=sys.stderr)
-            retry += 1
+                    if (len(fields) >= 3
+                            and fields[0].lower() == "irodsfs"
+                            and fields[1] == mount_point
+                            and fields[2].lower() == "fuse.irodsfs"):
+                        return True
         except OSError as e:
-            print("os error: %s" % e, file=sys.stderr)
-            retry += 1
+            print(f"error reading /proc/mounts: {e}", file=sys.stderr)
 
-    print("fuse mount not found for %s, after %d seconds" % (mountPoint, mountTimeout), file=sys.stderr)
-    print("mount dump >", file=sys.stderr)
-    with open('/proc/mounts', 'r') as f:
-        for line in f.readlines():
-            print(line, file=sys.stderr)
-    print("mount dump end", file=sys.stderr)
-
+    print(f"fuse mount not found for {mount_point!r} after {mount_timeout}s", file=sys.stderr)
+    try:
+        with open("/proc/mounts") as f:
+            print("mount dump >", file=sys.stderr)
+            sys.stderr.write(f.read())
+            print("mount dump end", file=sys.stderr)
+    except OSError:
+        pass
     return False
 
-def run_command(command_argv):
-    pathenv = os.getenv('PATH')
-    if not pathenv:
-        pathenv = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-        vars_dict = {}
-        vars_dict["PATH"] = pathenv
-        os.environ.update(vars_dict)
-
-    # returns exit code
-    return os.spawnvpe(os.P_WAIT, command_argv[0], command_argv, os.environ)
 
 def main(argv):
-    irodsBin = which("irodsfs")
-
-    if not irodsBin:
-        print("failed to find irodsfs (iRODS FUSE Lite) installed from PATH environment", file=sys.stderr)
+    irods_bin = shutil.which("irodsfs")
+    if not irods_bin:
+        print("irodsfs not found in PATH", file=sys.stderr)
         sys.exit(1)
 
-    print("found irodsfs > %s" % irodsBin)
+    print(f"found irodsfs > {irods_bin}")
 
-    reorderedArgv, mountTimeout = reorderArgs(argv)
-
-    if len(reorderedArgv) <= 2:
-        print("not enough number of arguments given", file=sys.stderr)
+    try:
+        options, positional_args, mount_timeout = reorder_args(argv)
+    except ValueError as error:
+        print(f"invalid mount arguments: {error}", file=sys.stderr)
         sys.exit(1)
 
-    mountPoint = reorderedArgv[-1]
-    mountPoint = os.path.abspath(os.path.expanduser(mountPoint))
+    mount_point = os.path.abspath(os.path.expanduser(positional_args[-1]))
+    cmd = [irods_bin] + options + positional_args
 
-    command = "%s %s" % (irodsBin, " ".join(reorderedArgv[1:]))
-    print("executing > %s" % command)
-    exitcode = run_command(command.split())
-    if exitcode > 0:
-        print("failed to mount (irodsfs exited with exitcode %d)" % exitcode, file=sys.stderr)
-        sys.exit(exitcode)
-    elif exitcode < 0:
-        print("failed to mount (irodsfs exited with SIG %d)" % exitcode, file=sys.stderr)
-        sys.exit(1)
+    # Do not print cmd: --url and --password can contain credentials, and this
+    # helper's stdout is commonly captured by mount(8), system logs, or both.
+    print(f"starting irodsfs mount at {mount_point}")
 
-    if not check_mount(mountPoint, mountTimeout):
-        print("failed to mount", file=sys.stderr)
+    result = subprocess.run(cmd)
+    if result.returncode != 0:
+        if result.returncode < 0:
+            print(f"irodsfs killed by signal {-result.returncode}", file=sys.stderr)
+        else:
+            print(f"irodsfs exited with code {result.returncode}", file=sys.stderr)
+        sys.exit(result.returncode if result.returncode > 0 else 1)
+
+    if not check_mount(mount_point, mount_timeout):
+        print("mount not detected after timeout", file=sys.stderr)
         sys.exit(1)
 
     sys.exit(0)
