@@ -11,6 +11,26 @@ import shutil
 import subprocess
 import time
 
+# Options supported as iRODSFS command-line flags.  mount(8) uses -o for both
+# filesystem-specific and generic FUSE options, so an arbitrary key=value must
+# not be assumed to be an iRODSFS flag.
+IRODSFS_VALUE_OPTIONS = {
+    "config",
+    "instance_id",
+    "log_path",
+    "username",
+    "client_username",
+    "password",
+    "read_ahead_max",
+    "read_write_max",
+    "uid",
+    "gid",
+    "sys_user",
+    "data_root",
+    "pool_endpoint",
+    "url",
+}
+
 
 def reorder_args(argv):
     options = []
@@ -32,16 +52,24 @@ def reorder_args(argv):
                     if key in ("ro", "readonly"):
                         options.append("--readonly")
                     elif key == "allow_other":
-                        options.append("--allow_other")
+                        # allow_other is an iRODSFS FUSE option, not an
+                        # iRODSFS command-line flag.
+                        options.extend(["-o", "allow_other"])
                     elif key == "f":
                         options.append("--foreground")
                     else:
                         options.extend(["-o", key])
                 else:
                     if key == "mounttimeout":
-                        mount_timeout = max(int(val), 10)
-                    else:
+                        try:
+                            mount_timeout = max(int(val), 10)
+                        except ValueError as error:
+                            raise ValueError("mounttimeout must be an integer") from error
+                    elif key in IRODSFS_VALUE_OPTIONS:
                         options.extend([f"--{key}", val])
+                    else:
+                        # Keep generic FUSE options in their original form.
+                        options.extend(["-o", opt])
         else:
             positional_args.append(arg)
         i += 1
@@ -50,7 +78,16 @@ def reorder_args(argv):
     if len(positional_args) > 1 and positional_args[0] == "irodsfs":
         positional_args = positional_args[1:]
 
-    return options, positional_args, mount_timeout
+    if len(positional_args) < 2:
+        raise ValueError("iRODS URL source and mount point are required")
+    if len(positional_args) > 2:
+        raise ValueError("expected one iRODS URL source and one mount point")
+
+    # iRODSFS now accepts only the mount point as a positional argument. The
+    # mount(8) source is the iRODS URL and must be passed through --url.
+    source, mount_point = positional_args
+    options.extend(["--url", source])
+    return options, [mount_point], mount_timeout
 
 
 def check_mount(mount_point, mount_timeout):
@@ -87,16 +124,18 @@ def main(argv):
 
     print(f"found irodsfs > {irods_bin}")
 
-    options, positional_args, mount_timeout = reorder_args(argv)
-
-    if len(positional_args) < 1:
-        print("mount point not provided", file=sys.stderr)
+    try:
+        options, positional_args, mount_timeout = reorder_args(argv)
+    except ValueError as error:
+        print(f"invalid mount arguments: {error}", file=sys.stderr)
         sys.exit(1)
 
     mount_point = os.path.abspath(os.path.expanduser(positional_args[-1]))
     cmd = [irods_bin] + options + positional_args
 
-    print(f"executing > {' '.join(cmd)}")
+    # Do not print cmd: --url and --password can contain credentials, and this
+    # helper's stdout is commonly captured by mount(8), system logs, or both.
+    print(f"starting irodsfs mount at {mount_point}")
 
     result = subprocess.run(cmd)
     if result.returncode != 0:
