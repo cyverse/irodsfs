@@ -5,7 +5,6 @@ irods_zone_name: iplant
 irods_user_password: 
 
 foreground: false
-allow_other: false
 
 path_mappings:
   - irods_path: /iplant/home/iychoi/datasets/POV
