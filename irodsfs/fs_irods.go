@@ -334,16 +334,7 @@ func (fs *IRODSFS) IRODSCreate(ctx context.Context, dir *Dir, path string, flags
 		return 0, nil, syscall.EREMOTEIO
 	}
 
-	entry, err := fs.fsClient.Stat(path)
-	if err != nil {
-		if irodsclient_types.IsFileNotFoundError(err) {
-			fs.logger.Debugf("failed to find file or dir for path %q", path)
-			return 0, nil, syscall.EREMOTEIO
-		}
-
-		fs.logger.Error(err)
-		return 0, nil, syscall.EREMOTEIO
-	}
+	entry := handle.GetEntry()
 
 	fileHandle, err := NewFileHandle(fs, handle)
 	if err != nil {
