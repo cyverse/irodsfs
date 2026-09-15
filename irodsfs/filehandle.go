@@ -275,7 +275,12 @@ func (handle *FileHandle) Release(ctx context.Context) syscall.Errno {
 		handle.mutex.Lock()
 		defer handle.mutex.Unlock()
 
-		handle.fs.fileHandleMap.Remove(handle.GetID())
+		// Leave the handle in the map until the close is done. Rename waits for
+		// in-flight handles by looking them up by path and taking their lock, so a
+		// handle that leaves the map while it is still closing lets a concurrent
+		// rename run against a data object that is not closed yet, which fails the
+		// close with SYS_INVALID_INPUT_PARAM and the rename with EREMOTEIO.
+		defer handle.fs.fileHandleMap.Remove(handle.GetID())
 
 		err := handle.fileHandle.Close()
 		if err != nil {
