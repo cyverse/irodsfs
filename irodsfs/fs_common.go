@@ -77,3 +77,24 @@ func (fs *IRODSFS) setAttrOutForIRODSEntry(entry *irodsclient_fs.Entry, mode fs.
 
 	return nil
 }
+
+func (fs *IRODSFS) setAttrOutForSymlinkEntry(entry *irodsclient_fs.Entry, out *fuse.Attr) error {
+	inodeID, err := fs.getInodeIDForIRODSEntry(entry)
+	if err != nil {
+		return err
+	}
+	out.Ino = inodeID
+
+	out.Uid = fs.uid
+	out.Gid = fs.gid
+
+	out.SetTimes(&entry.ModifyTime, &entry.ModifyTime, &entry.ModifyTime)
+
+	// the link target is the content of the data object, so the object size is the
+	// length the kernel expects readlink to return
+	out.Size = uint64(entry.Size)
+	out.Mode = uint32(fuse.S_IFLNK) | symlinkMode
+	out.Nlink = 1
+
+	return nil
+}

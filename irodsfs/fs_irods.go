@@ -2,8 +2,11 @@ package irodsfs
 
 import (
 	"context"
+	"io"
 	"os"
 	"syscall"
+
+	"github.com/cockroachdb/errors"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
@@ -151,21 +154,29 @@ func (fs *IRODSFS) IRODSReaddir(ctx context.Context, path string) ([]fuse.DirEnt
 		return nil, syscall.EREMOTEIO
 	}
 
-	for _, entry := range entries {
+	resolvedEntries, shadowedNames := ResolveDirEntries(entries)
+	for _, shadowedName := range shadowedNames {
+		fs.logger.Warnf("hiding symbolic link %q in %q, an entry of the same name exists", shadowedName, path)
+	}
+
+	for _, resolvedEntry := range resolvedEntries {
 		entryType := uint32(fuse.S_IFREG)
 
-		if entry.IsDir() {
+		switch {
+		case resolvedEntry.IsSymlink:
+			entryType = uint32(fuse.S_IFLNK)
+		case resolvedEntry.Entry.IsDir():
 			entryType = uint32(fuse.S_IFDIR)
 		}
 
-		inode, err := fs.getInodeIDForIRODSEntry(entry)
+		inode, err := fs.getInodeIDForIRODSEntry(resolvedEntry.Entry)
 		if err != nil {
 			fs.logger.Error(err)
 		} else {
 			dirEntry := fuse.DirEntry{
 				Ino:  inode,
 				Mode: entryType,
-				Name: entry.Name,
+				Name: resolvedEntry.VisibleName,
 			}
 
 			dirEntries = append(dirEntries, dirEntry)
@@ -386,4 +397,172 @@ func (fs *IRODSFS) IRODSFsync(ctx context.Context) syscall.Errno {
 	}
 
 	return fusefs.OK
+}
+
+// IRODSGetattrSymlink returns an attr for the symbolic link stored at the given irods path
+func (fs *IRODSFS) IRODSGetattrSymlink(ctx context.Context, path string, out *fuse.AttrOut) syscall.Errno {
+	entry, err := fs.fsClient.Stat(path)
+	if err != nil {
+		if irodsclient_types.IsFileNotFoundError(err) {
+			fs.logger.Debugf("failed to find symbolic link for path %q", path)
+			return syscall.ENOENT
+		}
+
+		fs.logger.Error(err)
+		return syscall.EREMOTEIO
+	}
+
+	err = fs.setAttrOutForSymlinkEntry(entry, &out.Attr)
+	if err != nil {
+		fs.logger.Error(err)
+		return syscall.EREMOTEIO
+	}
+
+	return fusefs.OK
+}
+
+// IRODSLookupSymlink returns entry for the symbolic link stored at the given irods path
+func (fs *IRODSFS) IRODSLookupSymlink(ctx context.Context, path string, out *fuse.EntryOut) (int64, syscall.Errno) {
+	entry, err := fs.fsClient.Stat(path)
+	if err != nil {
+		if irodsclient_types.IsFileNotFoundError(err) {
+			fs.logger.Debugf("failed to find symbolic link for path %q", path)
+			return 0, syscall.ENOENT
+		}
+
+		fs.logger.Error(err)
+		return 0, syscall.EREMOTEIO
+	}
+
+	if entry.IsDir() {
+		// a collection is never a symbolic link, even when its name ends with the suffix
+		fs.logger.Debugf("failed to find symbolic link for path %q, it is a collection", path)
+		return 0, syscall.ENOENT
+	}
+
+	err = fs.setAttrOutForSymlinkEntry(entry, &out.Attr)
+	if err != nil {
+		fs.logger.Error(err)
+		return 0, syscall.EREMOTEIO
+	}
+
+	return entry.ID, fusefs.OK
+}
+
+// IRODSReadlink returns the target of the symbolic link stored at the given irods path
+func (fs *IRODSFS) IRODSReadlink(ctx context.Context, path string) (string, syscall.Errno) {
+	fs.logger.Infof("Read symbolic link %q", path)
+
+	handle, err := fs.fsClient.OpenFile(path, string(irodsclient_types.FileOpenModeReadOnly))
+	if err != nil {
+		if irodsclient_types.IsFileNotFoundError(err) {
+			fs.logger.Debugf("failed to find symbolic link for path %q", path)
+			return "", syscall.ENOENT
+		}
+
+		fs.logger.Error(err)
+		return "", syscall.EREMOTEIO
+	}
+
+	entry := handle.GetEntry()
+	if entry.Size <= 0 || entry.Size > SymlinkTargetMax {
+		// the content is the link target, so an empty or oversized object is corrupt
+		fs.logger.Errorf("failed to read symbolic link %q, it holds an invalid target of %d bytes", path, entry.Size)
+		_ = handle.Close()
+		return "", syscall.EIO
+	}
+
+	buffer := make([]byte, entry.Size)
+	totalReadLen := 0
+	for totalReadLen < len(buffer) {
+		readLen, err := handle.ReadAt(buffer[totalReadLen:], int64(totalReadLen))
+		totalReadLen += readLen
+
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+
+			fs.logger.Error(err)
+			_ = handle.Close()
+			return "", syscall.EREMOTEIO
+		}
+
+		if readLen == 0 {
+			break
+		}
+	}
+
+	err = handle.Close()
+	if err != nil {
+		fs.logger.Error(err)
+		return "", syscall.EREMOTEIO
+	}
+
+	if totalReadLen == 0 {
+		fs.logger.Errorf("failed to read symbolic link %q, it holds an empty target", path)
+		return "", syscall.EIO
+	}
+
+	return string(buffer[:totalReadLen]), fusefs.OK
+}
+
+// IRODSExists returns true if an entry exists at the given irods path
+func (fs *IRODSFS) IRODSExists(ctx context.Context, path string) (bool, syscall.Errno) {
+	_, err := fs.fsClient.Stat(path)
+	if err != nil {
+		if irodsclient_types.IsFileNotFoundError(err) {
+			return false, fusefs.OK
+		}
+
+		fs.logger.Error(err)
+		return false, syscall.EREMOTEIO
+	}
+
+	return true, fusefs.OK
+}
+
+// IRODSSymlink creates a symbolic link holding the given target at the given irods path
+func (fs *IRODSFS) IRODSSymlink(ctx context.Context, path string, target string, out *fuse.EntryOut) (int64, syscall.Errno) {
+	fs.logger.Infof("Create symbolic link %q -> %q", path, target)
+
+	handle, err := fs.fsClient.CreateFile(path, string(irodsclient_types.FileOpenModeWriteOnly))
+	if err != nil {
+		fs.logger.Error(err)
+		return 0, syscall.EREMOTEIO
+	}
+
+	entry := handle.GetEntry()
+
+	writeErr := func() error {
+		if _, err := handle.WriteAt([]byte(target), 0); err != nil {
+			return err
+		}
+		return handle.Close()
+	}()
+
+	if writeErr != nil {
+		fs.logger.Error(writeErr)
+
+		// the object exists but does not hold the target, so remove it rather than
+		// leave something that reads back as a link to nowhere
+		if removeErr := fs.fsClient.RemoveFile(path, true); removeErr != nil {
+			fs.logger.Error(removeErr)
+		}
+
+		return 0, syscall.EREMOTEIO
+	}
+
+	// the handle entry was taken before the target was written, so report the size
+	// the target gives it. A copy keeps the correction out of any cached entry.
+	symlinkEntry := *entry
+	symlinkEntry.Size = int64(len(target))
+
+	err = fs.setAttrOutForSymlinkEntry(&symlinkEntry, &out.Attr)
+	if err != nil {
+		fs.logger.Error(err)
+		return 0, syscall.EREMOTEIO
+	}
+
+	return symlinkEntry.ID, fusefs.OK
 }

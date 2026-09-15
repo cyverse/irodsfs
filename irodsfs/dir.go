@@ -64,6 +64,13 @@ func (dir *Dir) NewSubFileInode(ctx context.Context, inodeID uint64, path string
 	return subFile, subFileInode
 }
 
+func (dir *Dir) NewSubSymlinkInode(ctx context.Context, inodeID uint64, path string, target string) (*Symlink, *fusefs.Inode) {
+	subSymlink := NewSymlink(dir.fs, inodeID, path, target)
+	subSymlinkInode := dir.NewInode(ctx, subSymlink, subSymlink.getStableAttr())
+
+	return subSymlink, subSymlinkInode
+}
+
 // Getattr returns stat of file entry
 func (dir *Dir) Getattr(ctx context.Context, fh fusefs.FileHandle, out *fuse.AttrOut) syscall.Errno {
 	if dir.fs.terminated.Load() {
@@ -178,6 +185,12 @@ func (dir *Dir) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*f
 	}
 
 	entryID, entryDir, errno := dir.fs.IRODSLookup(ctx, dir, irodsPath, vpathEntry.ReadOnly, out)
+	if errno == syscall.ENOENT {
+		// the name may belong to a symbolic link, which is stored under a suffixed
+		// name. It is probed second so that a real entry always wins.
+		return dir.lookupSymlink(ctx, irodsPath, targetPath, out)
+	}
+
 	if errno != fusefs.OK {
 		return nil, errno
 	}
@@ -195,6 +208,24 @@ func (dir *Dir) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*f
 
 	_, subFileInode := dir.NewSubFileInode(ctx, inodeID, targetPath)
 	return subFileInode, fusefs.OK
+}
+
+// lookupSymlink returns the inode of the symbolic link stored under the suffixed
+// name of the given irods path
+func (dir *Dir) lookupSymlink(ctx context.Context, irodsPath string, targetPath string, out *fuse.EntryOut) (*fusefs.Inode, syscall.Errno) {
+	entryID, errno := dir.fs.IRODSLookupSymlink(ctx, SymlinkStoredName(irodsPath), out)
+	if errno != fusefs.OK {
+		return nil, errno
+	}
+
+	inodeID, err := dir.fs.getInodeIDForIRODSEntryID(uint64(entryID))
+	if err != nil {
+		dir.fs.logger.Error(err)
+		return nil, syscall.EREMOTEIO
+	}
+
+	_, subSymlinkInode := dir.NewSubSymlinkInode(ctx, inodeID, targetPath, "")
+	return subSymlinkInode, fusefs.OK
 }
 
 // Opendir validates the existance of a dir
@@ -368,6 +399,47 @@ func (dir *Dir) Rmdir(ctx context.Context, name string) syscall.Errno {
 	return dir.fs.IRODSRmdir(ctx, irodsPath)
 }
 
+// resolveStoredIRODSPath maps the visible irods path of an existing entry to the path
+// it is stored under, and reports whether that entry is a symbolic link. A symbolic
+// link lives under a suffixed name, so the name the kernel hands us is not always the
+// name to act on.
+//
+// The node is usually already in the kernel cache, which answers this for free. When
+// it is not, the names are probed in the order Lookup uses, so that a real entry keeps
+// winning. When neither name exists the plain path is returned, leaving the caller to
+// report the same error it reports today.
+func (dir *Dir) resolveStoredIRODSPath(ctx context.Context, name string, irodsPath string) (string, bool, syscall.Errno) {
+	if childNode := dir.GetChild(name); childNode != nil {
+		if _, ok := childNode.Operations().(*Symlink); ok {
+			return SymlinkStoredName(irodsPath), true, fusefs.OK
+		}
+
+		return irodsPath, false, fusefs.OK
+	}
+
+	exists, errno := dir.fs.IRODSExists(ctx, irodsPath)
+	if errno != fusefs.OK {
+		return "", false, errno
+	}
+
+	if exists {
+		return irodsPath, false, fusefs.OK
+	}
+
+	storedPath := SymlinkStoredName(irodsPath)
+
+	exists, errno = dir.fs.IRODSExists(ctx, storedPath)
+	if errno != fusefs.OK {
+		return "", false, errno
+	}
+
+	if exists {
+		return storedPath, true, fusefs.OK
+	}
+
+	return irodsPath, false, fusefs.OK
+}
+
 // Unlink removes a file for the path
 func (dir *Dir) Unlink(ctx context.Context, name string) syscall.Errno {
 	if dir.fs.terminated.Load() {
@@ -410,7 +482,27 @@ func (dir *Dir) Unlink(ctx context.Context, name string) syscall.Errno {
 		return syscall.EREMOTEIO
 	}
 
-	return dir.fs.IRODSUnlink(ctx, irodsPath)
+	storedPath, isSymlink, errno := dir.resolveStoredIRODSPath(ctx, name, irodsPath)
+	if errno != fusefs.OK {
+		return errno
+	}
+
+	errno = dir.fs.IRODSUnlink(ctx, storedPath)
+	if errno != fusefs.OK {
+		return errno
+	}
+
+	if isSymlink {
+		// the node can outlive the removal, so drop the cached target rather than
+		// keep answering Readlink for a link that is gone
+		if childNode := dir.GetChild(name); childNode != nil {
+			if symlinkNode, ok := childNode.Operations().(*Symlink); ok {
+				symlinkNode.invalidateTarget()
+			}
+		}
+	}
+
+	return fusefs.OK
 }
 
 // Mkdir makes a dir for the path
@@ -426,6 +518,11 @@ func (dir *Dir) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.E
 	operID := dir.fs.GetNextOperationID()
 	dir.fs.logger.Infof("Calling Mkdir (%d) - %q", operID, targetPath)
 	defer dir.fs.logger.Infof("Called Mkdir (%d) - %q", operID, targetPath)
+
+	if IsSymlinkStoredName(name) {
+		dir.fs.logger.Errorf("failed to create %q, names ending with %q are reserved for symbolic links", targetPath, SymlinkSuffix)
+		return nil, syscall.EPERM
+	}
 
 	dir.mutex.Lock()
 	defer dir.mutex.Unlock()
@@ -468,6 +565,101 @@ func (dir *Dir) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.E
 	return subDirInode, fusefs.OK
 }
 
+// Symlink creates a symbolic link
+func (dir *Dir) Symlink(ctx context.Context, target string, name string, out *fuse.EntryOut) (*fusefs.Inode, syscall.Errno) {
+	if dir.fs.terminated.Load() {
+		return nil, syscall.ECONNABORTED
+	}
+
+	defer irodsfs_common_util.StackTraceFromPanic(dir.fs.logger)
+
+	targetPath := path.Join(dir.path, name)
+
+	operID := dir.fs.GetNextOperationID()
+	dir.fs.logger.Infof("Calling Symlink (%d) - %q -> %q", operID, targetPath, target)
+	defer dir.fs.logger.Infof("Called Symlink (%d) - %q -> %q", operID, targetPath, target)
+
+	if IsSymlinkStoredName(name) {
+		dir.fs.logger.Errorf("failed to create %q, names ending with %q are reserved for symbolic links", targetPath, SymlinkSuffix)
+		return nil, syscall.EPERM
+	}
+
+	if len(target) == 0 {
+		dir.fs.logger.Errorf("failed to create symbolic link %q, its target is empty", targetPath)
+		return nil, syscall.EINVAL
+	}
+
+	if int64(len(target)) > SymlinkTargetMax {
+		dir.fs.logger.Errorf("failed to create symbolic link %q, its target is %d bytes, larger than %d", targetPath, len(target), SymlinkTargetMax)
+		return nil, syscall.ENAMETOOLONG
+	}
+
+	dir.mutex.Lock()
+	defer dir.mutex.Unlock()
+
+	vpathEntry := dir.fs.vpathManager.GetClosestEntry(targetPath)
+	if vpathEntry == nil {
+		dir.fs.logger.Errorf("failed to get VPath Entry for %q", targetPath)
+		return nil, syscall.EREMOTEIO
+	}
+
+	if isVPathEntryUnmodifiable(vpathEntry, targetPath) {
+		dir.fs.logger.Errorf("failed to create a symbolic link in readonly vpath mapping entry %q", vpathEntry.Path)
+		return nil, syscall.EROFS
+	}
+
+	// IRODS Dir
+	err := dir.ensureDirIRODSPath(vpathEntry)
+	if err != nil {
+		dir.fs.logger.Error(err)
+		return nil, syscall.EREMOTEIO
+	}
+
+	irodsPath, err := vpathEntry.GetIRODSPath(targetPath)
+	if err != nil {
+		dir.fs.logger.Error(err)
+		return nil, syscall.EREMOTEIO
+	}
+
+	// a real entry always wins over a symbolic link of the same visible name, so a
+	// link that would be hidden the moment it is created is refused instead
+	exists, errno := dir.fs.IRODSExists(ctx, irodsPath)
+	if errno != fusefs.OK {
+		return nil, errno
+	}
+
+	if exists {
+		dir.fs.logger.Errorf("failed to create symbolic link %q, an entry of the same name exists", targetPath)
+		return nil, syscall.EEXIST
+	}
+
+	storedPath := SymlinkStoredName(irodsPath)
+
+	exists, errno = dir.fs.IRODSExists(ctx, storedPath)
+	if errno != fusefs.OK {
+		return nil, errno
+	}
+
+	if exists {
+		dir.fs.logger.Errorf("failed to create symbolic link %q, it already exists", targetPath)
+		return nil, syscall.EEXIST
+	}
+
+	entryID, errno := dir.fs.IRODSSymlink(ctx, storedPath, target, out)
+	if errno != fusefs.OK {
+		return nil, errno
+	}
+
+	inodeID, err := dir.fs.getInodeIDForIRODSEntryID(uint64(entryID))
+	if err != nil {
+		dir.fs.logger.Error(err)
+		return nil, syscall.EREMOTEIO
+	}
+
+	_, subSymlinkInode := dir.NewSubSymlinkInode(ctx, inodeID, targetPath, target)
+	return subSymlinkInode, fusefs.OK
+}
+
 func (dir *Dir) renameNode(srcPath string, destPath string, node *fusefs.Inode) error {
 	switch fsnode := node.Operations().(type) {
 	case *Dir:
@@ -498,6 +690,16 @@ func (dir *Dir) renameNode(srcPath string, destPath string, node *fusefs.Inode) 
 		dir.fs.logger.Debugf("renaming a file node %q to %q", fsnode.path, newPath)
 
 		fsnode.path = newPath
+	case *Symlink:
+		relPath, err := irodsclient_util.GetIRODSRelativePath(srcPath, fsnode.path)
+		if err != nil {
+			return err
+		}
+
+		newPath := path.Join(destPath, relPath)
+		dir.fs.logger.Debugf("renaming a symbolic link node %q to %q", fsnode.path, newPath)
+
+		fsnode.path = newPath
 	default:
 		return errors.New("unknown node type")
 	}
@@ -526,6 +728,11 @@ func (dir *Dir) Rename(ctx context.Context, name string, newParent fusefs.InodeE
 	operID := dir.fs.GetNextOperationID()
 	dir.fs.logger.Infof("Calling Rename (%d) - %q to %q", operID, targetSrcPath, targetDestPath)
 	defer dir.fs.logger.Infof("Called Rename (%d) - %q to %q", operID, targetSrcPath, targetDestPath)
+
+	if IsSymlinkStoredName(newName) {
+		dir.fs.logger.Errorf("failed to rename to %q, names ending with %q are reserved for symbolic links", targetDestPath, SymlinkSuffix)
+		return syscall.EPERM
+	}
 
 	dir.mutex.Lock()
 	defer dir.mutex.Unlock()
@@ -584,9 +791,33 @@ func (dir *Dir) Rename(ctx context.Context, name string, newParent fusefs.InodeE
 		return syscall.EREMOTEIO
 	}
 
+	// a symbolic link is stored under a suffixed name, so both ends of the rename
+	// carry the suffix. For every other entry the stored path is the visible one.
+	storedSrcPath, srcIsSymlink, errno := dir.resolveStoredIRODSPath(ctx, name, irodsSrcPath)
+	if errno != fusefs.OK {
+		return errno
+	}
+
+	storedDestPath := irodsDestPath
+	if srcIsSymlink {
+		storedDestPath = SymlinkStoredName(irodsDestPath)
+
+		// a real entry always wins over a symbolic link of the same visible name, so
+		// moving a link onto one would only hide the link the moment it lands
+		exists, errno := dir.fs.IRODSExists(ctx, irodsDestPath)
+		if errno != fusefs.OK {
+			return errno
+		}
+
+		if exists {
+			dir.fs.logger.Errorf("failed to rename symbolic link %q to %q, an entry of the same name exists", targetSrcPath, targetDestPath)
+			return syscall.EEXIST
+		}
+	}
+
 	// lock first
 	// dir?
-	openFilePaths := dir.fs.fileHandleMap.ListPathsInDir(irodsSrcPath)
+	openFilePaths := dir.fs.fileHandleMap.ListPathsInDir(storedSrcPath)
 	for _, openFilePath := range openFilePaths {
 		handlesOpened := dir.fs.fileHandleMap.ListByPath(openFilePath)
 		for _, handle := range handlesOpened {
@@ -596,13 +827,13 @@ func (dir *Dir) Rename(ctx context.Context, name string, newParent fusefs.InodeE
 	}
 
 	// file?
-	handlesOpened := dir.fs.fileHandleMap.ListByPath(irodsSrcPath)
+	handlesOpened := dir.fs.fileHandleMap.ListByPath(storedSrcPath)
 	for _, handle := range handlesOpened {
 		handle.mutex.Lock()
 		defer handle.mutex.Unlock()
 	}
 
-	errno := dir.fs.IRODSRename(ctx, dir, irodsSrcPath, irodsDestPath)
+	errno = dir.fs.IRODSRename(ctx, dir, storedSrcPath, storedDestPath)
 	if errno != fusefs.OK {
 		return errno
 	}
@@ -610,8 +841,8 @@ func (dir *Dir) Rename(ctx context.Context, name string, newParent fusefs.InodeE
 	// update in-memory path; if the node isn't cached yet, skip — the rename on iRODS already succeeded
 	childNode := dir.GetChild(name)
 	if childNode == nil {
-		dir.fs.logger.Warnf("node %q not in kernel cache after rename, skipping in-memory path update", irodsSrcPath)
-		dir.fs.fileHandleMap.Rename(irodsSrcPath, irodsDestPath)
+		dir.fs.logger.Warnf("node %q not in kernel cache after rename, skipping in-memory path update", storedSrcPath)
+		dir.fs.fileHandleMap.Rename(storedSrcPath, storedDestPath)
 		return fusefs.OK
 	}
 
@@ -621,7 +852,7 @@ func (dir *Dir) Rename(ctx context.Context, name string, newParent fusefs.InodeE
 	}
 
 	// report update to fileHandleMap
-	dir.fs.fileHandleMap.Rename(irodsSrcPath, irodsDestPath)
+	dir.fs.fileHandleMap.Rename(storedSrcPath, storedDestPath)
 
 	return fusefs.OK
 }
@@ -640,6 +871,11 @@ func (dir *Dir) Create(ctx context.Context, name string, flags uint32, mode uint
 	operID := dir.fs.GetNextOperationID()
 	dir.fs.logger.Infof("Calling Create (%d) - %q, mode %d", operID, targetPath, flags)
 	defer dir.fs.logger.Infof("Called Create (%d) - %q, mode %d", operID, targetPath, flags)
+
+	if IsSymlinkStoredName(name) {
+		dir.fs.logger.Errorf("failed to create %q, names ending with %q are reserved for symbolic links", targetPath, SymlinkSuffix)
+		return nil, nil, 0, syscall.EPERM
+	}
 
 	dir.mutex.Lock()
 	defer dir.mutex.Unlock()
