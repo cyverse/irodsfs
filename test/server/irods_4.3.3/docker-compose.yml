@@ -1,0 +1,25 @@
+name: irods-test-docker-4-3-3
+
+services:
+    irods-catalog:
+        image: cyverse/irods-test-docker-catalog:v4.3.3
+        environment:
+            - POSTGRES_PASSWORD=testpassword
+        restart: always
+
+    irods-catalog-provider:
+        image: cyverse/irods-test-docker-catalog-provider:v4.3.3
+        shm_size: 500mb
+        healthcheck:
+            test: ["CMD", "su", "-", "irods", "-c", "./irodsctl status | grep Process"]
+            interval: 10s
+            timeout: 10s
+            retries: 3
+            start_period: 20s
+            start_interval: 10s
+        restart: always
+        ports:
+            - "1247:1247"
+            - "20000-20199:20000-20199"
+        depends_on:
+            - irods-catalog
