@@ -355,6 +355,37 @@ To mount a collection as read-only, use the `--readonly` flag or set `readonly: 
 ./bin/irodsfs -c config.yaml --readonly /mount/irods
 ```
 
+### Symbolic Links
+
+iRODS has no symbolic link of its own. iRODS FUSE stores one as an ordinary data object whose name carries a `.irodssymlink` suffix and whose content is the link target. Inside the mount it behaves like any symbolic link.
+
+```shell script
+ln -s lib /mount/irods/lib64
+ls -l /mount/irods
+```
+
+```
+drwx------ 2 iychoi iychoi 0 Sep 15 09:25 lib
+lrwxrwxrwx 1 iychoi iychoi 3 Sep 15 09:25 lib64 -> lib
+```
+
+Other iRODS clients (`ils`, `gocommands`, the web interface) do not know the convention, so they see the object under its stored name, holding the target as plain text.
+
+```shell script
+ils /iplant/home/iychoi
+```
+
+```
+  C- /iplant/home/iychoi/lib
+  lib64.irodssymlink
+```
+
+Three things follow from this.
+
+- **A real entry wins.** If a collection holds both `lib64` and `lib64.irodssymlink`, the mount shows `lib64` and hides the link, and writes a warning to the log. Remove one of the two to resolve it.
+- **The suffix is reserved.** Creating a file or a directory whose name ends with `.irodssymlink` through the mount fails with `Operation not permitted`, because such an entry would not be visible under its own name.
+- **Links are not followed outside the mount.** Only iRODS FUSE resolves them; to any other client the object is a small regular file.
+
 ### Unmount
 
 It is recommended to use `fusermount` command to unmount iRODS FUSE as it does not require admin permission.
