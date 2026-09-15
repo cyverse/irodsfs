@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/go-irodsclient/irods/types"
-	"github.com/pkg/errors"
 )
 
 const (
