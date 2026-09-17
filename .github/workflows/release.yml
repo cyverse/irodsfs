@@ -37,6 +37,6 @@ jobs:
         install -m 0755 mount_exec/install.sh "${stage_dir}/install.sh"
         install -m 0755 mount_exec/mount.irodsfs "${stage_dir}/mount.irodsfs"
         tar -C "${stage_dir}" -czf "dist/${asset_name}.tar.gz" .
-    - uses: softprops/action-gh-release@v2
+    - uses: softprops/action-gh-release@v3
       with:
         files: dist/*.tar.gz
