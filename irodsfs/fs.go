@@ -68,7 +68,10 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 	if len(config.PoolEndpoint) > 0 {
 		// use pool driver
 		logger.Info("Initializing irodsfs-pool client")
-		poolClient := irodsfs_pool_client.NewPoolServiceClient(config.PoolEndpoint, time.Duration(config.MetadataConnection.LongOperationTimeout), true, logger)
+		// the mount's instance id names this client to the pool server, so one
+		// id identifies the mount in its own logs, in the server's, and as the
+		// scope of the file lock owners it reports
+		poolClient := irodsfs_pool_client.NewPoolServiceClient(config.PoolEndpoint, time.Duration(config.MetadataConnection.LongOperationTimeout), true, config.InstanceID, logger)
 		err = poolClient.Connect()
 		if err != nil {
 			clientErr := errors.Wrapf(err, "failed to connect to irodsfs-pool server %q", config.PoolEndpoint)
