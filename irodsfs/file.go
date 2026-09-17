@@ -288,7 +288,7 @@ func (file *File) Getlk(ctx context.Context, fh fusefs.FileHandle, owner uint64,
 		return syscall.EINVAL
 	}
 
-	return fileHandle.GetLocalLock(ctx, owner, lk, flags, out)
+	return fileHandle.Getlk(ctx, owner, lk, flags, out)
 }
 
 // Setlk obtains a lock on a file, or fail if the lock could not obtained
@@ -309,7 +309,7 @@ func (file *File) Setlk(ctx context.Context, fh fusefs.FileHandle, owner uint64,
 		return syscall.EINVAL
 	}
 
-	return fileHandle.SetLocalLock(ctx, owner, lk, flags)
+	return fileHandle.Setlk(ctx, owner, lk, flags)
 }
 
 // Setlkw obtains a lock on a file, waiting if necessary
@@ -330,5 +330,5 @@ func (file *File) Setlkw(ctx context.Context, fh fusefs.FileHandle, owner uint64
 		return syscall.EINVAL
 	}
 
-	return fileHandle.SetLocalLockW(ctx, owner, lk, flags)
+	return fileHandle.Setlkw(ctx, owner, lk, flags)
 }
