@@ -17,43 +17,20 @@ const (
 	fOFDSetlkw = 0x26
 )
 
-// openLockFile opens the same file on the mount twice, as two processes racing
-// for a lock would. The file is planted through iRODS rather than written
-// through the mount, so that no staging of its own is in flight while the
-// handles are open.
-//
-// The second handle is read-only on purpose: the mount serves one writable
-// handle per file at a time, so a second O_RDWR open fails with EREMOTEIO.
-// flock() does not care about the open mode, and a read lock is all the second
-// handle needs to collide with the first one's write lock.
+// openLockFile opens the same file on the mount twice for writing, as two
+// processes racing for a lock would. The file is planted through iRODS rather
+// than written through the mount, so that no staging of its own is in flight
+// while the handles are open.
 func openLockFile(t *testing.T, fixture *mountFixture, name string) (*os.File, *os.File) {
 	t.Helper()
 
 	writeIRODSFile(t, fixture.fsc, fixture.remote(name), "locked content")
 
-	reader, err := os.OpenFile(fixture.local(name), os.O_RDONLY, 0o600)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = reader.Close() })
-
-	writer, err := os.OpenFile(fixture.local(name), os.O_RDWR, 0o600)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = writer.Close() })
-
-	return writer, reader
-}
-
-// openLockFileReaders opens the same file twice read-only, which the mount
-// allows any number of
-func openLockFileReaders(t *testing.T, fixture *mountFixture, name string) (*os.File, *os.File) {
-	t.Helper()
-
-	writeIRODSFile(t, fixture.fsc, fixture.remote(name), "locked content")
-
-	first, err := os.OpenFile(fixture.local(name), os.O_RDONLY, 0o600)
+	first, err := os.OpenFile(fixture.local(name), os.O_RDWR, 0o600)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = first.Close() })
 
-	second, err := os.OpenFile(fixture.local(name), os.O_RDONLY, 0o600)
+	second, err := os.OpenFile(fixture.local(name), os.O_RDWR, 0o600)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = second.Close() })
 
@@ -92,7 +69,7 @@ func TestBlockingLockIsSupported(t *testing.T) {
 // each other even within a process
 func TestFlockExcludesTheOtherOpenFile(t *testing.T) {
 	fixture := newMountFixture(t)
-	first, second := openLockFileReaders(t, fixture, "flock.txt")
+	first, second := openLockFile(t, fixture, "flock.txt")
 
 	require.NoError(t, syscall.Flock(int(first.Fd()), syscall.LOCK_EX))
 
@@ -128,17 +105,17 @@ func TestFlockExcludesTheOtherOpenFile(t *testing.T) {
 // cmd/go uses to serialize access to the module cache and go.mod
 func TestOFDLockExcludesTheOtherOpenFile(t *testing.T) {
 	fixture := newMountFixture(t)
-	writer, reader := openLockFile(t, fixture, "ofd.txt")
+	first, second := openLockFile(t, fixture, "ofd.txt")
 
-	require.NoError(t, syscall.FcntlFlock(writer.Fd(), fOFDSetlk, wholeFileLock(syscall.F_WRLCK)))
+	require.NoError(t, syscall.FcntlFlock(first.Fd(), fOFDSetlk, wholeFileLock(syscall.F_WRLCK)))
 
-	err := syscall.FcntlFlock(reader.Fd(), fOFDSetlk, wholeFileLock(syscall.F_RDLCK))
-	require.Error(t, err, "a read lock must not be granted while another open file holds a write lock")
+	err := syscall.FcntlFlock(second.Fd(), fOFDSetlk, wholeFileLock(syscall.F_WRLCK))
+	require.Error(t, err, "a second exclusive lock must not be granted")
 	assert.True(t, err == syscall.EAGAIN || err == syscall.EACCES, "unexpected error %v", err)
 
 	acquired := make(chan error, 1)
 	go func() {
-		acquired <- syscall.FcntlFlock(reader.Fd(), fOFDSetlkw, wholeFileLock(syscall.F_RDLCK))
+		acquired <- syscall.FcntlFlock(second.Fd(), fOFDSetlkw, wholeFileLock(syscall.F_WRLCK))
 	}()
 
 	select {
@@ -147,7 +124,7 @@ func TestOFDLockExcludesTheOtherOpenFile(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 	}
 
-	require.NoError(t, syscall.FcntlFlock(writer.Fd(), fOFDSetlk, wholeFileLock(syscall.F_UNLCK)))
+	require.NoError(t, syscall.FcntlFlock(first.Fd(), fOFDSetlk, wholeFileLock(syscall.F_UNLCK)))
 
 	select {
 	case err := <-acquired:
@@ -156,42 +133,47 @@ func TestOFDLockExcludesTheOtherOpenFile(t *testing.T) {
 		t.Fatal("the waiting lock was never granted")
 	}
 
-	require.NoError(t, syscall.FcntlFlock(reader.Fd(), fOFDSetlk, wholeFileLock(syscall.F_UNLCK)))
+	require.NoError(t, syscall.FcntlFlock(second.Fd(), fOFDSetlk, wholeFileLock(syscall.F_UNLCK)))
 }
 
 // Read locks are shared, and a write lock waits for them
 func TestReadLocksAreShared(t *testing.T) {
 	fixture := newMountFixture(t)
-	first, second := openLockFileReaders(t, fixture, "shared.txt")
+	first, second := openLockFile(t, fixture, "shared.txt")
 
 	require.NoError(t, syscall.FcntlFlock(first.Fd(), fOFDSetlk, wholeFileLock(syscall.F_RDLCK)))
 	require.NoError(t, syscall.FcntlFlock(second.Fd(), fOFDSetlk, wholeFileLock(syscall.F_RDLCK)),
 		"two read locks on one file must both be granted")
 
+	require.Error(t, syscall.FcntlFlock(second.Fd(), fOFDSetlk, wholeFileLock(syscall.F_WRLCK)),
+		"a write lock must not be granted while another reader holds one")
+
 	require.NoError(t, syscall.FcntlFlock(first.Fd(), fOFDSetlk, wholeFileLock(syscall.F_UNLCK)))
+	require.NoError(t, syscall.FcntlFlock(second.Fd(), fOFDSetlk, wholeFileLock(syscall.F_WRLCK)),
+		"the write lock must be granted once the other reader is gone")
 	require.NoError(t, syscall.FcntlFlock(second.Fd(), fOFDSetlk, wholeFileLock(syscall.F_UNLCK)))
 }
 
 // Byte ranges that do not overlap are independent
 func TestByteRangeLocksDoNotCollide(t *testing.T) {
 	fixture := newMountFixture(t)
-	writer, reader := openLockFile(t, fixture, "ranges.txt")
+	first, second := openLockFile(t, fixture, "ranges.txt")
 
 	head := &syscall.Flock_t{Type: syscall.F_WRLCK, Whence: int16(os.SEEK_SET), Start: 0, Len: 4}
-	tail := &syscall.Flock_t{Type: syscall.F_RDLCK, Whence: int16(os.SEEK_SET), Start: 4, Len: 4}
-	overlapping := &syscall.Flock_t{Type: syscall.F_RDLCK, Whence: int16(os.SEEK_SET), Start: 2, Len: 4}
+	tail := &syscall.Flock_t{Type: syscall.F_WRLCK, Whence: int16(os.SEEK_SET), Start: 4, Len: 4}
+	overlapping := &syscall.Flock_t{Type: syscall.F_WRLCK, Whence: int16(os.SEEK_SET), Start: 2, Len: 4}
 
-	require.NoError(t, syscall.FcntlFlock(writer.Fd(), fOFDSetlk, head))
-	require.NoError(t, syscall.FcntlFlock(reader.Fd(), fOFDSetlk, tail),
+	require.NoError(t, syscall.FcntlFlock(first.Fd(), fOFDSetlk, head))
+	require.NoError(t, syscall.FcntlFlock(second.Fd(), fOFDSetlk, tail),
 		"a range that does not overlap must be grantable")
-	require.Error(t, syscall.FcntlFlock(reader.Fd(), fOFDSetlk, overlapping),
+	require.Error(t, syscall.FcntlFlock(second.Fd(), fOFDSetlk, overlapping),
 		"a range that overlaps the other lock must not be grantable")
 }
 
 // A lock is released when the file that holds it is closed
 func TestLocksAreReleasedOnClose(t *testing.T) {
 	fixture := newMountFixture(t)
-	first, second := openLockFileReaders(t, fixture, "closing.txt")
+	first, second := openLockFile(t, fixture, "closing.txt")
 
 	require.NoError(t, syscall.Flock(int(first.Fd()), syscall.LOCK_EX))
 	require.Error(t, syscall.Flock(int(second.Fd()), syscall.LOCK_EX|syscall.LOCK_NB))
