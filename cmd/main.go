@@ -109,10 +109,12 @@ func processCommand(command *cobra.Command, args []string) error {
 		fmt.Println("run as daemon")
 
 		if !daemon.IsDaemon() {
+			// this process keeps a terminal, and its log writer holds stderr
+			// as well as the file, so returning the error is enough: main logs
+			// it once and exits with the code it maps to
 			logWriter, err := config.GetLogWriter(true)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "failed to get log writer: %v\n", err)
-				os.Exit(1)
+				return errors.Wrap(err, "failed to open the log file")
 			}
 
 			if logWriter != nil {
@@ -121,11 +123,8 @@ func processCommand(command *cobra.Command, args []string) error {
 
 			log.SetOutput(logWriter)
 
-			err = daemon.Daemonize(context.Background(), config, nil)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "failed to daemonize: %v\n", err)
-				logger.WithError(err).Fatal("failed to daemonize")
-				os.Exit(1)
+			if err := daemon.Daemonize(context.Background(), config, nil); err != nil {
+				return errors.Wrap(err, "failed to daemonize")
 			}
 
 			fmt.Println("daemon started successfully")
@@ -134,9 +133,27 @@ func processCommand(command *cobra.Command, args []string) error {
 		}
 
 		// daemon process
-		logWriter, err := config.GetLogWriter(false)
+		//
+		// Take the config from the parent before opening the log: the log file
+		// name carries the instance id, and the config this process built from
+		// its own flags carries an id of its own making, while the mount runs
+		// under the parent's.
+		//
+		// Nothing here can be logged yet. The log file is not open, and the
+		// daemon's stderr goes to /dev/null, since Daemonize is given no stdio
+		// of its own. Until the log is open, the parent is the only one that
+		// can report a failure, through the status the ready function sends it.
+		var daemonConfig commons.Config
+		ready, err := daemon.WaitForParent(&daemonConfig)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to get log writer: %v\n", err)
+			// no ready function to report with - the parent fails on its own
+			// when the status pipe closes without a status
+			os.Exit(1)
+		}
+
+		logWriter, err := daemonConfig.GetLogWriter(false)
+		if err != nil {
+			ready(errors.Wrap(err, "failed to open the log file"))
 			os.Exit(1)
 		}
 
@@ -146,15 +163,7 @@ func processCommand(command *cobra.Command, args []string) error {
 
 		log.SetOutput(logWriter)
 
-		var config commons.Config
-		ready, err := daemon.WaitForParent(&config)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to receive params: %v\n", err)
-			logger.WithError(err).Fatal("failed to receive params")
-			os.Exit(1)
-		}
-
-		err = runManaged(&config, ready)
+		err = runManaged(&daemonConfig, ready)
 		if err != nil {
 			runErr := errors.Wrap(err, "failed to run iRODS FUSE")
 			logger.Error(runErr)
