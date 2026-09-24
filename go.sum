@@ -112,10 +112,10 @@ github.com/cyverse/go-daemonizer v0.2.0 h1:8Ez6qHZgCRYoQ1FylG0LvtmR/Sx7ovNtI1gtL
 github.com/cyverse/go-daemonizer v0.2.0/go.mod h1:vtw6PguGBLYFejqi2bV6iWqPROlONxFVDQ2sQphyczk=
 github.com/cyverse/go-irodsclient v0.21.2 h1:FfAjGyXE71ysLbsi0AAP2GJlTpfZQohl1ojbQczS+ak=
 github.com/cyverse/go-irodsclient v0.21.2/go.mod h1:HaK+ZsfAi0gvCnqroPxSfJnxK41PeGDD2FKNG1pZiN0=
-github.com/cyverse/irodsfs-common v0.0.0-20260918224558-afd4d4f211bb h1:R1lnf60ie7d3cHPpJxcInv9RiO23aP2aDt1VqmPL4+U=
-github.com/cyverse/irodsfs-common v0.0.0-20260918224558-afd4d4f211bb/go.mod h1:/mEwGnh6RO7JMGZ6xDAWwn3G2GF8+hCvgKsKkE6PAzI=
-github.com/cyverse/irodsfs-pool v0.12.5-0.20260918230954-d5b6f30d55ca h1:XVdoSOsHTRFeHM5kku+S8MmceO9sw482pSRmVxtCntU=
-github.com/cyverse/irodsfs-pool v0.12.5-0.20260918230954-d5b6f30d55ca/go.mod h1:+/ARMBdsLyx/NzfFliYatgepjmZraBfWXe2jHAL9CRo=
+github.com/cyverse/irodsfs-common v0.0.0-20260923220717-827291d1d76a h1:xM94h3XwTCFw91B7uiDxWywPpr+7E13dDDXugr5Y33U=
+github.com/cyverse/irodsfs-common v0.0.0-20260923220717-827291d1d76a/go.mod h1:/mEwGnh6RO7JMGZ6xDAWwn3G2GF8+hCvgKsKkE6PAzI=
+github.com/cyverse/irodsfs-pool v0.12.5 h1:vP/sXSAooawnyauWobaDXgsqMRmghsyA2liChfWkbDQ=
+github.com/cyverse/irodsfs-pool v0.12.5/go.mod h1:Ej7wr81p9M7a2XIESnMFU7i6fEG1NDWpmde+tD/VO9Q=
 github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964 h1:y5HC9v93H5EPKqaS1UYVg1uYah5Xf51mBfIoWehClUQ=
 github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964/go.mod h1:Xd9hchkHSWYkEqJwUGisez3G1QY8Ryz0sdWrLPMGjLk=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
