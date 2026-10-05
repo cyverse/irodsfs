@@ -27,7 +27,6 @@ type IRODSFS struct {
 	fuseServer   *fuse.Server
 	vpathManager *vpath.VPathManager
 
-	fsPoolClient        *irodsfs_pool_client.PoolServiceClient
 	irodsfsClient       *irodsclient_fs.FileSystem
 	fsClient            irodsfs_common_irods.IRODSFSClient
 	fsClientReleaseFunc func()
@@ -71,19 +70,12 @@ func NewFileSystem(config *commons.Config) (*IRODSFS, error) {
 		// the mount's instance id names this client to the pool server, so one
 		// id identifies the mount in its own logs, in the server's, and as the
 		// scope of the file lock owners it reports
-		poolClient := irodsfs_pool_client.NewPoolServiceClient(config.PoolEndpoint, time.Duration(config.MetadataConnection.LongOperationTimeout), true, config.InstanceID, logger)
-		err = poolClient.Connect()
+		poolClient := irodsfs_pool_client.NewPoolServiceClient(config.PoolEndpoint, time.Duration(config.MetadataConnection.LongOperationTimeout), true, config.InstanceID, account, commons.FuseFSName, config.Description, logger)
+		fsClient, err = poolClient.Connect()
 		if err != nil {
 			clientErr := errors.Wrapf(err, "failed to connect to irodsfs-pool server %q", config.PoolEndpoint)
 			logger.Error(clientErr)
 			return nil, clientErr
-		}
-
-		fsClient, err = poolClient.NewSession(account, commons.FuseFSName, config.Description)
-		if err != nil {
-			sessionErr := errors.Wrap(err, "failed to create a irodsfs-pool fs client")
-			logger.Error(sessionErr)
-			return nil, sessionErr
 		}
 
 		usePoolServer = true
@@ -154,11 +146,6 @@ func (fs *IRODSFS) Release() {
 	if fs.fsClient != nil {
 		fs.fsClient.Release()
 		fs.fsClient = nil
-	}
-
-	if fs.fsPoolClient != nil {
-		fs.fsPoolClient.Disconnect()
-		fs.fsPoolClient = nil
 	}
 
 	if fs.irodsfsClient != nil {
